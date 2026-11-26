@@ -1,9 +1,8 @@
-const CACHE_NAME = "smartsari-shell-v3";
+const CACHE_NAME = "smartsari-shell-v4";
 const SHELL_ASSETS = [
   "/",
   "/manifest.webmanifest",
-  "/logo-smartsari.jpg",
-  "/logo-mark.png",
+  "/logo-mark.png?v=2",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/icons/apple-touch-icon.png",
@@ -50,16 +49,20 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Stale-while-revalidate for static assets so updated logos/icons refresh automatically
   event.respondWith(
     caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((res) => {
-        if (res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-        }
-        return res;
-      });
+      const networkFetch = fetch(request)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return res;
+        })
+        .catch(() => cached);
+
+      return cached || networkFetch;
     })
   );
 });

@@ -1003,7 +1003,7 @@ export function JournalWorkspace() {
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/logo-mark.png"
+              src="/logo-mark.png?v=2"
               alt="SmartSari"
               className="h-6 w-6 object-contain drop-shadow-[0_0_8px_rgba(244,114,182,0.35)]"
             />
@@ -1342,7 +1342,7 @@ export function JournalWorkspace() {
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/logo-mark.png"
+                src="/logo-mark.png?v=2"
                 alt="SmartSari"
                 className="h-6 w-6 object-contain drop-shadow-[0_0_8px_rgba(244,114,182,0.35)]"
               />
@@ -1408,7 +1408,7 @@ export function JournalWorkspace() {
               <div className="mb-5 flex flex-col items-center gap-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/logo-mark.png"
+                  src="/logo-mark.png?v=2"
                   alt="SmartSari"
                   className="h-14 w-14 object-contain drop-shadow-[0_0_22px_rgba(244,114,182,0.32)] sm:h-16 sm:w-16"
                 />
