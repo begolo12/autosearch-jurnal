@@ -10,6 +10,7 @@ import {
 
 export interface SearchFilters {
   sources?: string[];
+  tiers?: string[];
   pdfOnly?: boolean;
   yearFrom?: number | null;
   sort?: string;
