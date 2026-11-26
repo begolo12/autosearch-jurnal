@@ -5,14 +5,18 @@ import {
   Bookmark,
   BookmarkCheck,
   BookOpenText,
+  Check,
   ChevronDown,
   ChevronUp,
+  Copy,
   ExternalLink,
   FileDown,
   FileText,
   Languages,
   Loader2,
+  Quote,
 } from "lucide-react";
+import { formatCitation, type CitationFormat } from "@/lib/citation";
 import type { ConversionMode, JournalPaper } from "@/lib/types";
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -65,6 +69,9 @@ export function PaperCard({
 }: PaperCardProps) {
   const [expandedAbstract, setExpandedAbstract] = useState(false);
   const [showConvertPanel, setShowConvertPanel] = useState(false);
+  const [showCitePanel, setShowCitePanel] = useState(false);
+  const [citeFormat, setCiteFormat] = useState<CitationFormat>("apa");
+  const [copiedCite, setCopiedCite] = useState(false);
   const [selectedMode, setSelectedMode] = useState<ConversionMode>("clean");
   const [bookmarkPending, setBookmarkPending] = useState(false);
 
@@ -93,6 +100,17 @@ export function PaperCard({
       await onToggleBookmark(paper);
     } finally {
       setBookmarkPending(false);
+    }
+  };
+
+  const handleCopyCitation = async () => {
+    const text = formatCitation(paper, citeFormat);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedCite(true);
+      setTimeout(() => setCopiedCite(false), 2000);
+    } catch {
+      // Clipboard fallback ignored
     }
   };
 
@@ -313,6 +331,22 @@ export function PaperCard({
 
           <button
             type="button"
+            onClick={() => {
+              setShowCitePanel((v) => !v);
+              setShowConvertPanel(false);
+            }}
+            className={`inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 ${
+              showCitePanel
+                ? "border-[#DB2777] bg-[#FDF2F8] text-[#9D174D]"
+                : "border-[#F1E4EB] bg-white text-[#52525B] hover:border-[#E2CDD8] hover:text-[#18181B]"
+            }`}
+          >
+            <Quote className="h-3.5 w-3.5" />
+            <span>Sitasi</span>
+          </button>
+
+          <button
+            type="button"
             disabled={bookmarkPending}
             onClick={() => void handleBookmarkClick()}
             className={`inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 ${
@@ -340,6 +374,61 @@ export function PaperCard({
             </a>
           )}
         </div>
+
+        {/* Inline 1-Click Citation Panel */}
+        {showCitePanel && (
+          <div className="mt-3 rounded-lg border border-[#F1E4EB] bg-[#FFF8FA] p-3.5">
+            <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1">
+                {(
+                  [
+                    { id: "apa", label: "APA 7" },
+                    { id: "ieee", label: "IEEE" },
+                    { id: "bibtex", label: "BibTeX" },
+                  ] as const
+                ).map((fmt) => (
+                  <button
+                    key={fmt.id}
+                    type="button"
+                    onClick={() => {
+                      setCiteFormat(fmt.id);
+                      setCopiedCite(false);
+                    }}
+                    className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                      citeFormat === fmt.id
+                        ? "bg-[#DB2777] text-white"
+                        : "bg-white text-[#52525B] hover:text-[#18181B]"
+                    }`}
+                  >
+                    {fmt.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void handleCopyCitation()}
+                className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md border border-[#E2CDD8] bg-white px-3 py-1 text-xs font-semibold text-[#18181B] transition-colors hover:border-[#DB2777] hover:text-[#DB2777]"
+              >
+                {copiedCite ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-[#15803D]" />
+                    <span className="text-[#15803D]">Tersalin</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5" />
+                    <span>Salin Sitasi</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <pre className="whitespace-pre-wrap break-words rounded-md border border-[#F1E4EB] bg-white p-3 font-mono text-[11px] leading-relaxed text-[#27272A]">
+              {formatCitation(paper, citeFormat)}
+            </pre>
+          </div>
+        )}
 
         {/* Inline Word Export Panel */}
         {showConvertPanel && (

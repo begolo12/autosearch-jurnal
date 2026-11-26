@@ -6,6 +6,10 @@ import { attachSessionCookie, getSessionContext } from "@/lib/session";
 
 export async function GET(request: NextRequest) {
   const { sessionId, isNew } = getSessionContext(request);
+  const filterQ = (request.nextUrl.searchParams.get("q") || "")
+    .trim()
+    .toLowerCase();
+
   try {
     const db = getDb();
     const rows = await db
@@ -13,9 +17,22 @@ export async function GET(request: NextRequest) {
       .from(searchHistory)
       .where(eq(searchHistory.sessionId, sessionId))
       .orderBy(desc(searchHistory.createdAt))
-      .limit(15);
+      .limit(60);
+
+    // Deduplicate by normalized lowercase query, keeping newest entry
+    const seen = new Set<string>();
+    const unique: typeof rows = [];
+    for (const row of rows) {
+      const norm = row.query.toLowerCase().replace(/\s+/g, " ").trim();
+      if (!norm || seen.has(norm)) continue;
+      seen.add(norm);
+      if (filterQ && !norm.includes(filterQ)) continue;
+      unique.push(row);
+      if (unique.length >= 30) break;
+    }
+
     return attachSessionCookie(
-      NextResponse.json({ history: rows }),
+      NextResponse.json({ history: unique }),
       sessionId,
       isNew
     );

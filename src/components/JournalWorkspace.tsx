@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
+  ArrowUp,
   Bookmark,
   ChevronDown,
   ChevronUp,
@@ -18,6 +19,7 @@ import {
 import { PaperCard } from "@/components/PaperCard";
 import { PdfReaderModal } from "@/components/PdfReaderModal";
 import { PwaRegistrar } from "@/components/PwaRegistrar";
+import { formatRelativeTimeId } from "@/lib/citation";
 import {
   TIER_PRIORITY_ORDER,
   type BookmarkRecord,
@@ -113,6 +115,13 @@ export function JournalWorkspace() {
   const [conversions, setConversions] = useState<ConversionRecord[]>([]);
   const [loadingSidebar, setLoadingSidebar] = useState(true);
 
+  // QoL filter & navigation states
+  const [historyFilter, setHistoryFilter] = useState("");
+  const [bookmarksFilter, setBookmarksFilter] = useState("");
+  const [conversionsFilter, setConversionsFilter] = useState("");
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   const [readerState, setReaderState] = useState<{
     paper: JournalPaper;
     autoTranslate: boolean;
@@ -168,6 +177,69 @@ export function JournalWorkspace() {
       active = false;
     };
   }, []);
+
+  // Keyboard shortcuts (/ or Ctrl+K / Cmd+K) & scroll-to-top listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const inEditable =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setActiveTab("search");
+        setTimeout(() => {
+          searchInputRef.current?.focus();
+          searchInputRef.current?.select();
+        }, 10);
+      } else if (e.key === "/" && !inEditable && !readerState) {
+        e.preventDefault();
+        setActiveTab("search");
+        setTimeout(() => {
+          searchInputRef.current?.focus();
+          searchInputRef.current?.select();
+        }, 10);
+      }
+    };
+
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 450);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, [readerState]);
+
+  const filteredHistory = useMemo(() => {
+    const q = historyFilter.trim().toLowerCase();
+    if (!q) return history;
+    return history.filter((item) => item.query.toLowerCase().includes(q));
+  }, [history, historyFilter]);
+
+  const filteredBookmarks = useMemo(() => {
+    const q = bookmarksFilter.trim().toLowerCase();
+    if (!q) return bookmarks;
+    return bookmarks.filter(
+      (b) =>
+        b.title.toLowerCase().includes(q) ||
+        (b.venue || "").toLowerCase().includes(q) ||
+        b.authors.some((a) => a.toLowerCase().includes(q))
+    );
+  }, [bookmarks, bookmarksFilter]);
+
+  const filteredConversions = useMemo(() => {
+    const q = conversionsFilter.trim().toLowerCase();
+    if (!q) return conversions;
+    return conversions.filter((c) => c.title.toLowerCase().includes(q));
+  }, [conversions, conversionsFilter]);
 
   const bookmarkedMap = useMemo(() => {
     const map = new Map<string, BookmarkRecord>();
@@ -418,6 +490,13 @@ export function JournalWorkspace() {
     }
   };
 
+  const handleDeleteHistoryItem = async (id: string) => {
+    const res = await fetch(`/api/history/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setHistory((prev) => prev.filter((item) => item.id !== id));
+    }
+  };
+
   const handleDeleteConversion = async (id: string) => {
     const res = await fetch(`/api/conversions/${id}`, { method: "DELETE" });
     if (res.ok) {
@@ -523,22 +602,54 @@ export function JournalWorkspace() {
             ) : history.length === 0 ? (
               <p className="text-xs text-[#71717A]">Belum ada riwayat.</p>
             ) : (
-              <ul className="space-y-0.5">
-                {history.slice(0, 7).map((item) => (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      onClick={() => void runSearch(item.query)}
-                      className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs text-[#3F3F46] transition-colors hover:bg-[#FDF2F8] hover:text-[#9D174D]"
-                    >
-                      <span className="truncate">{item.query}</span>
-                      <span className="shrink-0 font-mono text-[10px] tabular-nums text-[#71717A]">
-                        {item.resultCount}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <div className="relative mb-2">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-[#71717A]" />
+                  <input
+                    type="search"
+                    value={historyFilter}
+                    onChange={(e) => setHistoryFilter(e.target.value)}
+                    placeholder="Cari riwayat..."
+                    className="w-full rounded-md border border-[#E2CDD8] bg-white py-1 pl-7 pr-2 text-xs text-[#18181B] placeholder:text-[#71717A] focus:border-[#DB2777] focus:outline-none"
+                  />
+                </div>
+                {filteredHistory.length === 0 ? (
+                  <p className="text-[11px] text-[#71717A]">
+                    Tidak cocok dengan &ldquo;{historyFilter}&rdquo;.
+                  </p>
+                ) : (
+                  <ul className="space-y-0.5">
+                    {filteredHistory.slice(0, 10).map((item) => (
+                      <li
+                        key={item.id}
+                        className="group flex items-center gap-1 rounded-md px-1.5 py-1 transition-colors hover:bg-[#FDF2F8]"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => void runSearch(item.query)}
+                          className="flex min-w-0 flex-1 items-center justify-between gap-1.5 text-left text-xs text-[#3F3F46] group-hover:text-[#9D174D]"
+                        >
+                          <span className="truncate font-medium">
+                            {item.query}
+                          </span>
+                          <span className="shrink-0 font-mono text-[10px] tabular-nums text-[#71717A]">
+                            {formatRelativeTimeId(item.createdAt)} ·{" "}
+                            {item.resultCount}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Hapus riwayat ${item.query}`}
+                          onClick={() => void handleDeleteHistoryItem(item.id)}
+                          className="shrink-0 rounded p-0.5 text-[#71717A] opacity-0 transition-opacity hover:text-[#B91C1C] group-hover:opacity-100 focus:opacity-100"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
             )}
           </section>
 
@@ -654,12 +765,18 @@ export function JournalWorkspace() {
                   <div className="relative flex-1">
                     <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71717A]" />
                     <input
+                      ref={searchInputRef}
                       type="search"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                       placeholder="Cari jurnal Q1–Q4 & SINTA 1–6 (Bahasa Indonesia / Inggris)..."
-                      className="min-h-[44px] w-full rounded-lg border border-[#E2CDD8] bg-white py-2 pl-10 pr-3 text-base text-[#18181B] placeholder:text-[#71717A] focus:border-[#DB2777] focus:outline-none sm:min-h-[42px] sm:text-sm"
+                      className="min-h-[44px] w-full rounded-lg border border-[#E2CDD8] bg-white py-2 pl-10 pr-16 text-base text-[#18181B] placeholder:text-[#71717A] focus:border-[#DB2777] focus:outline-none sm:min-h-[42px] sm:text-sm"
                     />
+                    {!query && (
+                      <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border border-[#E2CDD8] bg-[#FFF8FA] px-1.5 py-0.5 font-mono text-[10px] text-[#71717A] sm:inline-block">
+                        Ctrl K
+                      </kbd>
+                    )}
                   </div>
                   <button
                     type="submit"
@@ -815,12 +932,39 @@ export function JournalWorkspace() {
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-8">
-                      {groupedResults.map((group) => (
-                        <section
-                          key={group.tier}
-                          aria-label={group.meta.title}
+                    <>
+                      {groupedResults.length > 1 && (
+                        <nav
+                          aria-label="Lompat ke peringkat"
+                          className="sticky top-[53px] z-10 -mx-1 mb-5 flex items-center gap-1.5 overflow-x-auto border-b border-[#F1E4EB] bg-white/95 px-1 py-2 backdrop-blur-sm md:top-0"
                         >
+                          <span className="shrink-0 text-[11px] font-medium text-[#71717A]">
+                            Lompat:
+                          </span>
+                          {groupedResults.map((group) => (
+                            <a
+                              key={group.tier}
+                              href={`#rank-${group.tier}`}
+                              className={`shrink-0 rounded-md px-2.5 py-1 font-mono text-[11px] font-semibold transition-colors ${
+                                group.meta.priority
+                                  ? "bg-[#DB2777] text-white hover:bg-[#BE185D]"
+                                  : "border border-[#E2CDD8] bg-[#FFF8FA] text-[#52525B] hover:border-[#DB2777] hover:text-[#9D174D]"
+                              }`}
+                            >
+                              {group.meta.badge} ({group.papers.length})
+                            </a>
+                          ))}
+                        </nav>
+                      )}
+
+                      <div className="space-y-8">
+                        {groupedResults.map((group) => (
+                          <section
+                            key={group.tier}
+                            id={`rank-${group.tier}`}
+                            aria-label={group.meta.title}
+                            className="scroll-mt-24"
+                          >
                           <div
                             className={`flex items-baseline justify-between gap-3 pb-2 ${
                               group.meta.priority
@@ -865,8 +1009,9 @@ export function JournalWorkspace() {
                             ))}
                           </div>
                         </section>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </div>
               )}
@@ -910,10 +1055,22 @@ export function JournalWorkspace() {
 
           {activeTab === "bookmarks" && (
             <section>
-              <div className="mb-4 border-b border-[#F1E4EB] pb-3">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-[#F1E4EB] pb-3">
                 <h2 className="text-lg font-semibold text-[#18181B]">
                   Jurnal Tersimpan ({bookmarks.length})
                 </h2>
+                {bookmarks.length > 0 && (
+                  <div className="relative w-full sm:w-64">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#71717A]" />
+                    <input
+                      type="search"
+                      value={bookmarksFilter}
+                      onChange={(e) => setBookmarksFilter(e.target.value)}
+                      placeholder="Cari di jurnal tersimpan..."
+                      className="min-h-[38px] w-full rounded-lg border border-[#E2CDD8] bg-[#FFF8FA] py-1.5 pl-8 pr-3 text-sm text-[#18181B] placeholder:text-[#71717A] focus:border-[#DB2777] focus:bg-white focus:outline-none sm:text-xs"
+                    />
+                  </div>
+                )}
               </div>
 
               {bookmarks.length === 0 ? (
@@ -926,9 +1083,14 @@ export function JournalWorkspace() {
                     menyimpannya ke koleksi Anda.
                   </p>
                 </div>
+              ) : filteredBookmarks.length === 0 ? (
+                <div className="rounded-xl border border-[#F1E4EB] bg-[#FFF8FA] p-6 text-center text-sm text-[#52525B]">
+                  Tidak ada jurnal tersimpan yang cocok dengan &ldquo;
+                  {bookmarksFilter}&rdquo;.
+                </div>
               ) : (
                 <div className="divide-y divide-[#F1E4EB]">
-                  {bookmarks.map((b) => (
+                  {filteredBookmarks.map((b) => (
                     <PaperCard
                       key={b.id}
                       paper={{
@@ -963,10 +1125,22 @@ export function JournalWorkspace() {
 
           {activeTab === "conversions" && (
             <section>
-              <div className="mb-4 border-b border-[#F1E4EB] pb-3">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-[#F1E4EB] pb-3">
                 <h2 className="text-lg font-semibold text-[#18181B]">
                   Arsip Konversi Word ({conversions.length})
                 </h2>
+                {conversions.length > 0 && (
+                  <div className="relative w-full sm:w-64">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#71717A]" />
+                    <input
+                      type="search"
+                      value={conversionsFilter}
+                      onChange={(e) => setConversionsFilter(e.target.value)}
+                      placeholder="Cari di arsip Word..."
+                      className="min-h-[38px] w-full rounded-lg border border-[#E2CDD8] bg-[#FFF8FA] py-1.5 pl-8 pr-3 text-sm text-[#18181B] placeholder:text-[#71717A] focus:border-[#DB2777] focus:bg-white focus:outline-none sm:text-xs"
+                    />
+                  </div>
+                )}
               </div>
 
               {conversions.length === 0 ? (
@@ -979,9 +1153,14 @@ export function JournalWorkspace() {
                     atau &ldquo;Terjemahkan ID&rdquo;.
                   </p>
                 </div>
+              ) : filteredConversions.length === 0 ? (
+                <div className="rounded-xl border border-[#F1E4EB] bg-[#FFF8FA] p-6 text-center text-sm text-[#52525B]">
+                  Tidak ada arsip Word yang cocok dengan &ldquo;
+                  {conversionsFilter}&rdquo;.
+                </div>
               ) : (
                 <div className="divide-y divide-[#F1E4EB]">
-                  {conversions.map((conv) => (
+                  {filteredConversions.map((conv) => (
                     <div
                       key={conv.id}
                       className="flex flex-wrap items-center justify-between gap-4 py-4"
@@ -1045,27 +1224,56 @@ export function JournalWorkspace() {
                   </button>
                 )}
               </div>
+              {history.length > 0 && (
+                <div className="relative mb-3">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71717A]" />
+                  <input
+                    type="search"
+                    value={historyFilter}
+                    onChange={(e) => setHistoryFilter(e.target.value)}
+                    placeholder="Cari riwayat pencarian..."
+                    className="min-h-[42px] w-full rounded-lg border border-[#E2CDD8] bg-[#FFF8FA] py-2 pl-9 pr-3 text-base text-[#18181B] placeholder:text-[#71717A] focus:border-[#DB2777] focus:bg-white focus:outline-none sm:text-sm"
+                  />
+                </div>
+              )}
               {history.length === 0 ? (
                 <div className="rounded-xl border border-[#F1E4EB] bg-[#FFF8FA] p-8 text-center">
                   <p className="text-sm text-[#52525B]">
                     Belum ada riwayat pencarian.
                   </p>
                 </div>
+              ) : filteredHistory.length === 0 ? (
+                <div className="rounded-xl border border-[#F1E4EB] bg-[#FFF8FA] p-6 text-center text-sm text-[#52525B]">
+                  Tidak ada riwayat yang cocok dengan &ldquo;{historyFilter}
+                  &rdquo;.
+                </div>
               ) : (
                 <ul className="divide-y divide-[#F1E4EB]">
-                  {history.map((item) => (
-                    <li key={item.id}>
+                  {filteredHistory.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-center justify-between gap-2 py-2.5"
+                    >
                       <button
                         type="button"
                         onClick={() => void runSearch(item.query)}
-                        className="flex min-h-[48px] w-full items-center justify-between py-3 text-left text-sm"
+                        className="flex min-h-[40px] min-w-0 flex-1 items-center justify-between gap-2 text-left text-sm"
                       >
-                        <span className="font-medium text-[#18181B]">
+                        <span className="truncate font-medium text-[#18181B]">
                           {item.query}
                         </span>
-                        <span className="font-mono text-xs text-[#71717A]">
-                          {item.resultCount} hasil
+                        <span className="shrink-0 font-mono text-xs text-[#71717A]">
+                          {formatRelativeTimeId(item.createdAt)} ·{" "}
+                          {item.resultCount}
                         </span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Hapus riwayat ${item.query}`}
+                        onClick={() => void handleDeleteHistoryItem(item.id)}
+                        className="min-h-[38px] min-w-[38px] rounded-lg p-2 text-[#71717A] hover:text-[#B91C1C]"
+                      >
+                        <X className="h-4 w-4" />
                       </button>
                     </li>
                   ))}
@@ -1075,6 +1283,18 @@ export function JournalWorkspace() {
           )}
         </main>
       </div>
+
+      {/* Floating Scroll-to-Top Button */}
+      {showScrollTop && (
+        <button
+          type="button"
+          aria-label="Kembali ke atas"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="fixed bottom-20 right-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#E2CDD8] bg-white text-[#DB2777] shadow-sm transition-colors hover:border-[#DB2777] hover:bg-[#FDF2F8] md:bottom-6 md:right-6"
+        >
+          <ArrowUp className="h-4 w-4" />
+        </button>
+      )}
 
       {/* Mobile Sticky Bottom Navigation */}
       <nav
