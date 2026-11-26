@@ -698,10 +698,10 @@ export function JournalWorkspace() {
             <img
               src="/logo-mark.png"
               alt="SmartSari"
-              className="h-6 w-6 rounded-md bg-white p-0.5 object-contain"
+              className="h-6 w-6 object-contain drop-shadow-[0_0_8px_rgba(244,114,182,0.35)]"
             />
             <span className="text-sm font-semibold tracking-[-0.01em] text-[#F4F4F5]">
-              SmartSari
+              Smart<span className="text-[#F472B6]">Sari</span>
             </span>
           </button>
 
@@ -916,10 +916,10 @@ export function JournalWorkspace() {
               <img
                 src="/logo-mark.png"
                 alt="SmartSari"
-                className="h-6 w-6 rounded-md bg-white p-0.5 object-contain"
+                className="h-6 w-6 object-contain drop-shadow-[0_0_8px_rgba(244,114,182,0.35)]"
               />
               <span className="text-sm font-semibold text-white">
-                SmartSari
+                Smart<span className="text-[#F472B6]">Sari</span>
               </span>
             </button>
           </div>
@@ -977,13 +977,21 @@ export function JournalWorkspace() {
 
           {activeTab === "search" && isLanding && (
             <div className="animate-fade-up flex min-h-[74vh] flex-col items-center justify-center">
-              <div className="mb-4 rounded-xl border border-[#232429] bg-white px-3.5 py-2">
+              <div className="mb-5 flex flex-col items-center gap-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/logo-smartsari.jpg"
-                  alt="SmartSari — Pencarian Jurnal Terfilter & Akurat"
-                  className="h-12 w-auto object-contain sm:h-14"
+                  src="/logo-mark.png"
+                  alt="SmartSari"
+                  className="h-14 w-14 object-contain drop-shadow-[0_0_22px_rgba(244,114,182,0.32)] sm:h-16 sm:w-16"
                 />
+                <div className="flex flex-col items-center">
+                  <span className="text-lg font-semibold tracking-[-0.02em] text-[#F4F4F5]">
+                    Smart
+                    <span className="bg-gradient-to-r from-[#F9A8D4] via-[#F472B6] to-[#DB2777] bg-clip-text text-transparent">
+                      Sari
+                    </span>
+                  </span>
+                </div>
               </div>
 
               <h1 className="mb-6 text-center text-[26px] font-medium tracking-[-0.02em] text-[#F4F4F5] sm:text-[34px]">
