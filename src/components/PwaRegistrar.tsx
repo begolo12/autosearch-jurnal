@@ -61,31 +61,35 @@ export function PwaRegistrar() {
       <button
         type="button"
         onClick={() => void handleInstall()}
-        className="inline-flex min-h-[34px] items-center gap-1.5 rounded-lg border border-[#E2CDD8] bg-white px-3 py-1.5 text-xs font-medium text-[#18181B] transition-colors duration-150 hover:border-[#DB2777] hover:text-[#DB2777]"
+        className="btn-tactile inline-flex min-h-[34px] items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3.5 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#DB2777]/60 hover:text-white"
       >
         {installPrompt ? (
-          <Download className="h-3.5 w-3.5 text-[#DB2777]" />
+          <Download className="h-3.5 w-3.5 text-[#F472B6]" />
         ) : (
-          <Share className="h-3.5 w-3.5 text-[#DB2777]" />
+          <Share className="h-3.5 w-3.5 text-[#F472B6]" />
         )}
         <span>Pasang App</span>
       </button>
 
       {showIosGuide && (
-        <div className="absolute right-0 top-10 z-40 w-64 rounded-lg border border-[#E2CDD8] bg-white p-3 text-xs text-[#18181B] shadow-md">
+        <div className="animate-panel-open absolute right-0 top-10 z-40 w-64 rounded-xl border border-[#2C2E35] bg-[#151619] p-3.5 text-xs text-[#F4F4F5] shadow-xl">
           <div className="mb-1 flex items-center justify-between font-semibold">
             <span>Pasang SmartSari di iPhone/iPad</span>
             <button
               type="button"
               onClick={() => setShowIosGuide(false)}
-              className="text-[#71717A]"
+              className="text-[#A1A1AA] hover:text-white"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
-          <p className="text-[11px] leading-relaxed text-[#52525B]">
-            Ketuk tombol <strong>Bagikan (Share)</strong> di Safari, lalu pilih{" "}
-            <strong>Tambah ke Layar Utama (Add to Home Screen)</strong>.
+          <p className="text-[11px] leading-relaxed text-[#A1A1AA]">
+            Ketuk tombol <strong className="text-white">Bagikan (Share)</strong>{" "}
+            di Safari, lalu pilih{" "}
+            <strong className="text-white">
+              Tambah ke Layar Utama (Add to Home Screen)
+            </strong>
+            .
           </p>
         </div>
       )}

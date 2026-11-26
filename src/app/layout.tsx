@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "SmartSari",
   },
   icons: {
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#DB2777",
+  themeColor: "#0E0F12",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -47,7 +47,7 @@ export default function RootLayout({
       lang="id"
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-white text-[#18181B] font-sans selection:bg-[#DB2777]/15 selection:text-[#9D174D]">
+      <body className="min-h-full bg-[#0E0F12] text-[#F4F4F5] font-sans">
         {children}
       </body>
     </html>

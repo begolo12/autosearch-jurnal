@@ -1,17 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --bg-main: #FFFFFF;
-  --bg-sidebar: #FFF8FA;
-  --bg-hover: #FDF2F8;
-  --border-hairline: #F1E4EB;
-  --border-strong: #E2CDD8;
-  --ink-primary: #18181B;
-  --ink-secondary: #52525B;
+  --bg-main: #0E0F12;
+  --bg-sidebar: #151619;
+  --bg-elevated: #1E1F23;
+  --border-hairline: #232429;
+  --border-strong: #2C2E35;
+  --ink-primary: #F4F4F5;
+  --ink-secondary: #A1A1AA;
   --ink-muted: #71717A;
   --accent-rose: #DB2777;
-  --accent-rose-hover: #BE185D;
-  --accent-crimson: #B91C1C;
+  --accent-rose-soft: #F472B6;
 }
 
 @theme inline {
@@ -23,7 +22,7 @@
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #E2CDD8 transparent;
+  scrollbar-color: #2C2E35 transparent;
 }
 
 ::-webkit-scrollbar {
@@ -36,7 +35,7 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: #E2CDD8;
+  background-color: #2C2E35;
   border-radius: 9999px;
 }
 
@@ -45,17 +44,26 @@
 }
 
 ::selection {
-  background: rgba(219, 39, 119, 0.14);
-  color: #9D174D;
+  background: rgba(244, 114, 182, 0.24);
+  color: #FCE7F3;
 }
 
 :focus-visible {
-  outline: 2px solid #DB2777;
+  outline: 2px solid #F472B6;
   outline-offset: 2px;
 }
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+.ambient-rose-glow {
+  background-image: radial-gradient(
+    ellipse 62% 46% at 50% 45%,
+    rgba(219, 39, 119, 0.14) 0%,
+    rgba(157, 23, 77, 0.06) 44%,
+    transparent 74%
+  );
 }
 
 @keyframes fadeUp {
@@ -108,8 +116,7 @@
     transform 120ms ease,
     background-color 150ms ease,
     border-color 150ms ease,
-    color 150ms ease,
-    box-shadow 150ms ease;
+    color 150ms ease;
 }
 
 .btn-tactile:active:not(:disabled) {

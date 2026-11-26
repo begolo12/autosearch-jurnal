@@ -30,7 +30,7 @@ function renderInlineMarkdown(text: string) {
   return parts.map((part, idx) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
-        <strong key={idx} className="font-semibold text-[#18181B]">
+        <strong key={idx} className="font-semibold text-white">
           {part.slice(2, -2)}
         </strong>
       );
@@ -49,7 +49,7 @@ function renderInlineMarkdown(text: string) {
 function MarkdownView({ content }: { content: string }) {
   const blocks = content.replace(/\r\n/g, "\n").split("\n\n");
   return (
-    <div className="space-y-4 text-[15px] leading-[1.75] text-[#27272A]">
+    <div className="space-y-4 text-[15px] leading-[1.75] text-[#E4E4E7]">
       {blocks.map((block, i) => {
         const trimmed = block.trim();
         if (!trimmed) return null;
@@ -58,7 +58,7 @@ function MarkdownView({ content }: { content: string }) {
           return (
             <h2
               key={i}
-              className="text-xl font-bold leading-snug tracking-[-0.015em] text-[#18181B]"
+              className="text-xl font-bold leading-snug tracking-[-0.015em] text-white"
             >
               {trimmed.slice(2).trim()}
             </h2>
@@ -68,7 +68,7 @@ function MarkdownView({ content }: { content: string }) {
           return (
             <h3
               key={i}
-              className="pt-3 text-lg font-semibold text-[#9D174D]"
+              className="pt-3 text-lg font-semibold text-[#F472B6]"
             >
               {trimmed.slice(3).trim()}
             </h3>
@@ -78,7 +78,7 @@ function MarkdownView({ content }: { content: string }) {
           return (
             <h4
               key={i}
-              className="pt-1.5 text-base font-semibold text-[#18181B]"
+              className="pt-1.5 text-base font-semibold text-[#F4F4F5]"
             >
               {trimmed.slice(4).trim()}
             </h4>
@@ -309,10 +309,10 @@ export function PdfReaderModal({
       role="dialog"
       aria-modal="true"
       aria-label={`Pembaca Jurnal: ${paper.title}`}
-      className="animate-modal-in fixed inset-0 z-50 flex flex-col bg-[#FFF8FA]"
+      className="animate-modal-in fixed inset-0 z-50 flex flex-col bg-[#0E0F12]"
     >
       {/* Top Reader Toolbar */}
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#F1E4EB] bg-white px-3 py-2.5 sm:px-5">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#232429] bg-[#151619] px-3 py-2.5 sm:px-5">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           {paper.journalMetrics && (
             <span className="shrink-0 rounded-md bg-[#DB2777] px-2 py-0.5 font-mono text-xs font-semibold text-white">
@@ -320,20 +320,20 @@ export function PdfReaderModal({
               {paper.journalMetrics.impactFactor}
             </span>
           )}
-          <h2 className="truncate text-sm font-semibold text-[#18181B] sm:text-base">
+          <h2 className="truncate text-sm font-semibold text-[#F4F4F5] sm:text-base">
             {paper.title}
           </h2>
         </div>
 
         {/* Desktop view mode switch */}
-        <div className="hidden items-center gap-1 rounded-lg border border-[#F1E4EB] bg-[#FFF8FA] p-0.5 lg:flex">
+        <div className="hidden items-center gap-1 rounded-lg border border-[#2C2E35] bg-[#0E0F12] p-0.5 lg:flex">
           <button
             type="button"
             onClick={() => setDesktopView("split")}
             className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
               desktopView === "split"
                 ? "bg-[#DB2777] text-white"
-                : "text-[#52525B] hover:text-[#18181B]"
+                : "text-[#A1A1AA] hover:text-white"
             }`}
           >
             <Columns2 className="h-3.5 w-3.5" />
@@ -345,7 +345,7 @@ export function PdfReaderModal({
             className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
               desktopView === "pdf"
                 ? "bg-[#DB2777] text-white"
-                : "text-[#52525B] hover:text-[#18181B]"
+                : "text-[#A1A1AA] hover:text-white"
             }`}
           >
             <Maximize2 className="h-3.5 w-3.5" />
@@ -357,7 +357,7 @@ export function PdfReaderModal({
             className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
               desktopView === "translate"
                 ? "bg-[#DB2777] text-white"
-                : "text-[#52525B] hover:text-[#18181B]"
+                : "text-[#A1A1AA] hover:text-white"
             }`}
           >
             <Languages className="h-3.5 w-3.5" />
@@ -371,10 +371,10 @@ export function PdfReaderModal({
               type="button"
               disabled={downloadingPdf}
               onClick={() => void handlePdfClick()}
-              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-[#E2CDD8] bg-white px-2.5 py-1.5 text-xs font-medium text-[#18181B] hover:border-[#DB2777] disabled:opacity-60"
+              className="btn-tactile inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#DB2777] disabled:opacity-60"
             >
               {downloadingPdf ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#DB2777]" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F472B6]" />
               ) : (
                 <FileDown className="h-3.5 w-3.5" />
               )}
@@ -386,7 +386,7 @@ export function PdfReaderModal({
             type="button"
             disabled={downloadingDocx}
             onClick={() => void handleDocxClick()}
-            className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg bg-[#DB2777] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
+            className="btn-tactile inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-[#DB2777] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
           >
             {downloadingDocx ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -401,7 +401,7 @@ export function PdfReaderModal({
             type="button"
             aria-label="Tutup pembaca"
             onClick={onClose}
-            className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg border border-[#F1E4EB] text-[#52525B] hover:border-[#E2CDD8] hover:text-[#18181B]"
+            className="btn-tactile inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full border border-[#2C2E35] text-[#A1A1AA] hover:border-[#3F414A] hover:text-white"
           >
             <X className="h-4 w-4" />
           </button>
@@ -409,14 +409,14 @@ export function PdfReaderModal({
       </header>
 
       {/* Mobile Tab Switcher */}
-      <div className="grid grid-cols-2 border-b border-[#F1E4EB] bg-white lg:hidden">
+      <div className="grid grid-cols-2 border-b border-[#232429] bg-[#151619] lg:hidden">
         <button
           type="button"
           onClick={() => setMobileTab("pdf")}
           className={`min-h-[42px] border-b-2 text-xs font-semibold ${
             mobileTab === "pdf"
-              ? "border-[#DB2777] text-[#DB2777]"
-              : "border-transparent text-[#52525B]"
+              ? "border-[#DB2777] text-[#F472B6]"
+              : "border-transparent text-[#A1A1AA]"
           }`}
         >
           PDF Asli
@@ -431,8 +431,8 @@ export function PdfReaderModal({
           }}
           className={`min-h-[42px] border-b-2 text-xs font-semibold ${
             mobileTab === "translate"
-              ? "border-[#DB2777] text-[#DB2777]"
-              : "border-transparent text-[#52525B]"
+              ? "border-[#DB2777] text-[#F472B6]"
+              : "border-transparent text-[#A1A1AA]"
           }`}
         >
           Terjemahan Indonesia
@@ -443,27 +443,27 @@ export function PdfReaderModal({
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* PDF Viewer Pane */}
         <section
-          className={`min-h-0 flex-1 flex-col border-[#F1E4EB] bg-[#F4ECF0] lg:border-r ${
+          className={`min-h-0 flex-1 flex-col border-[#232429] bg-[#151619] lg:border-r ${
             mobileTab === "pdf" ? "flex" : "hidden lg:flex"
           } ${desktopView === "translate" ? "lg:hidden" : ""}`}
         >
           {pdfProxyUrl ? (
             <div className="relative flex h-full w-full flex-col">
-              <div className="flex items-center justify-between border-b border-[#F1E4EB] bg-[#FFF8FA] px-3 py-1.5 text-[11px] text-[#52525B]">
+              <div className="flex items-center justify-between border-b border-[#232429] bg-[#151619] px-3 py-1.5 text-[11px] text-[#A1A1AA]">
                 <span>Pratinjau PDF Langsung</span>
                 <a
                   href={paper.pdfUrl!}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 font-medium text-[#DB2777] hover:underline"
+                  className="inline-flex items-center gap-1 font-medium text-[#F472B6] hover:underline"
                 >
                   Buka Sumber Asli <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
               {pdfLoading ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-white p-6 text-center">
+                <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-[#0E0F12] p-6 text-center">
                   <Loader2 className="h-6 w-6 animate-spin text-[#DB2777]" />
-                  <p className="text-xs font-medium text-[#52525B]">
+                  <p className="text-xs font-medium text-[#A1A1AA]">
                     Memuat dokumen PDF dari penerbit...
                   </p>
                 </div>
@@ -474,13 +474,13 @@ export function PdfReaderModal({
                   className="h-full w-full flex-1 bg-white"
                 />
               ) : (
-                <div className="flex flex-1 flex-col items-center justify-center bg-[#FFF8FA] p-6 text-center">
-                  <div className="max-w-md rounded-xl border border-[#F1E4EB] bg-white p-6">
-                    <AlertCircle className="mx-auto h-6 w-6 text-[#B91C1C]" />
-                    <h3 className="mt-3 text-base font-semibold text-[#18181B]">
+                <div className="flex flex-1 flex-col items-center justify-center bg-[#0E0F12] p-6 text-center">
+                  <div className="max-w-md rounded-xl border border-[#2C2E35] bg-[#151619] p-6">
+                    <AlertCircle className="mx-auto h-6 w-6 text-[#F87171]" />
+                    <h3 className="mt-3 text-base font-semibold text-white">
                       Pratinjau PDF Dibatasi Penerbit
                     </h3>
-                    <p className="mt-1.5 text-xs leading-relaxed text-[#52525B]">
+                    <p className="mt-1.5 text-xs leading-relaxed text-[#A1A1AA]">
                       {pdfLoadError}
                     </p>
                     <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
@@ -488,7 +488,7 @@ export function PdfReaderModal({
                         href={paper.pdfUrl!}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg bg-[#DB2777] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D]"
+                        className="btn-tactile inline-flex min-h-[38px] items-center gap-1.5 rounded-full bg-[#DB2777] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D]"
                       >
                         Buka PDF di Tab Baru{" "}
                         <ExternalLink className="h-3.5 w-3.5" />
@@ -498,7 +498,7 @@ export function PdfReaderModal({
                           href={paper.landingUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-[#E2CDD8] bg-white px-3.5 py-1.5 text-xs font-medium text-[#18181B] hover:border-[#DB2777]"
+                          className="btn-tactile inline-flex min-h-[38px] items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3.5 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#DB2777]"
                         >
                           Halaman Penerbit
                         </a>
@@ -512,7 +512,7 @@ export function PdfReaderModal({
                             void runTranslate();
                           }
                         }}
-                        className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-[#E2CDD8] bg-[#FFF8FA] px-3.5 py-1.5 text-xs font-medium text-[#9D174D] hover:border-[#DB2777]"
+                        className="btn-tactile inline-flex min-h-[38px] items-center gap-1.5 rounded-full border border-[#DB2777]/35 bg-[#DB2777]/15 px-3.5 py-1.5 text-xs font-medium text-[#F9A8D4] hover:border-[#F472B6]"
                       >
                         <Languages className="h-3.5 w-3.5" />
                         Baca Terjemahan ID
@@ -524,10 +524,10 @@ export function PdfReaderModal({
             </div>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
-              <p className="text-base font-semibold text-[#18181B]">
+              <p className="text-base font-semibold text-white">
                 PDF langsung tidak tersedia dari penerbit
               </p>
-              <p className="mt-1 max-w-md text-xs text-[#52525B]">
+              <p className="mt-1 max-w-md text-xs text-[#A1A1AA]">
                 Anda tetap dapat membaca terjemahan Bahasa Indonesia di panel
                 sebelah, atau membuka halaman penerbit.
               </p>
@@ -536,7 +536,7 @@ export function PdfReaderModal({
                   href={paper.landingUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[#DB2777] px-4 py-2 text-xs font-semibold text-white"
+                  className="btn-tactile mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#DB2777] px-4 py-2 text-xs font-semibold text-white"
                 >
                   Buka Halaman Penerbit <ExternalLink className="h-3.5 w-3.5" />
                 </a>
@@ -547,18 +547,18 @@ export function PdfReaderModal({
 
         {/* Auto-Translate Pane */}
         <section
-          className={`min-h-0 flex-1 flex-col overflow-y-auto bg-[#FFF8FA] ${
+          className={`min-h-0 flex-1 flex-col overflow-y-auto bg-[#0E0F12] ${
             mobileTab === "translate" ? "flex" : "hidden lg:flex"
           } ${desktopView === "pdf" ? "lg:hidden" : ""}`}
         >
           <div className="mx-auto w-full max-w-[70ch] p-4 sm:p-6">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-[#F1E4EB] pb-4">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-[#232429] pb-4">
               <div>
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-[#18181B]">
-                  <Languages className="h-4 w-4 text-[#DB2777]" />
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                  <Languages className="h-4 w-4 text-[#F472B6]" />
                   Terjemahan Otomatis ke Bahasa Indonesia
                 </div>
-                <p className="mt-0.5 text-[11px] text-[#52525B]">
+                <p className="mt-0.5 text-[11px] text-[#A1A1AA]">
                   Deteksi otomatis bahasa sumber (Inggris, Mandarin, Jepang,
                   Jerman, Arab, dll.)
                 </p>
@@ -568,7 +568,7 @@ export function PdfReaderModal({
                 type="button"
                 disabled={translating}
                 onClick={() => void runTranslate()}
-                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg bg-[#DB2777] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
+                className="btn-tactile inline-flex min-h-[38px] items-center gap-1.5 rounded-full bg-[#DB2777] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
               >
                 {translating ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -584,33 +584,33 @@ export function PdfReaderModal({
             </div>
 
             {translateError && (
-              <div className="mb-4 flex items-start gap-2 rounded-lg border border-[#B91C1C]/30 bg-[#FEF2F2] p-4 text-sm text-[#B91C1C]">
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#EF4444]/30 bg-[#EF4444]/10 p-4 text-sm text-[#FCA5A5]">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{translateError}</span>
               </div>
             )}
 
             {translating && (
-              <div className="space-y-3 rounded-xl border border-[#F1E4EB] bg-white p-5">
-                <div className="flex items-center gap-2 text-xs font-medium text-[#DB2777]">
+              <div className="space-y-3 rounded-xl border border-[#232429] bg-[#151619] p-5">
+                <div className="flex items-center gap-2 text-xs font-medium text-[#F472B6]">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Mengekstrak teks &amp; menerjemahkan dengan
                   mv/zai-glm-5-3-flash...
                 </div>
-                <div className="h-4 w-3/4 animate-pulse rounded bg-[#FDF2F8]" />
-                <div className="h-4 w-full animate-pulse rounded bg-[#FDF2F8]" />
-                <div className="h-4 w-5/6 animate-pulse rounded bg-[#FDF2F8]" />
+                <div className="h-4 w-3/4 animate-pulse rounded bg-[#232429]" />
+                <div className="h-4 w-full animate-pulse rounded bg-[#232429]" />
+                <div className="h-4 w-5/6 animate-pulse rounded bg-[#232429]" />
               </div>
             )}
 
             {!translating && translatedMarkdown && (
-              <article className="rounded-xl border border-[#F1E4EB] bg-white p-5 sm:p-7">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-[#F1E4EB] pb-3 text-[11px] text-[#71717A]">
+              <article className="rounded-xl border border-[#232429] bg-[#151619] p-5 sm:p-7">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-[#232429] pb-3 text-[11px] text-[#71717A]">
                   <span className="font-mono">
                     {translateModel || "mv/zai-glm-5-3-flash"}
                   </span>
                   {translateCached && (
-                    <span className="rounded bg-[#FCE7F3] px-2 py-0.5 font-medium text-[#9D174D]">
+                    <span className="rounded bg-[#DB2777]/15 px-2 py-0.5 font-medium text-[#F472B6]">
                       Arsip Cache
                     </span>
                   )}
@@ -620,11 +620,11 @@ export function PdfReaderModal({
             )}
 
             {!translating && !translatedMarkdown && !translateError && (
-              <div className="rounded-xl border border-[#F1E4EB] bg-white p-6 text-center">
-                <p className="text-base font-semibold text-[#18181B]">
+              <div className="rounded-xl border border-[#232429] bg-[#151619] p-6 text-center">
+                <p className="text-base font-semibold text-white">
                   Siap Menerjemahkan Jurnal Ini
                 </p>
-                <p className="mt-1 text-xs text-[#52525B]">
+                <p className="mt-1 text-xs text-[#A1A1AA]">
                   Klik tombol &ldquo;Terjemahkan Sekarang&rdquo; di atas untuk
                   membaca isi jurnal dalam Bahasa Indonesia yang rapi.
                 </p>
