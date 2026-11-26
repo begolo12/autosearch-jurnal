@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: dark;
   --bg-main: #0E0F12;
   --bg-sidebar: #151619;
   --bg-elevated: #1E1F23;
@@ -48,9 +49,24 @@
   color: #FCE7F3;
 }
 
-:focus-visible {
-  outline: 2px solid #F472B6;
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid rgba(244, 114, 182, 0.7);
   outline-offset: 2px;
+}
+
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible {
+  outline: none;
+}
+
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .tabular-nums {

@@ -889,7 +889,7 @@ export function JournalWorkspace() {
           e.preventDefault();
           void runSearch();
         }}
-        className={`flex items-center gap-2 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-2.5 transition-all duration-150 focus-within:border-[#DB2777]/70 focus-within:ring-2 focus-within:ring-[#DB2777]/20 ${
+        className={`flex items-center gap-2 rounded-full border border-[#2C2E35] bg-[#1A1B20] px-2.5 transition-all duration-150 focus-within:border-[#F472B6]/45 focus-within:bg-[#202228] focus-within:shadow-[0_0_0_3px_rgba(219,39,119,0.14)] ${
           compact ? "min-h-[46px] py-1" : "min-h-[54px] py-1.5"
         }`}
       >
@@ -898,7 +898,9 @@ export function JournalWorkspace() {
           aria-label="Filter indeks dan tahun"
           onClick={() => setShowFilterMenu((v) => !v)}
           className={`btn-tactile inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
-            showFilterMenu || yearFrom || selectedSources.length < 2
+            showFilterMenu ||
+            yearFrom ||
+            selectedSources.length < ALL_SOURCES.length
               ? "bg-[#DB2777]/20 text-[#F472B6]"
               : "text-[#A1A1AA] hover:bg-[#2C2E35] hover:text-white"
           }`}
@@ -912,14 +914,28 @@ export function JournalWorkspace() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Cari jurnal Q1–Q4, SINTA 1–6, atau DOI..."
-          className="min-w-0 flex-1 bg-transparent text-base text-[#F4F4F5] placeholder:text-[#71717A] focus:outline-none sm:text-sm"
+          className="min-w-0 flex-1 bg-transparent text-base text-[#F4F4F5] caret-[#F472B6] placeholder:text-[#71717A] focus:outline-none sm:text-sm"
         />
+
+        {query.trim().length > 0 && (
+          <button
+            type="button"
+            aria-label="Bersihkan kata kunci"
+            onClick={() => {
+              setQuery("");
+              searchInputRef.current?.focus();
+            }}
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#71717A] transition-colors hover:bg-[#2C2E35] hover:text-white"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
 
         <select
           aria-label="Urutkan hasil"
           value={sort}
           onChange={(e) => setSort(e.target.value as SortOption)}
-          className="hidden cursor-pointer rounded-full bg-transparent px-2 py-1 text-xs font-medium text-[#A1A1AA] hover:text-white focus:outline-none sm:block"
+          className="hidden cursor-pointer border-l border-[#2C2E35] bg-transparent pl-2.5 pr-1 py-1 text-xs font-medium text-[#A1A1AA] hover:text-white focus:outline-none sm:block"
         >
           <option value="relevance" className="bg-[#151619] text-[#F4F4F5]">
             Relevansi
