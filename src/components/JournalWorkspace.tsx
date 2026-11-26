@@ -3,17 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
-  BookOpen,
   Bookmark,
   ChevronDown,
   ChevronUp,
-  Clock,
   FileDown,
   FileText,
   History,
   Loader2,
   Search,
-  ShieldCheck,
   SlidersHorizontal,
   Trash2,
   X,
@@ -43,58 +40,22 @@ const ALL_SOURCES: Array<{ id: SearchSource; label: string }> = [
 
 const RANK_SECTION_META: Record<
   JournalTier,
-  { badge: string; title: string; badgeClass: string }
+  { badge: string; title: string; priority?: boolean }
 > = {
   Q1: {
     badge: "Q1",
     title: "Kuartil 1 Internasional · Prioritas Utama",
-    badgeClass: "bg-[#1B4D3E] text-white",
+    priority: true,
   },
-  Q2: {
-    badge: "Q2",
-    title: "Kuartil 2 Internasional",
-    badgeClass: "bg-[#1E5F5B] text-white",
-  },
-  Q3: {
-    badge: "Q3",
-    title: "Kuartil 3 Internasional",
-    badgeClass: "bg-[#44403C] text-white",
-  },
-  Q4: {
-    badge: "Q4",
-    title: "Kuartil 4 Internasional",
-    badgeClass: "bg-[#57534E] text-white",
-  },
-  SINTA1: {
-    badge: "SINTA 1",
-    title: "Jurnal Nasional Terakreditasi Peringkat 1",
-    badgeClass: "bg-[#1B4D3E] text-white",
-  },
-  SINTA2: {
-    badge: "SINTA 2",
-    title: "Jurnal Nasional Terakreditasi Peringkat 2",
-    badgeClass: "bg-[#1E5F5B] text-white",
-  },
-  SINTA3: {
-    badge: "SINTA 3",
-    title: "Jurnal Nasional Terakreditasi Peringkat 3",
-    badgeClass: "bg-[#44403C] text-white",
-  },
-  SINTA4: {
-    badge: "SINTA 4",
-    title: "Jurnal Nasional Terakreditasi Peringkat 4",
-    badgeClass: "bg-[#57534E] text-white",
-  },
-  SINTA5: {
-    badge: "SINTA 5",
-    title: "Jurnal Nasional Terakreditasi Peringkat 5",
-    badgeClass: "bg-[#9A3412] text-white",
-  },
-  SINTA6: {
-    badge: "SINTA 6",
-    title: "Jurnal Nasional Terakreditasi Peringkat 6",
-    badgeClass: "bg-[#7C2D12] text-white",
-  },
+  Q2: { badge: "Q2", title: "Kuartil 2 Internasional" },
+  Q3: { badge: "Q3", title: "Kuartil 3 Internasional" },
+  Q4: { badge: "Q4", title: "Kuartil 4 Internasional" },
+  SINTA1: { badge: "SINTA 1", title: "Jurnal Nasional Terakreditasi 1" },
+  SINTA2: { badge: "SINTA 2", title: "Jurnal Nasional Terakreditasi 2" },
+  SINTA3: { badge: "SINTA 3", title: "Jurnal Nasional Terakreditasi 3" },
+  SINTA4: { badge: "SINTA 4", title: "Jurnal Nasional Terakreditasi 4" },
+  SINTA5: { badge: "SINTA 5", title: "Jurnal Nasional Terakreditasi 5" },
+  SINTA6: { badge: "SINTA 6", title: "Jurnal Nasional Terakreditasi 6" },
 };
 
 const STARTER_QUERIES = [
@@ -105,7 +66,7 @@ const STARTER_QUERIES = [
 ];
 
 const MODE_BADGE: Record<string, string> = {
-  clean: "Konversi Utuh",
+  clean: "Naskah Utuh",
   translate_id: "Terjemahan ID",
   summary_id: "Ringkasan ID",
 };
@@ -133,7 +94,6 @@ function parseFilenameFromHeader(
 export function JournalWorkspace() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("search");
 
-  // Search controls
   const [query, setQuery] = useState("");
   const [selectedSources, setSelectedSources] = useState<SearchSource[]>([
     "openalex",
@@ -144,7 +104,6 @@ export function JournalWorkspace() {
   const [sort, setSort] = useState<SortOption>("relevance");
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
-  // Data states
   const [searchResult, setSearchResult] = useState<SearchResponse | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -154,13 +113,11 @@ export function JournalWorkspace() {
   const [conversions, setConversions] = useState<ConversionRecord[]>([]);
   const [loadingSidebar, setLoadingSidebar] = useState(true);
 
-  // Reader modal state
   const [readerState, setReaderState] = useState<{
     paper: JournalPaper;
     autoTranslate: boolean;
   } | null>(null);
 
-  // Action states
   const [downloadingPdfKey, setDownloadingPdfKey] = useState<string | null>(
     null
   );
@@ -201,7 +158,7 @@ export function JournalWorkspace() {
           setConversions(cJson.conversions ?? []);
         }
       } catch {
-        // Non-fatal on initial load
+        // Non-fatal
       } finally {
         if (active) setLoadingSidebar(false);
       }
@@ -325,7 +282,7 @@ export function JournalWorkspace() {
       setBookmarks((prev) => [data.bookmark, ...prev]);
       setNotice({
         type: "success",
-        message: "Jurnal Q1 disimpan ke daftar Tersimpan Anda.",
+        message: "Jurnal disimpan ke daftar Tersimpan Anda.",
       });
     } else {
       setNotice({
@@ -367,7 +324,7 @@ export function JournalWorkspace() {
       const blob = await res.blob();
       const filename = parseFilenameFromHeader(
         res.headers.get("content-disposition"),
-        "jurnal-q1.pdf"
+        "jurnal.pdf"
       );
       triggerBlobDownload(blob, filename);
       setNotice({
@@ -425,7 +382,7 @@ export function JournalWorkspace() {
       const blob = await res.blob();
       const filename = parseFilenameFromHeader(
         res.headers.get("content-disposition"),
-        "jurnal-q1.docx"
+        "jurnal.docx"
       );
       triggerBlobDownload(blob, filename);
 
@@ -433,8 +390,8 @@ export function JournalWorkspace() {
       setNotice({
         type: "success",
         message: isCached
-          ? "Dokumen Word (.docx) diambil dari cache dan siap diunduh."
-          : "Dokumen Word (.docx) selesai dibuat oleh AI!",
+          ? "Dokumen Word (.docx) diambil dari arsip cache dan siap diunduh."
+          : "Dokumen Word (.docx) selesai dibuat.",
       });
 
       const cRes = await fetch("/api/conversions");
@@ -469,73 +426,60 @@ export function JournalWorkspace() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col pb-20 md:pb-0">
-      {/* Top Masthead */}
-      <header className="sticky top-0 z-20 border-b border-[#E5DFD5] bg-[#FAF8F4]/95 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#1B4D3E] text-white">
-              <BookOpen className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-serif text-lg font-bold tracking-tight text-[#1C1917] sm:text-xl">
-                  PustakaCari
-                </h1>
-                <span className="rounded bg-[#1B4D3E] px-1.5 py-0.5 font-mono text-[10px] font-bold text-white">
-                  PRIORITAS Q1
-                </span>
-              </div>
-              <p className="hidden text-xs text-[#57534E] sm:block">
-                Jurnal Q1–Q4 &amp; SINTA 1–6 · Baca PDF &amp; Terjemahan Otomatis
-              </p>
-            </div>
+    <div className="min-h-screen flex flex-col bg-[#F8F7F4] pb-20 md:pb-0">
+      {/* Typographic Editorial Masthead */}
+      <header className="sticky top-0 z-20 border-b border-[#E2DFD7] bg-white/95 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+          <div className="min-w-0">
+            <h1 className="font-serif text-xl font-bold tracking-[-0.02em] text-[#161513] sm:text-2xl">
+              PustakaCari
+            </h1>
+            <p className="hidden text-xs text-[#57554F] sm:block">
+              Indeks Jurnal Ilmiah Q1–Q4 &amp; SINTA 1–6 · Prioritas Q1
+            </p>
           </div>
 
-          {/* Desktop Navigation Tabs */}
+          {/* Desktop Underline Navigation */}
           <nav
             aria-label="Navigasi utama"
-            className="hidden items-center gap-1 rounded-lg border border-[#E5DFD5] bg-[#F2EFE9] p-1 md:flex"
+            className="hidden items-center gap-6 md:flex"
           >
             <button
               type="button"
               onClick={() => setActiveTab("search")}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+              className={`border-b-2 py-2 text-xs font-semibold transition-colors ${
                 activeTab === "search"
-                  ? "bg-white text-[#1C1917]"
-                  : "text-[#57534E] hover:text-[#1C1917]"
+                  ? "border-[#154033] text-[#154033]"
+                  : "border-transparent text-[#57554F] hover:text-[#161513]"
               }`}
             >
-              <Search className="h-3.5 w-3.5" />
-              Pencarian Q1
+              Indeks Jurnal
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("bookmarks")}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+              className={`border-b-2 py-2 text-xs font-semibold transition-colors ${
                 activeTab === "bookmarks"
-                  ? "bg-white text-[#1C1917]"
-                  : "text-[#57534E] hover:text-[#1C1917]"
+                  ? "border-[#154033] text-[#154033]"
+                  : "border-transparent text-[#57554F] hover:text-[#161513]"
               }`}
             >
-              <Bookmark className="h-3.5 w-3.5" />
-              Tersimpan
-              <span className="font-mono tabular-nums text-[11px] text-[#57534E]">
+              Tersimpan{" "}
+              <span className="font-mono tabular-nums text-[11px] text-[#78756E]">
                 ({bookmarks.length})
               </span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("conversions")}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+              className={`border-b-2 py-2 text-xs font-semibold transition-colors ${
                 activeTab === "conversions"
-                  ? "bg-white text-[#1C1917]"
-                  : "text-[#57534E] hover:text-[#1C1917]"
+                  ? "border-[#154033] text-[#154033]"
+                  : "border-transparent text-[#57554F] hover:text-[#161513]"
               }`}
             >
-              <FileText className="h-3.5 w-3.5" />
-              Riwayat Word
-              <span className="font-mono tabular-nums text-[11px] text-[#57534E]">
+              Arsip Word{" "}
+              <span className="font-mono tabular-nums text-[11px] text-[#78756E]">
                 ({conversions.length})
               </span>
             </button>
@@ -543,25 +487,21 @@ export function JournalWorkspace() {
 
           <div className="flex items-center gap-2">
             <PwaRegistrar />
-            <span className="hidden items-center gap-1 rounded-md border border-[#E5DFD5] bg-white px-2.5 py-1 text-[11px] font-medium text-[#1B4D3E] lg:inline-flex">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Filter Q1 Aktif
-            </span>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 sm:px-6 sm:py-6">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 sm:px-6 sm:py-7">
         {notice && (
           <div
             role="status"
-            className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${
+            className={`mb-5 flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-2.5 text-sm ${
               notice.type === "error"
-                ? "border-[#9A3412]/30 bg-[#9A3412]/8 text-[#7C2D12]"
+                ? "border-[#8C3B1A]/35 bg-[#8C3B1A]/8 text-[#8C3B1A]"
                 : notice.type === "success"
-                  ? "border-[#1B4D3E]/30 bg-[#1B4D3E]/8 text-[#143B2F]"
-                  : "border-[#CFC6B8] bg-[#F2EFE9] text-[#1C1917]"
+                  ? "border-[#154033]/30 bg-[#154033]/8 text-[#0F2E24]"
+                  : "border-[#C9C4B8] bg-white text-[#161513]"
             }`}
           >
             <div className="flex items-center gap-2">
@@ -574,7 +514,7 @@ export function JournalWorkspace() {
                   href={notice.actionUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-[#1C1917] underline"
+                  className="text-xs font-semibold underline"
                 >
                   {notice.actionLabel || "Buka"}
                 </a>
@@ -592,78 +532,76 @@ export function JournalWorkspace() {
         )}
 
         {activeTab === "search" && (
-          <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-            {/* Main Search Column */}
-            <div>
-              <section className="rounded-xl border border-[#E5DFD5] bg-white p-3.5 sm:p-5">
+          <div className="grid gap-8 lg:grid-cols-[1fr_270px]">
+            {/* Main Search & Reading Sheet */}
+            <div className="min-w-0">
+              {/* Search Bar & Filters */}
+              <section className="rounded-md border border-[#E2DFD7] bg-white p-3.5 sm:p-4">
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
                     void runSearch();
                   }}
-                  className="flex flex-col gap-2.5 sm:flex-row sm:gap-3"
+                  className="flex flex-col gap-2.5 sm:flex-row sm:gap-2.5"
                 >
                   <div className="relative flex-1">
-                    <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#78716C]" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#78756E]" />
                     <input
                       type="search"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Cari jurnal Q1–Q4 / SINTA 1–6 (ID / EN)..."
-                      className="min-h-[44px] w-full rounded-lg border border-[#CFC6B8] bg-[#FAF8F4] py-2.5 pl-10 pr-4 text-base text-[#1C1917] placeholder:text-[#78716C] focus:border-[#1B4D3E] focus:bg-white focus:outline-none sm:text-sm"
+                      placeholder="Cari topik, judul, penulis, atau DOI..."
+                      className="min-h-[44px] w-full rounded-md border border-[#C9C4B8] bg-[#F8F7F4] py-2 pl-9 pr-3 text-base text-[#161513] placeholder:text-[#78756E] focus:border-[#154033] focus:bg-white focus:outline-none sm:min-h-[40px] sm:text-sm"
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={searching}
-                    className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#1B4D3E] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#143B2F] disabled:opacity-60"
+                    className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md bg-[#154033] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#0F2E24] disabled:opacity-60 sm:min-h-[40px]"
                   >
                     {searching ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Search className="h-4 w-4" />
                     )}
-                    {searching ? "Mencari..." : "Cari Jurnal"}
+                    {searching ? "Mencari..." : "Cari"}
                   </button>
                 </form>
 
                 {/* Mobile Filter Toggle */}
-                <div className="mt-3 flex items-center justify-between border-t border-[#F2EFE9] pt-2.5 sm:hidden">
+                <div className="mt-3 flex items-center justify-between border-t border-[#E2DFD7] pt-2.5 sm:hidden">
                   <button
                     type="button"
                     onClick={() => setShowMobileFilters((v) => !v)}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#57534E]"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[#57554F]"
                   >
                     <SlidersHorizontal className="h-3.5 w-3.5" />
-                    Filter &amp; Urutan Q1
+                    Saring &amp; Urutan
                     {showMobileFilters ? (
                       <ChevronUp className="h-3.5 w-3.5" />
                     ) : (
                       <ChevronDown className="h-3.5 w-3.5" />
                     )}
                   </button>
-                  <label className="inline-flex items-center gap-1.5 text-xs text-[#1C1917]">
+                  <label className="inline-flex items-center gap-1.5 text-xs text-[#161513]">
                     <input
                       type="checkbox"
                       checked={pdfOnly}
                       onChange={(e) => setPdfOnly(e.target.checked)}
-                      className="h-4 w-4 accent-[#1B4D3E]"
+                      className="h-4 w-4 accent-[#154033]"
                     />
                     PDF saja
                   </label>
                 </div>
 
-                {/* Filter Controls (always visible on sm+, toggleable on mobile) */}
+                {/* Understated Filter Row */}
                 <div
-                  className={`mt-3 flex-wrap items-center justify-between gap-3 border-t border-[#F2EFE9] pt-3.5 sm:mt-4 sm:flex ${
+                  className={`mt-3 flex-wrap items-center justify-between gap-3 border-t border-[#E2DFD7] pt-3 sm:flex ${
                     showMobileFilters ? "flex" : "hidden"
                   }`}
                 >
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="mr-1 inline-flex items-center gap-1 text-xs font-medium text-[#57534E]">
-                      <SlidersHorizontal className="h-3.5 w-3.5" />
-                      Indeks Q1:
-                    </span>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-[#78756E]">Indeks:</span>
                     {ALL_SOURCES.map((src) => {
                       const active = selectedSources.includes(src.id);
                       return (
@@ -671,10 +609,10 @@ export function JournalWorkspace() {
                           key={src.id}
                           type="button"
                           onClick={() => toggleSource(src.id)}
-                          className={`min-h-[34px] rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+                          className={`rounded border px-2 py-1 text-xs font-medium transition-colors ${
                             active
-                              ? "border-[#1B4D3E] bg-[#1B4D3E]/10 text-[#1B4D3E]"
-                              : "border-[#E5DFD5] bg-[#FAF8F4] text-[#57534E]"
+                              ? "border-[#154033] bg-[#154033]/8 text-[#154033]"
+                              : "border-[#E2DFD7] bg-white text-[#78756E] hover:text-[#161513]"
                           }`}
                         >
                           {src.label}
@@ -684,21 +622,21 @@ export function JournalWorkspace() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 text-xs">
-                    <label className="hidden cursor-pointer items-center gap-1.5 text-[#1C1917] sm:inline-flex">
+                    <label className="hidden cursor-pointer items-center gap-1.5 text-[#161513] sm:inline-flex">
                       <input
                         type="checkbox"
                         checked={pdfOnly}
                         onChange={(e) => setPdfOnly(e.target.checked)}
-                        className="h-3.5 w-3.5 accent-[#1B4D3E]"
+                        className="h-3.5 w-3.5 accent-[#154033]"
                       />
-                      Hanya PDF langsung
+                      PDF langsung
                     </label>
 
                     <select
                       aria-label="Filter tahun minimal"
                       value={yearFrom}
                       onChange={(e) => setYearFrom(e.target.value)}
-                      className="min-h-[36px] rounded-md border border-[#CFC6B8] bg-[#FAF8F4] px-2.5 py-1 text-xs text-[#1C1917]"
+                      className="min-h-[34px] rounded border border-[#C9C4B8] bg-[#F8F7F4] px-2 py-1 text-xs text-[#161513]"
                     >
                       <option value="">Semua Tahun</option>
                       <option value="2024">Sejak 2024</option>
@@ -711,10 +649,10 @@ export function JournalWorkspace() {
                       aria-label="Urutkan hasil"
                       value={sort}
                       onChange={(e) => setSort(e.target.value as SortOption)}
-                      className="min-h-[36px] rounded-md border border-[#CFC6B8] bg-[#FAF8F4] px-2.5 py-1 text-xs text-[#1C1917]"
+                      className="min-h-[34px] rounded border border-[#C9C4B8] bg-[#F8F7F4] px-2 py-1 text-xs text-[#161513]"
                     >
                       <option value="relevance">Relevansi + PDF</option>
-                      <option value="impact">Impact Factor Tertinggi</option>
+                      <option value="impact">Impact Factor</option>
                       <option value="newest">Terbaru</option>
                       <option value="citations">Sitasi Terbanyak</option>
                     </select>
@@ -723,92 +661,86 @@ export function JournalWorkspace() {
               </section>
 
               {searchError && (
-                <div className="mt-4 rounded-xl border border-[#9A3412]/30 bg-[#9A3412]/8 p-4 text-sm text-[#7C2D12]">
+                <div className="mt-4 rounded-md border border-[#8C3B1A]/35 bg-[#8C3B1A]/8 p-3.5 text-sm text-[#8C3B1A]">
                   {searchError}
                 </div>
               )}
 
               {searching && (
-                <div className="mt-5 space-y-4">
+                <div className="mt-6 divide-y divide-[#E2DFD7] rounded-md border border-[#E2DFD7] bg-white px-5">
                   {[1, 2, 3].map((n) => (
-                    <div
-                      key={n}
-                      className="animate-pulse rounded-xl border border-[#E5DFD5] bg-white p-5"
-                    >
-                      <div className="mb-3 flex gap-2">
-                        <div className="h-5 w-12 rounded bg-[#F2EFE9]" />
-                        <div className="h-5 w-24 rounded bg-[#F2EFE9]" />
-                      </div>
-                      <div className="h-6 w-3/4 rounded bg-[#F2EFE9]" />
-                      <div className="mt-2 h-4 w-1/2 rounded bg-[#F2EFE9]" />
-                      <div className="mt-4 h-14 w-full rounded bg-[#F2EFE9]" />
+                    <div key={n} className="animate-pulse py-5">
+                      <div className="h-4 w-20 rounded bg-[#F2EFE9]" />
+                      <div className="mt-2.5 h-5 w-3/4 rounded bg-[#F2EFE9]" />
+                      <div className="mt-2 h-3.5 w-1/2 rounded bg-[#F2EFE9]" />
+                      <div className="mt-3 h-12 w-full rounded bg-[#F2EFE9]" />
                     </div>
                   ))}
                 </div>
               )}
 
+              {/* Grouped Archival Results */}
               {!searching && searchResult && (
-                <div className="mt-5">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[#57534E]">
+                <div className="mt-6">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-xs text-[#57554F]">
                     <span>
-                      Menampilkan{" "}
-                      <strong className="font-mono tabular-nums text-[#1C1917]">
+                      Ditemukan{" "}
+                      <strong className="font-mono tabular-nums text-[#161513]">
                         {searchResult.total}
                       </strong>{" "}
-                      jurnal Q1 untuk &ldquo;{searchResult.query}&rdquo;
+                      artikel untuk &ldquo;{searchResult.query}&rdquo;
                     </span>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {searchResult.sourceStats.map((st) => (
-                        <span
-                          key={st.source}
-                          className="rounded border border-[#E5DFD5] bg-white px-2 py-0.5 font-mono text-[11px]"
-                        >
-                          {st.source}: {st.ok ? st.count : "err"}
-                        </span>
-                      ))}
-                    </div>
+                    <span className="font-mono text-[11px] text-[#78756E]">
+                      {searchResult.sourceStats
+                        .map((st) => `${st.source}: ${st.ok ? st.count : "err"}`)
+                        .join(" · ")}
+                    </span>
                   </div>
 
                   {searchResult.papers.length === 0 ? (
-                    <div className="rounded-xl border border-[#E5DFD5] bg-white p-6 text-center sm:p-8">
-                      <p className="font-serif text-lg font-semibold text-[#1C1917]">
-                        Tidak ada jurnal Q1 yang cocok
+                    <div className="rounded-md border border-[#E2DFD7] bg-white p-8 text-center">
+                      <p className="font-serif text-lg font-semibold text-[#161513]">
+                        Tidak ada artikel yang cocok
                       </p>
-                      <p className="mt-1 text-sm text-[#57534E]">
-                        Karena pencarian dikhususkan untuk jurnal Q1 bereputasi
-                        tinggi, coba gunakan kata kunci berbahasa Inggris atau
-                        matikan filter &ldquo;Hanya PDF langsung&rdquo;.
+                      <p className="mt-1 text-sm text-[#57554F]">
+                        Coba gunakan kata kunci lebih umum atau matikan filter
+                        PDF langsung.
                       </p>
                     </div>
                   ) : (
                     <div className="space-y-8">
-                      {groupedResults.map((group, groupIdx) => (
+                      {groupedResults.map((group) => (
                         <section
                           key={group.tier}
                           aria-label={group.meta.title}
-                          className={
-                            groupIdx > 0
-                              ? "border-t-2 border-[#E5DFD5] pt-6"
-                              : ""
-                          }
                         >
-                          <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#E5DFD5] bg-[#F2EFE9]/80 px-3.5 py-2.5">
-                            <div className="flex items-center gap-2.5">
+                          <div
+                            className={`flex items-baseline justify-between gap-3 pb-2 ${
+                              group.meta.priority
+                                ? "border-b-2 border-[#161513]"
+                                : "border-b border-[#C9C4B8]"
+                            }`}
+                          >
+                            <div className="flex items-baseline gap-2.5">
                               <span
-                                className={`rounded-md px-2.5 py-0.5 font-mono text-xs font-bold ${group.meta.badgeClass}`}
+                                className={`font-mono text-xs font-bold ${
+                                  group.meta.priority
+                                    ? "text-[#154033]"
+                                    : "text-[#161513]"
+                                }`}
                               >
                                 {group.meta.badge}
                               </span>
-                              <h3 className="font-serif text-sm font-semibold text-[#1C1917]">
+                              <h2 className="font-serif text-base font-semibold text-[#161513]">
                                 {group.meta.title}
-                              </h3>
+                              </h2>
                             </div>
-                            <span className="font-mono text-xs font-medium tabular-nums text-[#57534E]">
-                              {group.papers.length} jurnal
+                            <span className="font-mono text-xs tabular-nums text-[#78756E]">
+                              {group.papers.length} artikel
                             </span>
                           </div>
 
-                          <div className="space-y-4">
+                          <div className="divide-y divide-[#E2DFD7] rounded-b-md border-x border-b border-[#E2DFD7] bg-white px-4 sm:px-5">
                             {group.papers.map((paper) => (
                               <PaperCard
                                 key={paper.paperKey}
@@ -832,75 +764,83 @@ export function JournalWorkspace() {
                 </div>
               )}
 
+              {/* Quiet Editorial Empty State */}
               {!searching && !searchResult && (
-                <div className="mt-5 rounded-xl border border-[#E5DFD5] bg-white p-5 sm:p-8">
-                  <h2 className="font-serif text-lg font-semibold text-[#1C1917]">
-                    Telusuri Jurnal Ilmiah Q1 Terverifikasi
+                <div className="mt-6 rounded-md border border-[#E2DFD7] bg-white p-6 sm:p-8">
+                  <h2 className="font-serif text-xl font-semibold tracking-[-0.015em] text-[#161513]">
+                    Telusuri Literatur Ilmiah Terindeks
                   </h2>
-                  <p className="mt-1.5 max-w-[65ch] text-sm leading-relaxed text-[#57534E]">
-                    Semua hasil disaring otomatis hanya dari jurnal peer-review
-                    kuartil 1 (Q1) berdasarkan metrik Impact Factor &amp;
-                    h-index. Anda dapat membaca PDF langsung di aplikasi,
-                    menerjemahkan otomatis dari bahasa apa pun ke Bahasa
-                    Indonesia, dan mengunduh versi Word (.docx).
+                  <p className="mt-2 max-w-[64ch] text-sm leading-relaxed text-[#57554F]">
+                    Hasil pencarian otomatis dikelompokkan berdasarkan peringkat
+                    jurnal dengan prioritas{" "}
+                    <strong className="font-semibold text-[#161513]">
+                      Kuartil 1 (Q1)
+                    </strong>{" "}
+                    di urutan teratas, diikuti Q2–Q4 dan SINTA 1–6. Baca PDF
+                    langsung atau terjemahkan ke Bahasa Indonesia dari bahasa
+                    apa pun.
                   </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {STARTER_QUERIES.map((sample) => (
-                      <button
-                        key={sample}
-                        type="button"
-                        onClick={() => void runSearch(sample)}
-                        className="min-h-[38px] rounded-lg border border-[#CFC6B8] bg-[#FAF8F4] px-3 py-1.5 text-xs font-medium text-[#1C1917] transition-colors hover:border-[#1B4D3E] hover:bg-[#1B4D3E]/8 hover:text-[#1B4D3E]"
-                      >
-                        {sample}
-                      </button>
-                    ))}
+                  <div className="mt-5 border-t border-[#E2DFD7] pt-4">
+                    <span className="block text-xs font-medium text-[#78756E]">
+                      Contoh topik pencarian:
+                    </span>
+                    <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
+                      {STARTER_QUERIES.map((sample) => (
+                        <button
+                          key={sample}
+                          type="button"
+                          onClick={() => void runSearch(sample)}
+                          className="text-sm font-medium text-[#154033] underline decoration-[#C9C4B8] underline-offset-4 transition-colors hover:decoration-[#154033]"
+                        >
+                          {sample}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Desktop Right Sidebar */}
-            <aside className="hidden space-y-5 lg:block">
-              <section className="rounded-xl border border-[#E5DFD5] bg-[#F2EFE9]/70 p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[#57534E]">
-                    <History className="h-3.5 w-3.5 text-[#1B4D3E]" />
+            {/* Quiet Desktop Rail */}
+            <aside className="hidden space-y-7 lg:block lg:border-l lg:border-[#E2DFD7] lg:pl-6">
+              <section>
+                <div className="mb-3 flex items-center justify-between border-b border-[#E2DFD7] pb-2">
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-[#57554F]">
                     Riwayat Pencarian
                   </h2>
                   {history.length > 0 && (
                     <button
                       type="button"
                       onClick={() => void handleClearHistory()}
-                      className="text-[11px] font-medium text-[#78716C] hover:text-[#9A3412]"
+                      className="text-[11px] text-[#78756E] hover:text-[#8C3B1A]"
                     >
-                      Bersihkan
+                      Hapus
                     </button>
                   )}
                 </div>
 
                 {loadingSidebar ? (
                   <div className="space-y-2">
-                    <div className="h-8 rounded bg-[#E5DFD5]/70" />
-                    <div className="h-8 rounded bg-[#E5DFD5]/70" />
+                    <div className="h-6 rounded bg-[#E2DFD7]/60" />
+                    <div className="h-6 rounded bg-[#E2DFD7]/60" />
                   </div>
                 ) : history.length === 0 ? (
-                  <p className="text-xs text-[#57534E]">
-                    Belum ada riwayat pencarian Anda.
+                  <p className="text-xs text-[#78756E]">
+                    Belum ada riwayat pencarian.
                   </p>
                 ) : (
-                  <ul className="space-y-1.5">
+                  <ul className="divide-y divide-[#E2DFD7]">
                     {history.slice(0, 8).map((item) => (
                       <li key={item.id}>
                         <button
                           type="button"
                           onClick={() => void runSearch(item.query)}
-                          className="flex w-full items-center justify-between gap-2 rounded-lg border border-transparent bg-white px-3 py-2 text-left text-xs transition-colors hover:border-[#CFC6B8]"
+                          className="flex w-full items-center justify-between gap-2 py-2 text-left text-xs transition-colors hover:text-[#154033]"
                         >
-                          <span className="truncate font-medium text-[#1C1917]">
+                          <span className="truncate font-medium text-[#161513]">
                             {item.query}
                           </span>
-                          <span className="shrink-0 font-mono tabular-nums text-[11px] text-[#78716C]">
+                          <span className="shrink-0 font-mono tabular-nums text-[11px] text-[#78756E]">
                             {item.resultCount}
                           </span>
                         </button>
@@ -910,44 +850,38 @@ export function JournalWorkspace() {
                 )}
               </section>
 
-              <section className="rounded-xl border border-[#E5DFD5] bg-[#F2EFE9]/70 p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[#57534E]">
-                    <Clock className="h-3.5 w-3.5 text-[#9A3412]" />
-                    Konversi Word Terbaru
+              <section>
+                <div className="mb-3 flex items-center justify-between border-b border-[#E2DFD7] pb-2">
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-[#57554F]">
+                    Arsip Word Terbaru
                   </h2>
                   {conversions.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setActiveTab("conversions")}
-                      className="text-[11px] font-medium text-[#1B4D3E] hover:underline"
+                      className="text-[11px] font-medium text-[#154033] hover:underline"
                     >
-                      Lihat semua
+                      Semua
                     </button>
                   )}
                 </div>
 
                 {conversions.length === 0 ? (
-                  <p className="text-xs text-[#57534E]">
-                    Hasil konversi &amp; terjemahan .docx Anda tersimpan di sini.
+                  <p className="text-xs text-[#78756E]">
+                    Hasil ekspor .docx tersimpan di sini.
                   </p>
                 ) : (
-                  <ul className="space-y-2">
+                  <ul className="divide-y divide-[#E2DFD7]">
                     {conversions.slice(0, 5).map((conv) => (
-                      <li
-                        key={conv.id}
-                        className="rounded-lg border border-[#E5DFD5] bg-white p-2.5"
-                      >
-                        <div className="line-clamp-2 font-serif text-xs font-semibold text-[#1C1917]">
+                      <li key={conv.id} className="py-2.5">
+                        <div className="line-clamp-2 font-serif text-xs font-medium leading-snug text-[#161513]">
                           {conv.title}
                         </div>
-                        <div className="mt-1.5 flex items-center justify-between gap-2">
-                          <span className="rounded bg-[#FAF8F4] px-1.5 py-0.5 text-[10px] font-medium text-[#57534E]">
-                            {MODE_BADGE[conv.mode] || conv.mode}
-                          </span>
+                        <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[#78756E]">
+                          <span>{MODE_BADGE[conv.mode] || conv.mode}</span>
                           <a
                             href={`/api/conversions/${conv.id}/download`}
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1B4D3E] hover:underline"
+                            className="inline-flex items-center gap-1 font-medium text-[#154033] hover:underline"
                           >
                             <FileDown className="h-3 w-3" />
                             .docx
@@ -964,22 +898,24 @@ export function JournalWorkspace() {
 
         {activeTab === "bookmarks" && (
           <section>
-            <h2 className="mb-4 font-serif text-xl font-semibold text-[#1C1917]">
-              Jurnal Q1 Tersimpan ({bookmarks.length})
-            </h2>
+            <div className="mb-4 border-b border-[#161513] pb-2">
+              <h2 className="font-serif text-xl font-semibold text-[#161513]">
+                Jurnal Tersimpan ({bookmarks.length})
+              </h2>
+            </div>
 
             {bookmarks.length === 0 ? (
-              <div className="rounded-xl border border-[#E5DFD5] bg-white p-8 text-center">
-                <p className="font-serif text-lg font-semibold text-[#1C1917]">
+              <div className="rounded-md border border-[#E2DFD7] bg-white p-8 text-center">
+                <p className="font-serif text-lg font-semibold text-[#161513]">
                   Belum ada jurnal tersimpan
                 </p>
-                <p className="mt-1 text-sm text-[#57534E]">
-                  Klik tombol &ldquo;Simpan&rdquo; pada hasil pencarian untuk
-                  menyimpannya ke koleksi pribadi Anda.
+                <p className="mt-1 text-sm text-[#57554F]">
+                  Klik &ldquo;Simpan&rdquo; pada artikel hasil pencarian untuk
+                  menyimpannya ke koleksi Anda.
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="divide-y divide-[#E2DFD7] rounded-md border border-[#E2DFD7] bg-white px-4 sm:px-5">
                 {bookmarks.map((b) => (
                   <PaperCard
                     key={b.id}
@@ -1015,42 +951,48 @@ export function JournalWorkspace() {
 
         {activeTab === "conversions" && (
           <section>
-            <h2 className="mb-4 font-serif text-xl font-semibold text-[#1C1917]">
-              Riwayat Konversi &amp; Terjemahan Word ({conversions.length})
-            </h2>
+            <div className="mb-4 border-b border-[#161513] pb-2">
+              <h2 className="font-serif text-xl font-semibold text-[#161513]">
+                Arsip Konversi Word ({conversions.length})
+              </h2>
+            </div>
 
             {conversions.length === 0 ? (
-              <div className="rounded-xl border border-[#E5DFD5] bg-white p-8 text-center">
-                <p className="font-serif text-lg font-semibold text-[#1C1917]">
-                  Belum ada riwayat konversi Word
+              <div className="rounded-md border border-[#E2DFD7] bg-white p-8 text-center">
+                <p className="font-serif text-lg font-semibold text-[#161513]">
+                  Belum ada arsip konversi Word
                 </p>
-                <p className="mt-1 text-sm text-[#57534E]">
-                  Pilih salah satu jurnal Q1 lalu klik &ldquo;Convert Word&rdquo;
+                <p className="mt-1 text-sm text-[#57554F]">
+                  Pilih salah satu artikel lalu klik &ldquo;Ekspor Word&rdquo;
                   atau &ldquo;Terjemahkan ID&rdquo;.
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="divide-y divide-[#E2DFD7] rounded-md border border-[#E2DFD7] bg-white px-4 sm:px-5">
                 {conversions.map((conv) => (
                   <div
                     key={conv.id}
-                    className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#E5DFD5] bg-white p-4"
+                    className="flex flex-wrap items-center justify-between gap-4 py-4"
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="mb-1 flex flex-wrap items-center gap-2 text-xs">
-                        <span className="rounded bg-[#9A3412]/10 px-2 py-0.5 font-medium text-[#9A3412]">
+                      <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-[#57554F]">
+                        <span className="font-medium text-[#154033]">
                           {MODE_BADGE[conv.mode] || conv.mode}
                         </span>
-                        <span className="font-mono text-[11px] text-[#57534E]">
+                        <span aria-hidden="true">·</span>
+                        <span className="font-mono text-[11px]">
                           {conv.model}
                         </span>
                         {conv.year && (
-                          <span className="font-mono tabular-nums text-[#78716C]">
-                            {conv.year}
-                          </span>
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span className="font-mono tabular-nums">
+                              {conv.year}
+                            </span>
+                          </>
                         )}
                       </div>
-                      <h3 className="font-serif text-base font-semibold text-[#1C1917]">
+                      <h3 className="font-serif text-base font-semibold text-[#161513]">
                         {conv.title}
                       </h3>
                     </div>
@@ -1058,16 +1000,16 @@ export function JournalWorkspace() {
                     <div className="flex items-center gap-2">
                       <a
                         href={`/api/conversions/${conv.id}/download`}
-                        className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg bg-[#1B4D3E] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#143B2F]"
+                        className="inline-flex min-h-[38px] items-center gap-1.5 rounded-md bg-[#154033] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0F2E24]"
                       >
                         <FileDown className="h-3.5 w-3.5" />
                         Unduh .docx
                       </a>
                       <button
                         type="button"
-                        aria-label="Hapus riwayat konversi"
+                        aria-label="Hapus arsip konversi"
                         onClick={() => void handleDeleteConversion(conv.id)}
-                        className="min-h-[40px] rounded-lg border border-[#E5DFD5] p-2 text-[#78716C] hover:border-[#9A3412]/40 hover:text-[#9A3412]"
+                        className="min-h-[38px] rounded-md border border-[#E2DFD7] p-2 text-[#78756E] hover:border-[#8C3B1A]/40 hover:text-[#8C3B1A]"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -1081,40 +1023,40 @@ export function JournalWorkspace() {
 
         {activeTab === "history" && (
           <section>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-serif text-xl font-semibold text-[#1C1917]">
+            <div className="mb-4 flex items-center justify-between border-b border-[#161513] pb-2">
+              <h2 className="font-serif text-xl font-semibold text-[#161513]">
                 Riwayat Pencarian ({history.length})
               </h2>
               {history.length > 0 && (
                 <button
                   type="button"
                   onClick={() => void handleClearHistory()}
-                  className="text-xs font-medium text-[#9A3412] hover:underline"
+                  className="text-xs font-medium text-[#8C3B1A] hover:underline"
                 >
-                  Bersihkan Semua
+                  Hapus Semua
                 </button>
               )}
             </div>
             {history.length === 0 ? (
-              <div className="rounded-xl border border-[#E5DFD5] bg-white p-8 text-center">
-                <p className="text-sm text-[#57534E]">
+              <div className="rounded-md border border-[#E2DFD7] bg-white p-8 text-center">
+                <p className="text-sm text-[#57554F]">
                   Belum ada riwayat pencarian.
                 </p>
               </div>
             ) : (
-              <ul className="space-y-2">
+              <ul className="divide-y divide-[#E2DFD7] rounded-md border border-[#E2DFD7] bg-white px-4">
                 {history.map((item) => (
                   <li key={item.id}>
                     <button
                       type="button"
                       onClick={() => void runSearch(item.query)}
-                      className="flex min-h-[48px] w-full items-center justify-between rounded-xl border border-[#E5DFD5] bg-white px-4 py-3 text-left text-sm"
+                      className="flex min-h-[48px] w-full items-center justify-between py-3 text-left text-sm"
                     >
-                      <span className="font-medium text-[#1C1917]">
+                      <span className="font-medium text-[#161513]">
                         {item.query}
                       </span>
-                      <span className="font-mono text-xs text-[#57534E]">
-                        {item.resultCount} Q1
+                      <span className="font-mono text-xs text-[#78756E]">
+                        {item.resultCount} hasil
                       </span>
                     </button>
                   </li>
@@ -1128,23 +1070,27 @@ export function JournalWorkspace() {
       {/* Mobile Sticky Bottom Navigation */}
       <nav
         aria-label="Navigasi seluler"
-        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-[#E5DFD5] bg-[#FAF8F4]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-[#E2DFD7] bg-white pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         <button
           type="button"
           onClick={() => setActiveTab("search")}
-          className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[11px] font-semibold ${
-            activeTab === "search" ? "text-[#1B4D3E]" : "text-[#57534E]"
+          className={`flex min-h-[54px] flex-col items-center justify-center gap-0.5 border-t-2 text-[11px] font-semibold ${
+            activeTab === "search"
+              ? "border-[#154033] text-[#154033]"
+              : "border-transparent text-[#57554F]"
           }`}
         >
           <Search className="h-4 w-4" />
-          Cari Q1
+          Indeks
         </button>
         <button
           type="button"
           onClick={() => setActiveTab("bookmarks")}
-          className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[11px] font-semibold ${
-            activeTab === "bookmarks" ? "text-[#1B4D3E]" : "text-[#57534E]"
+          className={`flex min-h-[54px] flex-col items-center justify-center gap-0.5 border-t-2 text-[11px] font-semibold ${
+            activeTab === "bookmarks"
+              ? "border-[#154033] text-[#154033]"
+              : "border-transparent text-[#57554F]"
           }`}
         >
           <Bookmark className="h-4 w-4" />
@@ -1153,8 +1099,10 @@ export function JournalWorkspace() {
         <button
           type="button"
           onClick={() => setActiveTab("conversions")}
-          className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[11px] font-semibold ${
-            activeTab === "conversions" ? "text-[#1B4D3E]" : "text-[#57534E]"
+          className={`flex min-h-[54px] flex-col items-center justify-center gap-0.5 border-t-2 text-[11px] font-semibold ${
+            activeTab === "conversions"
+              ? "border-[#154033] text-[#154033]"
+              : "border-transparent text-[#57554F]"
           }`}
         >
           <FileText className="h-4 w-4" />
@@ -1163,8 +1111,10 @@ export function JournalWorkspace() {
         <button
           type="button"
           onClick={() => setActiveTab("history")}
-          className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[11px] font-semibold ${
-            activeTab === "history" ? "text-[#1B4D3E]" : "text-[#57534E]"
+          className={`flex min-h-[54px] flex-col items-center justify-center gap-0.5 border-t-2 text-[11px] font-semibold ${
+            activeTab === "history"
+              ? "border-[#154033] text-[#154033]"
+              : "border-transparent text-[#57554F]"
           }`}
         >
           <History className="h-4 w-4" />

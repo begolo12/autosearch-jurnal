@@ -1,17 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --bg-paper: #FAF8F4;
-  --bg-rail: #F2EFE9;
-  --bg-elevated: #FFFFFF;
-  --border-hairline: #E5DFD5;
-  --border-strong: #CFC6B8;
-  --ink-primary: #1C1917;
-  --ink-secondary: #57534E;
-  --ink-muted: #78716C;
-  --accent-library: #1B4D3E;
-  --accent-library-hover: #143B2F;
-  --accent-sienna: #9A3412;
+  --bg-paper: #F8F7F4;
+  --bg-sheet: #FFFFFF;
+  --border-hairline: #E2DFD7;
+  --border-strong: #C9C4B8;
+  --ink-primary: #161513;
+  --ink-secondary: #57554F;
+  --ink-muted: #78756E;
+  --accent-oxford: #154033;
+  --accent-oxford-hover: #0F2E24;
+  --accent-rust: #8C3B1A;
 }
 
 @theme inline {
@@ -24,12 +23,12 @@
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #D6CFC4 transparent;
+  scrollbar-color: #C9C4B8 transparent;
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
@@ -37,21 +36,21 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: #D6CFC4;
+  background-color: #C9C4B8;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #B8AFA1;
+  background-color: #A8A297;
 }
 
 ::selection {
-  background: rgba(27, 77, 62, 0.16);
-  color: #143B2F;
+  background: rgba(21, 64, 51, 0.14);
+  color: #0F2E24;
 }
 
 :focus-visible {
-  outline: 2px solid #1B4D3E;
+  outline: 2px solid #154033;
   outline-offset: 2px;
 }
 
