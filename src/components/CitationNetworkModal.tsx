@@ -18,7 +18,13 @@ import type { CitationNetworkResponse, JournalPaper } from "@/lib/types";
 
 interface CitationNetworkModalProps {
   initialPaper: JournalPaper;
+  initialTrail?: JournalPaper[];
+  initialTab?: NetworkTab;
   bookmarkedKeys: Set<string>;
+  onStateChange?: (state: {
+    trail: JournalPaper[];
+    activeTab: NetworkTab;
+  }) => void;
   onClose: () => void;
   onToggleBookmark: (paper: JournalPaper) => Promise<void>;
   onOpenReader: (paper: JournalPaper, autoTranslate?: boolean) => void;
@@ -29,22 +35,33 @@ type NetworkTab = "citing" | "references" | "related";
 
 export function CitationNetworkModal({
   initialPaper,
+  initialTrail,
+  initialTab,
   bookmarkedKeys,
+  onStateChange,
   onClose,
   onToggleBookmark,
   onOpenReader,
   onBuildMatrix,
 }: CitationNetworkModalProps) {
-  const [trail, setTrail] = useState<JournalPaper[]>([initialPaper]);
+  const [trail, setTrail] = useState<JournalPaper[]>(
+    initialTrail && initialTrail.length > 0 ? initialTrail : [initialPaper]
+  );
   const activeSeed = trail[trail.length - 1];
 
-  const [activeTab, setActiveTab] = useState<NetworkTab>("citing");
+  const [activeTab, setActiveTab] = useState<NetworkTab>(
+    initialTab ?? "citing"
+  );
   const [showGraph, setShowGraph] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [network, setNetwork] = useState<CitationNetworkResponse | null>(null);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [buildingMatrix, setBuildingMatrix] = useState(false);
+
+  useEffect(() => {
+    onStateChange?.({ trail, activeTab });
+  }, [trail, activeTab, onStateChange]);
 
   useEffect(() => {
     let active = true;

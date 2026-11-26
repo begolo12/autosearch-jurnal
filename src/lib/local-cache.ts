@@ -3,6 +3,7 @@ import type {
   BookmarkRecord,
   CitationNetworkResponse,
   ConversionRecord,
+  JournalPaper,
   LiteratureMatrixResult,
   PaperChatMessage,
   PaperTakeaways,
@@ -10,6 +11,8 @@ import type {
   SearchHistoryRecord,
   SearchResearchBrief,
   SearchResponse,
+  SearchSource,
+  SortOption,
 } from "@/lib/types";
 
 const PREFIX = "smartsari:v1:";
@@ -238,4 +241,57 @@ export function getWorkspaceSnapshot(): WorkspaceSnapshot | null {
 
 export function setWorkspaceSnapshot(snapshot: WorkspaceSnapshot): void {
   writeCacheEntry("workspace", "snapshot", snapshot, 2, 30 * DAY_MS);
+}
+
+// 10. Active UI Session (restores active tab, search results, modals, scroll across refresh)
+export interface UiReaderSession {
+  paper: JournalPaper;
+  autoTranslate: boolean;
+  desktopView?: "split" | "pdf" | "translate" | "chat";
+  mobileTab?: "pdf" | "translate" | "chat";
+}
+
+export interface UiNetworkSession {
+  paper: JournalPaper;
+  trail: JournalPaper[];
+  activeTab: "citing" | "references" | "related";
+}
+
+export interface UiSessionState {
+  activeTab: "search" | "bookmarks" | "conversions" | "history";
+  sidebarOpen: boolean;
+  selectedProjectId: string | null;
+  query: string;
+  selectedSources: SearchSource[];
+  tierPreset: "all" | "q1" | "q1_q2" | "q1_q4" | "sinta";
+  pdfOnly: boolean;
+  yearFrom: string;
+  sort: SortOption;
+  activeSearchCacheKey: string | null;
+  activeBriefCacheKey: string | null;
+  activeMatrixKey: string | null;
+  selectedPapersMap: Record<string, JournalPaper>;
+  readerState: UiReaderSession | null;
+  networkState: UiNetworkSession | null;
+  scrollY?: number;
+}
+
+export function getUiSession(): UiSessionState | null {
+  return readCacheEntry<UiSessionState>("ui_session", "active")?.value ?? null;
+}
+
+export function setUiSession(state: UiSessionState): void {
+  writeCacheEntry("ui_session", "active", state, 2, 7 * DAY_MS);
+}
+
+export function patchUiSessionScroll(scrollY: number): void {
+  const existing = getUiSession();
+  if (!existing) return;
+  writeCacheEntry(
+    "ui_session",
+    "active",
+    { ...existing, scrollY },
+    2,
+    7 * DAY_MS
+  );
 }

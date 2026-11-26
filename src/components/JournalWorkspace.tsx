@@ -41,11 +41,16 @@ import {
   getCachedBrief,
   getCachedMatrix,
   getCachedSearch,
+  getUiSession,
   getWorkspaceSnapshot,
+  patchUiSessionScroll,
   setCachedBrief,
   setCachedMatrix,
   setCachedSearch,
+  setUiSession,
   setWorkspaceSnapshot,
+  type UiNetworkSession,
+  type UiReaderSession,
 } from "@/lib/local-cache";
 import {
   TIER_PRIORITY_ORDER,
@@ -175,6 +180,9 @@ export function JournalWorkspace() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchSyncBadge, setSearchSyncBadge] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [activeSearchCacheKey, setActiveSearchCacheKey] = useState<
+    string | null
+  >(null);
 
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -192,11 +200,17 @@ export function JournalWorkspace() {
   const [buildingMatrix, setBuildingMatrix] = useState(false);
   const [matrixResult, setMatrixResult] =
     useState<LiteratureMatrixResult | null>(null);
+  const [activeMatrixKey, setActiveMatrixKey] = useState<string | null>(null);
   const [searchBrief, setSearchBrief] = useState<SearchResearchBrief | null>(
     null
   );
+  const [activeBriefCacheKey, setActiveBriefCacheKey] = useState<string | null>(
+    null
+  );
   const [loadingBrief, setLoadingBrief] = useState(false);
-  const [networkPaper, setNetworkPaper] = useState<JournalPaper | null>(null);
+  const [networkState, setNetworkState] = useState<UiNetworkSession | null>(
+    null
+  );
   const [exportingBibDocx, setExportingBibDocx] = useState(false);
 
   const [bookmarks, setBookmarks] = useState<BookmarkRecord[]>([]);
@@ -210,11 +224,14 @@ export function JournalWorkspace() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const sidebarSearchRef = useRef<HTMLInputElement>(null);
-
-  const [readerState, setReaderState] = useState<{
-    paper: JournalPaper;
-    autoTranslate: boolean;
+  const sessionHydratedRef = useRef(false);
+  const pendingRestoreSearchRef = useRef<{
+    query: string;
+    pdfOnly: boolean;
+    tierPreset: TierPresetId;
   } | null>(null);
+
+  const [readerState, setReaderState] = useState<UiReaderSession | null>(null);
 
   const [downloadingPdfKey, setDownloadingPdfKey] = useState<string | null>(
     null
@@ -226,6 +243,55 @@ export function JournalWorkspace() {
     actionUrl?: string;
     actionLabel?: string;
   } | null>(null);
+
+  const resetToHome = useCallback(() => {
+    setActiveTab("search");
+    setSearchResult(null);
+    setSearchBrief(null);
+    setActiveSearchCacheKey(null);
+    setActiveBriefCacheKey(null);
+    setActiveMatrixKey(null);
+    setMatrixResult(null);
+    setReaderState(null);
+    setNetworkState(null);
+    setSearchSyncBadge(null);
+    setSearchError(null);
+    setQuery("");
+  }, []);
+
+  const handleReaderViewChange = useCallback(
+    (view: {
+      desktopView: "split" | "pdf" | "translate" | "chat";
+      mobileTab: "pdf" | "translate" | "chat";
+    }) => {
+      setReaderState((prev) =>
+        !prev ||
+        (prev.desktopView === view.desktopView &&
+          prev.mobileTab === view.mobileTab)
+          ? prev
+          : { ...prev, ...view }
+      );
+    },
+    []
+  );
+
+  const handleNetworkStateChange = useCallback(
+    (st: {
+      trail: JournalPaper[];
+      activeTab: "citing" | "references" | "related";
+    }) => {
+      setNetworkState((prev) =>
+        !prev ||
+        (prev.activeTab === st.activeTab &&
+          prev.trail.length === st.trail.length &&
+          prev.trail[prev.trail.length - 1]?.paperKey ===
+            st.trail[st.trail.length - 1]?.paperKey)
+          ? prev
+          : { ...prev, trail: st.trail, activeTab: st.activeTab }
+      );
+    },
+    []
+  );
 
   const reloadWorkspaceData = useCallback(async () => {
     try {
@@ -301,8 +367,198 @@ export function JournalWorkspace() {
       setConversions(snap.conversions);
       setLoadingSidebar(false);
     }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const saved = getUiSession();
+
+    const urlTab = urlParams.get("tab") as ActiveTab | null;
+    const urlProject = urlParams.get("project");
+    const urlQuery = urlParams.get("q");
+    const urlTier = urlParams.get("tier") as TierPresetId | null;
+    const urlPdf = urlParams.get("pdf");
+    const urlYear = urlParams.get("year");
+    const urlSort = urlParams.get("sort") as SortOption | null;
+
+    if (saved) {
+      setActiveTab(
+        urlTab &&
+          ["search", "bookmarks", "conversions", "history"].includes(urlTab)
+          ? urlTab
+          : saved.activeTab
+      );
+      setSidebarOpen(saved.sidebarOpen);
+      setSelectedProjectId(urlProject ?? saved.selectedProjectId);
+      setQuery(urlQuery ?? saved.query);
+      if (saved.selectedSources?.length) {
+        setSelectedSources(saved.selectedSources);
+      }
+      setTierPreset(urlTier ?? saved.tierPreset);
+      setPdfOnly(urlPdf === "1" ? true : saved.pdfOnly);
+      setYearFrom(urlYear ?? saved.yearFrom);
+      setSort(urlSort ?? saved.sort);
+      setSelectedPapersMap(saved.selectedPapersMap ?? {});
+      if (saved.readerState) setReaderState(saved.readerState);
+      if (saved.networkState) setNetworkState(saved.networkState);
+
+      let restoredSearch = false;
+      if (saved.activeSearchCacheKey) {
+        const cached = getCachedSearch(saved.activeSearchCacheKey);
+        if (cached) {
+          setSearchResult(cached.data);
+          setActiveSearchCacheKey(saved.activeSearchCacheKey);
+          setSearchSyncBadge("Cache Lokal · Dipulihkan");
+          restoredSearch = true;
+        }
+      }
+
+      if (saved.activeBriefCacheKey) {
+        const cachedBrief = getCachedBrief(saved.activeBriefCacheKey);
+        if (cachedBrief) {
+          setSearchBrief(cachedBrief);
+          setActiveBriefCacheKey(saved.activeBriefCacheKey);
+        }
+      }
+
+      if (saved.activeMatrixKey) {
+        const cachedMatrix = getCachedMatrix(saved.activeMatrixKey);
+        if (cachedMatrix) {
+          setMatrixResult(cachedMatrix);
+          setActiveMatrixKey(saved.activeMatrixKey);
+        }
+      }
+
+      const effectiveQuery = (urlQuery ?? saved.query).trim();
+      const effectiveTab =
+        urlTab &&
+        ["search", "bookmarks", "conversions", "history"].includes(urlTab)
+          ? urlTab
+          : saved.activeTab;
+
+      if (
+        !restoredSearch &&
+        effectiveTab === "search" &&
+        effectiveQuery.length >= 2 &&
+        (urlQuery || saved.activeSearchCacheKey)
+      ) {
+        pendingRestoreSearchRef.current = {
+          query: effectiveQuery,
+          pdfOnly: urlPdf === "1" ? true : saved.pdfOnly,
+          tierPreset: urlTier ?? saved.tierPreset,
+        };
+      }
+
+      if (
+        saved.scrollY &&
+        saved.scrollY > 0 &&
+        !saved.readerState &&
+        !saved.networkState &&
+        !saved.activeMatrixKey
+      ) {
+        const targetY = saved.scrollY;
+        requestAnimationFrame(() => window.scrollTo(0, targetY));
+      }
+    } else if (urlTab || urlQuery || urlProject) {
+      if (
+        urlTab &&
+        ["search", "bookmarks", "conversions", "history"].includes(urlTab)
+      ) {
+        setActiveTab(urlTab);
+      }
+      if (urlProject) setSelectedProjectId(urlProject);
+      if (urlTier) setTierPreset(urlTier);
+      if (urlPdf === "1") setPdfOnly(true);
+      if (urlYear) setYearFrom(urlYear);
+      if (urlSort) setSort(urlSort);
+      if (urlQuery && urlQuery.trim().length >= 2) {
+        setQuery(urlQuery);
+        pendingRestoreSearchRef.current = {
+          query: urlQuery.trim(),
+          pdfOnly: urlPdf === "1",
+          tierPreset: urlTier ?? "all",
+        };
+      }
+    }
+
+    sessionHydratedRef.current = true;
     void reloadWorkspaceData();
   }, [reloadWorkspaceData]);
+
+  useEffect(() => {
+    if (!sessionHydratedRef.current) return;
+
+    setUiSession({
+      activeTab,
+      sidebarOpen,
+      selectedProjectId,
+      query,
+      selectedSources,
+      tierPreset,
+      pdfOnly,
+      yearFrom,
+      sort,
+      activeSearchCacheKey,
+      activeBriefCacheKey,
+      activeMatrixKey,
+      selectedPapersMap,
+      readerState,
+      networkState,
+    });
+
+    const isHomeLanding =
+      activeTab === "search" &&
+      !searchResult &&
+      !readerState &&
+      !networkState &&
+      !matrixResult;
+
+    if (isHomeLanding) {
+      if (window.location.search) {
+        window.history.replaceState(null, "", "/");
+      }
+      return;
+    }
+
+    const params = new URLSearchParams();
+    if (activeTab !== "search") params.set("tab", activeTab);
+    if (activeTab === "bookmarks" && selectedProjectId) {
+      params.set("project", selectedProjectId);
+    }
+    if (activeTab === "search" && (searchResult?.query || query.trim())) {
+      params.set("q", (searchResult?.query || query).trim());
+    }
+    if (tierPreset !== "all") params.set("tier", tierPreset);
+    if (pdfOnly) params.set("pdf", "1");
+    if (yearFrom) params.set("year", yearFrom);
+    if (sort !== "relevance") params.set("sort", sort);
+    if (readerState) params.set("view", "pdf");
+    else if (networkState) params.set("view", "network");
+    else if (matrixResult) params.set("view", "matrix");
+
+    const qs = params.toString();
+    const nextUrl = qs ? `/?${qs}` : "/";
+    const currentUrl = window.location.pathname + window.location.search;
+    if (currentUrl !== nextUrl) {
+      window.history.replaceState(null, "", nextUrl);
+    }
+  }, [
+    activeTab,
+    sidebarOpen,
+    selectedProjectId,
+    query,
+    selectedSources,
+    tierPreset,
+    pdfOnly,
+    yearFrom,
+    sort,
+    activeSearchCacheKey,
+    activeBriefCacheKey,
+    activeMatrixKey,
+    selectedPapersMap,
+    readerState,
+    networkState,
+    searchResult,
+    matrixResult,
+  ]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -318,7 +574,8 @@ export function JournalWorkspace() {
         setShowFilterMenu(false);
         setShowAuthModal(false);
         setMatrixResult(null);
-        setNetworkPaper(null);
+        setActiveMatrixKey(null);
+        setNetworkState(null);
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setActiveTab("search");
@@ -336,8 +593,15 @@ export function JournalWorkspace() {
       }
     };
 
+    let scrollTimer: ReturnType<typeof setTimeout> | null = null;
     const handleScroll = () => {
       setShowScrollTop(window.scrollY > 450);
+      if (!readerState && !networkState && !matrixResult) {
+        if (scrollTimer) clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(() => {
+          patchUiSessionScroll(window.scrollY);
+        }, 250);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -345,8 +609,9 @@ export function JournalWorkspace() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("scroll", handleScroll);
+      if (scrollTimer) clearTimeout(scrollTimer);
     };
-  }, [readerState]);
+  }, [readerState, networkState, matrixResult]);
 
   const filteredHistory = useMemo(() => {
     const q = historyFilter.trim().toLowerCase();
@@ -421,6 +686,8 @@ export function JournalWorkspace() {
       setShowFilterMenu(false);
       setSearchError(null);
       setNotice(null);
+      setActiveSearchCacheKey(searchCacheKey);
+      setActiveBriefCacheKey(briefCacheKey);
 
       let servedFromCache = false;
       let cachedEntry: { data: SearchResponse; savedAt: number } | null = null;
@@ -539,11 +806,19 @@ export function JournalWorkspace() {
     [query, selectedSources, pdfOnly, tierPreset, yearFrom, sort]
   );
 
+  useEffect(() => {
+    const pending = pendingRestoreSearchRef.current;
+    if (!pending) return;
+    pendingRestoreSearchRef.current = null;
+    void runSearch(pending.query, pending.pdfOnly, pending.tierPreset);
+  }, [runSearch]);
+
   const handleGenerateBrief = async () => {
     if (!searchResult || searchResult.papers.length === 0 || loadingBrief) {
       return;
     }
     const briefCacheKey = `${searchResult.query.toLowerCase().replace(/\s+/g, " ")}::${tierPreset}`;
+    setActiveBriefCacheKey(briefCacheKey);
     const cached = getCachedBrief(briefCacheKey);
     if (cached) {
       setSearchBrief(cached);
@@ -630,6 +905,7 @@ export function JournalWorkspace() {
       .map((p) => p.paperKey)
       .sort()
       .join("|");
+    setActiveMatrixKey(matrixKey);
     const cached = getCachedMatrix(matrixKey);
     if (cached) {
       setMatrixResult(cached);
@@ -1191,11 +1467,7 @@ export function JournalWorkspace() {
         <div className="flex items-center justify-between px-4 py-3.5">
           <button
             type="button"
-            onClick={() => {
-              setActiveTab("search");
-              setSearchResult(null);
-              setQuery("");
-            }}
+            onClick={resetToHome}
             className="flex items-center gap-2 text-left"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1236,11 +1508,7 @@ export function JournalWorkspace() {
         <nav aria-label="Menu utama" className="space-y-0.5 px-2.5">
           <button
             type="button"
-            onClick={() => {
-              setActiveTab("search");
-              setSearchResult(null);
-              setQuery("");
-            }}
+            onClick={resetToHome}
             className={`flex w-full items-center gap-2.5 rounded-full px-3 py-2 text-xs font-medium transition-colors ${
               activeTab === "search" && !searchResult
                 ? "bg-[#232429] text-white"
@@ -1530,11 +1798,7 @@ export function JournalWorkspace() {
 
             <button
               type="button"
-              onClick={() => {
-                setActiveTab("search");
-                setSearchResult(null);
-                setQuery("");
-              }}
+              onClick={resetToHome}
               className="flex items-center gap-2 md:hidden"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1967,7 +2231,13 @@ export function JournalWorkspace() {
                                   onToggleSelectMatrix={
                                     handleToggleSelectMatrix
                                   }
-                                  onOpenNetwork={(p) => setNetworkPaper(p)}
+                                  onOpenNetwork={(p) =>
+                                    setNetworkState({
+                                      paper: p,
+                                      trail: [p],
+                                      activeTab: "citing",
+                                    })
+                                  }
                                 />
                               ))}
                             </div>
@@ -2156,7 +2426,13 @@ export function JournalWorkspace() {
                           selectedPapersMap[b.paperKey]
                         )}
                         onToggleSelectMatrix={handleToggleSelectMatrix}
-                        onOpenNetwork={(p) => setNetworkPaper(p)}
+                        onOpenNetwork={(p) =>
+                                    setNetworkState({
+                                      paper: p,
+                                      trail: [p],
+                                      activeTab: "citing",
+                                    })
+                                  }
                         bookmarkId={b.id}
                         projectId={b.projectId}
                         note={b.note}
@@ -2438,8 +2714,12 @@ export function JournalWorkspace() {
       {/* In-App PDF Reader & Universal Auto-Translate + Tanya AI Modal */}
       {readerState && (
         <PdfReaderModal
+          key={readerState.paper.paperKey}
           paper={readerState.paper}
           initialTranslate={readerState.autoTranslate}
+          initialDesktopView={readerState.desktopView}
+          initialMobileTab={readerState.mobileTab}
+          onViewChange={handleReaderViewChange}
           onClose={() => setReaderState(null)}
           onDownloadPdf={handleDownloadPdf}
           onDownloadTranslatedDocx={(p) =>
@@ -2449,11 +2729,15 @@ export function JournalWorkspace() {
       )}
 
       {/* Citation Network & Snowballing Modal */}
-      {networkPaper && (
+      {networkState && (
         <CitationNetworkModal
-          initialPaper={networkPaper}
+          key={networkState.paper.paperKey}
+          initialPaper={networkState.paper}
+          initialTrail={networkState.trail}
+          initialTab={networkState.activeTab}
           bookmarkedKeys={new Set(bookmarkedMap.keys())}
-          onClose={() => setNetworkPaper(null)}
+          onStateChange={handleNetworkStateChange}
+          onClose={() => setNetworkState(null)}
           onToggleBookmark={handleToggleBookmark}
           onOpenReader={(p, autoTranslate = false) =>
             setReaderState({ paper: p, autoTranslate })
@@ -2468,7 +2752,10 @@ export function JournalWorkspace() {
       {matrixResult && (
         <LiteratureMatrixModal
           matrix={matrixResult}
-          onClose={() => setMatrixResult(null)}
+          onClose={() => {
+            setMatrixResult(null);
+            setActiveMatrixKey(null);
+          }}
         />
       )}
 

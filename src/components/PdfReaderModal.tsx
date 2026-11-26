@@ -28,6 +28,12 @@ import type { JournalPaper, PaperChatMessage } from "@/lib/types";
 interface PdfReaderModalProps {
   paper: JournalPaper;
   initialTranslate?: boolean;
+  initialDesktopView?: DesktopView;
+  initialMobileTab?: MobileTab;
+  onViewChange?: (view: {
+    desktopView: DesktopView;
+    mobileTab: MobileTab;
+  }) => void;
   onClose: () => void;
   onDownloadPdf: (paper: JournalPaper) => Promise<void>;
   onDownloadTranslatedDocx: (paper: JournalPaper) => Promise<void>;
@@ -125,16 +131,25 @@ function MarkdownView({ content }: { content: string }) {
 export function PdfReaderModal({
   paper,
   initialTranslate = false,
+  initialDesktopView,
+  initialMobileTab,
+  onViewChange,
   onClose,
   onDownloadPdf,
   onDownloadTranslatedDocx,
 }: PdfReaderModalProps) {
   const [desktopView, setDesktopView] = useState<DesktopView>(
-    initialTranslate ? "split" : paper.pdfUrl ? "split" : "translate"
+    initialDesktopView ??
+      (initialTranslate ? "split" : paper.pdfUrl ? "split" : "translate")
   );
   const [mobileTab, setMobileTab] = useState<MobileTab>(
-    initialTranslate || !paper.pdfUrl ? "translate" : "pdf"
+    initialMobileTab ??
+      (initialTranslate || !paper.pdfUrl ? "translate" : "pdf")
   );
+
+  useEffect(() => {
+    onViewChange?.({ desktopView, mobileTab });
+  }, [desktopView, mobileTab, onViewChange]);
 
   const [translating, setTranslating] = useState(initialTranslate);
   const [translatedMarkdown, setTranslatedMarkdown] = useState<string | null>(
