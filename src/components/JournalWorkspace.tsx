@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Search,
   Send,
+  SlidersHorizontal,
   Sparkles,
   SquarePen,
   Trash2,
@@ -38,6 +39,7 @@ import {
   formatRelativeTimeId,
 } from "@/lib/citation";
 import {
+  clearAllLocalCache,
   getCachedBrief,
   getCachedMatrix,
   getCachedSearch,
@@ -656,7 +658,10 @@ export function JournalWorkspace() {
       overrideTierPreset?: TierPresetId,
       pageNum = 1,
       append = false,
-      forceOnline = false
+      forceOnline = false,
+      overrideSort?: SortOption,
+      overrideYearFrom?: string,
+      overrideSources?: SearchSource[]
     ) => {
       const q = (overrideQuery ?? query).trim();
       if (q.length < 2) {
@@ -669,16 +674,19 @@ export function JournalWorkspace() {
 
       const effectivePdfOnly = overridePdfOnly ?? pdfOnly;
       const effectivePresetId = overrideTierPreset ?? tierPreset;
+      const effectiveSort = overrideSort ?? sort;
+      const effectiveYearFrom = overrideYearFrom ?? yearFrom;
+      const effectiveSources = overrideSources ?? selectedSources;
       const preset =
         TIER_PRESETS.find((p) => p.id === effectivePresetId) ?? TIER_PRESETS[0];
 
       const searchCacheKey = JSON.stringify({
         q: q.toLowerCase().replace(/\s+/g, " "),
-        sources: [...selectedSources].sort(),
+        sources: [...effectiveSources].sort(),
         preset: effectivePresetId,
         pdfOnly: effectivePdfOnly,
-        yearFrom,
-        sort,
+        yearFrom: effectiveYearFrom,
+        sort: effectiveSort,
       });
       const briefCacheKey = `${q.toLowerCase().replace(/\s+/g, " ")}::${effectivePresetId}`;
 
@@ -718,17 +726,17 @@ export function JournalWorkspace() {
         const params = new URLSearchParams();
         params.set("q", q);
         if (
-          selectedSources.length > 0 &&
-          selectedSources.length < ALL_SOURCES.length
+          effectiveSources.length > 0 &&
+          effectiveSources.length < ALL_SOURCES.length
         ) {
-          params.set("sources", selectedSources.join(","));
+          params.set("sources", effectiveSources.join(","));
         }
         if (effectivePresetId !== "all") {
           params.set("tiers", preset.tiers.join(","));
         }
         if (effectivePdfOnly) params.set("pdfOnly", "true");
-        if (yearFrom) params.set("yearFrom", yearFrom);
-        params.set("sort", sort);
+        if (effectiveYearFrom) params.set("yearFrom", effectiveYearFrom);
+        params.set("sort", effectiveSort);
         params.set("page", String(pageNum));
 
         const res = await fetch(`/api/search?${params.toString()}`);
@@ -1101,12 +1109,26 @@ export function JournalWorkspace() {
   }, [searchResult]);
 
   const toggleSource = (source: SearchSource) => {
-    setSelectedSources((prev) => {
-      if (prev.includes(source)) {
-        return prev.length > 1 ? prev.filter((s) => s !== source) : prev;
-      }
-      return [...prev, source];
-    });
+    const next = selectedSources.includes(source)
+      ? selectedSources.length > 1
+        ? selectedSources.filter((s) => s !== source)
+        : selectedSources
+      : [...selectedSources, source];
+    if (next === selectedSources) return;
+    setSelectedSources(next);
+    if (searchResult && activeTab === "search") {
+      void runSearch(
+        searchResult.query,
+        undefined,
+        undefined,
+        1,
+        false,
+        false,
+        undefined,
+        undefined,
+        next
+      );
+    }
   };
 
   const handleToggleBookmark = async (paper: JournalPaper) => {
@@ -1303,7 +1325,7 @@ export function JournalWorkspace() {
           type="button"
           aria-label="Filter indeks dan tahun"
           onClick={() => setShowFilterMenu((v) => !v)}
-          className={`btn-tactile inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
+          className={`btn-tactile relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
             showFilterMenu ||
             yearFrom ||
             selectedSources.length < ALL_SOURCES.length
@@ -1311,7 +1333,10 @@ export function JournalWorkspace() {
               : "text-[#A1A1AA] hover:bg-[#2C2E35] hover:text-white"
           }`}
         >
-          <Plus className="h-4 w-4" />
+          <SlidersHorizontal className="h-4 w-4" />
+          {(yearFrom || selectedSources.length < ALL_SOURCES.length) && (
+            <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#F472B6]" />
+          )}
         </button>
 
         <input
@@ -1340,7 +1365,21 @@ export function JournalWorkspace() {
         <select
           aria-label="Urutkan hasil"
           value={sort}
-          onChange={(e) => setSort(e.target.value as SortOption)}
+          onChange={(e) => {
+            const nextSort = e.target.value as SortOption;
+            setSort(nextSort);
+            if (searchResult && activeTab === "search") {
+              void runSearch(
+                searchResult.query,
+                undefined,
+                undefined,
+                1,
+                false,
+                false,
+                nextSort
+              );
+            }
+          }}
           className="hidden cursor-pointer border-l border-[#2C2E35] bg-transparent pl-2.5 pr-1 py-1 text-xs font-medium text-[#A1A1AA] hover:text-white focus:outline-none sm:block"
         >
           <option value="relevance" className="bg-[#151619] text-[#F4F4F5]">
@@ -1421,7 +1460,22 @@ export function JournalWorkspace() {
                 <select
                   aria-label="Filter tahun minimal"
                   value={yearFrom}
-                  onChange={(e) => setYearFrom(e.target.value)}
+                  onChange={(e) => {
+                    const nextYear = e.target.value;
+                    setYearFrom(nextYear);
+                    if (searchResult && activeTab === "search") {
+                      void runSearch(
+                        searchResult.query,
+                        undefined,
+                        undefined,
+                        1,
+                        false,
+                        false,
+                        undefined,
+                        nextYear
+                      );
+                    }
+                  }}
                   className="w-full rounded-lg border border-[#2C2E35] bg-[#1E1F23] px-2.5 py-1.5 text-xs text-[#F4F4F5]"
                 >
                   <option value="">Semua Tahun</option>
@@ -1439,7 +1493,21 @@ export function JournalWorkspace() {
                 <select
                   aria-label="Urutkan hasil seluler"
                   value={sort}
-                  onChange={(e) => setSort(e.target.value as SortOption)}
+                  onChange={(e) => {
+                    const nextSort = e.target.value as SortOption;
+                    setSort(nextSort);
+                    if (searchResult && activeTab === "search") {
+                      void runSearch(
+                        searchResult.query,
+                        undefined,
+                        undefined,
+                        1,
+                        false,
+                        false,
+                        nextSort
+                      );
+                    }
+                  }}
                   className="w-full rounded-lg border border-[#2C2E35] bg-[#1E1F23] px-2.5 py-1.5 text-xs text-[#F4F4F5]"
                 >
                   <option value="relevance">Relevansi</option>
@@ -1641,27 +1709,6 @@ export function JournalWorkspace() {
             )}
           </section>
 
-          {conversions.length > 0 && (
-            <section>
-              <div className="mb-1.5 px-1 text-[11px] font-medium text-[#71717A]">
-                Arsip Word
-              </div>
-              <ul className="space-y-0.5">
-                {conversions.slice(0, 4).map((conv) => (
-                  <li key={conv.id}>
-                    <a
-                      href={`/api/conversions/${conv.id}/download`}
-                      className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-[#D4D4D8] transition-colors hover:bg-[#1E1F23] hover:text-white"
-                    >
-                      <FileDown className="h-3.5 w-3.5 shrink-0 text-[#F472B6]" />
-                      <span className="truncate">{conv.title}</span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
           <section>
             <div className="mb-1.5 flex items-center justify-between px-1">
               <span className="text-[11px] font-medium text-[#71717A]">
@@ -1738,7 +1785,7 @@ export function JournalWorkspace() {
         </div>
 
         {/* Account & Cross-Device Sync Footer */}
-        <div className="border-t border-[#232429] p-3">
+        <div className="space-y-2 border-t border-[#232429] p-3">
           {authUser ? (
             <div className="flex items-center justify-between gap-2 rounded-xl bg-[#1E1F23] px-3 py-2">
               <div className="flex min-w-0 items-center gap-2">
@@ -1773,6 +1820,23 @@ export function JournalWorkspace() {
               <span>Masuk &amp; Sinkronkan</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => {
+              clearAllLocalCache();
+              setSearchSyncBadge(null);
+              setNotice({
+                type: "info",
+                message:
+                  "Cache lokal dibersihkan. Pencarian berikutnya akan mengambil data segar.",
+              });
+            }}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg px-2 py-1 text-[11px] text-[#71717A] transition-colors hover:bg-[#1E1F23] hover:text-[#D4D4D8]"
+          >
+            <Trash2 className="h-3 w-3" />
+            <span>Bersihkan Cache Lokal</span>
+          </button>
         </div>
       </aside>
 
@@ -1815,6 +1879,31 @@ export function JournalWorkspace() {
 
           <div className="flex items-center gap-2">
             <PwaRegistrar />
+            {authUser ? (
+              <div className="flex items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#151619] py-1 pl-2.5 pr-1.5 text-xs md:hidden">
+                <User className="h-3.5 w-3.5 text-[#F472B6]" />
+                <span className="max-w-[90px] truncate font-medium text-white">
+                  {authUser.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void handleLogout()}
+                  aria-label="Keluar dari akun"
+                  className="rounded-full p-1 text-[#A1A1AA] hover:bg-[#232429] hover:text-[#F87171]"
+                >
+                  <LogOut className="h-3 w-3" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowAuthModal(true)}
+                className="btn-tactile inline-flex items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/45 hover:text-white md:hidden"
+              >
+                <Cloud className="h-3.5 w-3.5 text-[#F472B6]" />
+                <span>Masuk</span>
+              </button>
+            )}
           </div>
         </header>
 
@@ -1889,7 +1978,7 @@ export function JournalWorkspace() {
 
               {renderPillSearchBar(false)}
 
-              {/* 2-Pill Mode Toggle (like Chat | Task in reference) */}
+              {/* 2-Pill Mode Toggle */}
               <div className="mt-4 inline-flex items-center gap-1 rounded-full bg-[#151619] p-1 border border-[#232429]">
                 <button
                   type="button"
@@ -1900,7 +1989,7 @@ export function JournalWorkspace() {
                       : "text-[#A1A1AA] hover:text-white"
                   }`}
                 >
-                  Semua Rank
+                  Semua Jurnal
                 </button>
                 <button
                   type="button"
@@ -1911,7 +2000,7 @@ export function JournalWorkspace() {
                       : "text-[#A1A1AA] hover:text-white"
                   }`}
                 >
-                  Khusus PDF
+                  Ada PDF Gratis
                 </button>
               </div>
 
@@ -1990,15 +2079,21 @@ export function JournalWorkspace() {
                         Cek Baru
                       </button>
                     </div>
-                    <span className="font-mono text-[11px] text-[#71717A]">
-                      {searchResult.sourceStats
+                    <span
+                      title={searchResult.sourceStats
                         .map((st) => `${st.source}: ${st.ok ? st.count : "err"}`)
                         .join(" · ")}
+                      className="cursor-help text-[11px] text-[#71717A]"
+                    >
+                      {
+                        searchResult.sourceStats.filter((st) => st.ok).length
+                      }{" "}
+                      indeks aktif
                     </span>
                   </div>
 
-                  {/* Quick Tier Filter Chips */}
-                  <div className="mb-4 flex flex-wrap items-center gap-1.5">
+                  {/* Unified Tier + PDF Filter Chips */}
+                  <div className="mb-3 flex flex-wrap items-center gap-1.5">
                     {TIER_PRESETS.map((preset) => {
                       const active = tierPreset === preset.id;
                       return (
@@ -2025,41 +2120,64 @@ export function JournalWorkspace() {
                         </button>
                       );
                     })}
+
+                    <span
+                      aria-hidden="true"
+                      className="mx-1 hidden h-4 w-px bg-[#2C2E35] sm:inline-block"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextPdfOnly = !pdfOnly;
+                        setPdfOnly(nextPdfOnly);
+                        void runSearch(
+                          searchResult.query,
+                          nextPdfOnly,
+                          undefined,
+                          1,
+                          false
+                        );
+                      }}
+                      className={`btn-tactile inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                        pdfOnly
+                          ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300"
+                          : "border border-[#2C2E35] bg-[#151619] text-[#A1A1AA] hover:border-emerald-500/40 hover:text-white"
+                      }`}
+                    >
+                      <FileText className="h-3 w-3" />
+                      <span>Ada PDF Gratis</span>
+                    </button>
                   </div>
 
-                  {/* AI Research Brief & Query Optimizer */}
+                  {/* Compact AI Research Brief & Query Optimizer */}
                   {searchResult.papers.length > 0 && (
-                    <div className="mb-5 rounded-2xl border border-[#2C2E35] bg-[#151619] p-4">
+                    <div
+                      className={`mb-4 rounded-xl border border-[#2C2E35] bg-[#151619] ${
+                        searchBrief ? "p-4" : "px-3.5 py-2.5"
+                      }`}
+                    >
                       {!searchBrief ? (
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex items-center gap-2.5">
-                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#DB2777]/15 text-[#F472B6]">
-                              <Sparkles className="h-4 w-4" />
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 text-xs">
+                            <Sparkles className="h-3.5 w-3.5 shrink-0 text-[#F472B6]" />
+                            <span className="font-medium text-[#E4E4E7]">
+                              Ringkasan AI &amp; saran kata kunci dari hasil
+                              teratas
                             </span>
-                            <div>
-                              <p className="text-xs font-semibold text-white">
-                                Ringkasan AI &amp; Optimasi Pencarian
-                              </p>
-                              <p className="text-[11px] text-[#A1A1AA]">
-                                Rangkum temuan utama dari hasil teratas &amp;
-                                dapatkan saran kata kunci yang lebih tajam.
-                              </p>
-                            </div>
                           </div>
                           <button
                             type="button"
                             disabled={loadingBrief}
                             onClick={() => void handleGenerateBrief()}
-                            className="btn-tactile inline-flex items-center gap-1.5 rounded-full bg-[#DB2777] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
+                            className="btn-tactile inline-flex items-center gap-1.5 rounded-full bg-[#DB2777] px-3.5 py-1 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
                           >
                             {loadingBrief ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              <Loader2 className="h-3 w-3 animate-spin" />
                             ) : (
-                              <Sparkles className="h-3.5 w-3.5" />
+                              <Sparkles className="h-3 w-3" />
                             )}
-                            {loadingBrief
-                              ? "Menganalisis..."
-                              : "Analisis Hasil dengan AI"}
+                            {loadingBrief ? "Menganalisis..." : "Analisis AI"}
                           </button>
                         </div>
                       ) : (
@@ -2070,8 +2188,8 @@ export function JournalWorkspace() {
                               <span className="text-xs font-semibold text-white">
                                 Intisari Riset AI
                               </span>
-                              <span className="font-mono text-[10px] text-[#71717A]">
-                                {searchBrief.model}
+                              <span className="text-[11px] font-medium text-[#A1A1AA]">
+                                · SmartSari AI
                               </span>
                             </div>
                             <button
@@ -2312,6 +2430,68 @@ export function JournalWorkspace() {
                 )}
               </div>
 
+              <div className="mb-3 flex flex-wrap items-center gap-1.5 overflow-x-auto pb-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedProjectId(null)}
+                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    !selectedProjectId
+                      ? "bg-[#DB2777] text-white"
+                      : "border border-[#2C2E35] bg-[#151619] text-[#A1A1AA] hover:text-white"
+                  }`}
+                >
+                  Semua ({bookmarks.length})
+                </button>
+                {projects.map((proj) => (
+                  <button
+                    key={proj.id}
+                    type="button"
+                    onClick={() => setSelectedProjectId(proj.id)}
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                      selectedProjectId === proj.id
+                        ? "bg-[#DB2777] text-white"
+                        : "border border-[#2C2E35] bg-[#151619] text-[#A1A1AA] hover:text-white"
+                    }`}
+                  >
+                    <FolderOpen className="h-3 w-3" />
+                    <span>{proj.name}</span>
+                    <span className="font-mono text-[10px] opacity-80">
+                      {proj.bookmarkCount}
+                    </span>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setShowNewProjectInput((v) => !v)}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-[#2C2E35] px-2.5 py-1 text-xs font-medium text-[#F472B6] hover:border-[#F472B6]"
+                >
+                  <Plus className="h-3 w-3" />
+                  <span>Proyek</span>
+                </button>
+              </div>
+
+              {showNewProjectInput && (
+                <form
+                  onSubmit={(e) => void handleCreateProject(e)}
+                  className="mb-3 flex max-w-xs items-center gap-1.5"
+                >
+                  <input
+                    type="text"
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    placeholder="Nama proyek baru..."
+                    className="min-w-0 flex-1 rounded-lg border border-[#2C2E35] bg-[#151619] px-2.5 py-1.5 text-xs text-white placeholder:text-[#71717A] focus:border-[#F472B6] focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={creatingProject || !newProjectName.trim()}
+                    className="rounded-lg bg-[#DB2777] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-50"
+                  >
+                    Simpan
+                  </button>
+                </form>
+              )}
+
               {filteredBookmarks.length > 0 && (
                 <div className="mb-4 flex flex-wrap items-center gap-2">
                   <button
@@ -2395,6 +2575,16 @@ export function JournalWorkspace() {
               ) : (
                 <div className="divide-y divide-[#232429]">
                   {filteredBookmarks.map((b) => {
+                    const normalizedTier = b.tierLabel
+                      ? (b.tierLabel
+                          .toUpperCase()
+                          .replace(/\s+/g, "") as JournalTier)
+                      : null;
+                    const mappedTier =
+                      normalizedTier &&
+                      TIER_PRIORITY_ORDER.includes(normalizedTier)
+                        ? normalizedTier
+                        : undefined;
                     const mappedPaper: JournalPaper = {
                       paperKey: b.paperKey,
                       title: b.title,
@@ -2408,6 +2598,15 @@ export function JournalWorkspace() {
                       doi: b.doi,
                       citations: b.citations,
                       openAccess: Boolean(b.pdfUrl),
+                      journalMetrics: b.tierLabel
+                        ? {
+                            primaryTier: mappedTier ?? "Q1",
+                            tierLabel: b.tierLabel,
+                            impactFactor: 0,
+                            hIndex: 0,
+                            issn: null,
+                          }
+                        : undefined,
                     };
                     return (
                       <PaperCard
@@ -2493,8 +2692,8 @@ export function JournalWorkspace() {
                           <span className="rounded-md bg-[#DB2777]/15 px-2 py-0.5 font-medium text-[#F472B6]">
                             {MODE_BADGE[conv.mode] || conv.mode}
                           </span>
-                          <span className="font-mono text-[11px]">
-                            {conv.model}
+                          <span className="text-[11px] font-medium text-[#A1A1AA]">
+                            SmartSari AI
                           </span>
                           {conv.year && (
                             <span className="font-mono tabular-nums">

@@ -257,7 +257,12 @@ export function PaperCard({
   };
 
   const tier = paper.journalMetrics?.primaryTier;
-  const tierLabel = paper.journalMetrics?.tierLabel || "Q1";
+  const tierLabel = paper.journalMetrics?.tierLabel || null;
+  const hasImpactMetrics = Boolean(
+    paper.journalMetrics &&
+      (paper.journalMetrics.impactFactor > 0 ||
+        paper.journalMetrics.hIndex > 0)
+  );
 
   const tierBadgeClass =
     tier === "Q1" || tier === "SINTA1"
@@ -285,12 +290,18 @@ export function PaperCard({
     <article className="-mx-3 rounded-xl px-3 py-5 transition-colors duration-150 hover:bg-[#16171B] sm:grid sm:grid-cols-[88px_1fr] sm:gap-5">
       {/* Left Rank Indicator */}
       <div className="mb-2 flex items-baseline gap-2.5 sm:mb-0 sm:block sm:pt-0.5">
-        <span
-          className={`inline-block rounded-md px-2 py-0.5 font-mono text-xs font-semibold tracking-tight ${tierBadgeClass}`}
-        >
-          {tierLabel}
-        </span>
-        {paper.journalMetrics && (
+        {tierLabel ? (
+          <span
+            className={`inline-block rounded-md px-2 py-0.5 font-mono text-xs font-semibold tracking-tight ${tierBadgeClass}`}
+          >
+            {tierLabel}
+          </span>
+        ) : (
+          <span className="inline-block rounded-md border border-[#2C2E35] bg-[#1E1F23] px-2 py-0.5 font-mono text-[11px] font-medium text-[#A1A1AA]">
+            Jurnal
+          </span>
+        )}
+        {hasImpactMetrics && paper.journalMetrics && (
           <div className="flex items-center gap-2 font-mono text-[11px] tabular-nums text-[#71717A] sm:mt-1.5 sm:block sm:space-y-0.5">
             <div>IF {paper.journalMetrics.impactFactor}</div>
             <div>H-{paper.journalMetrics.hIndex}</div>
@@ -304,9 +315,18 @@ export function PaperCard({
           {translatedAbstract ? translatedAbstract.title : paper.title}
         </h3>
 
-        <p className="mt-1 text-[13px] leading-relaxed text-[#A1A1AA]">
-          {metaItems.join(" · ")}
-        </p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[13px] leading-relaxed text-[#A1A1AA]">
+          {paper.pdfUrl ? (
+            <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
+              PDF Gratis
+            </span>
+          ) : (
+            <span className="inline-flex items-center rounded-full border border-[#2C2E35] bg-[#1E1F23] px-2 py-0.5 text-[11px] font-medium text-[#A1A1AA]">
+              Abstrak / DOI
+            </span>
+          )}
+          <span>{metaItems.join(" · ")}</span>
+        </div>
 
         {abstractText ? (
           <div className="mt-2.5 max-w-[68ch] text-sm leading-relaxed text-[#D4D4D8]">
@@ -420,7 +440,7 @@ export function PaperCard({
               className="btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full bg-[#DB2777] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D]"
             >
               <BookOpenText className="h-3.5 w-3.5" />
-              Baca PDF
+              Baca &amp; AI
             </button>
           ) : (
             <button
@@ -429,43 +449,17 @@ export function PaperCard({
               className="btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full bg-[#DB2777] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D]"
             >
               <Languages className="h-3.5 w-3.5" />
-              Terjemahkan ID
-            </button>
-          )}
-
-          {paper.pdfUrl && (
-            <button
-              type="button"
-              onClick={() => onOpenReader(paper, true)}
-              className="btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border border-[#DB2777]/35 bg-[#DB2777]/12 px-3.5 py-1.5 text-xs font-medium text-[#F9A8D4] hover:border-[#F472B6] hover:bg-[#DB2777]/20"
-            >
-              <Languages className="h-3.5 w-3.5" />
-              Terjemahkan ID
-            </button>
-          )}
-
-          {paper.pdfUrl && (
-            <button
-              type="button"
-              disabled={isPdfLoading}
-              onClick={() => void onDownloadPdf(paper)}
-              className="btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#3F414A] hover:text-white disabled:opacity-60"
-            >
-              {isPdfLoading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F472B6]" />
-              ) : (
-                <FileDown className="h-3.5 w-3.5" />
-              )}
-              {isPdfLoading ? "Mengunduh..." : "Unduh PDF"}
+              Terjemahkan &amp; AI
             </button>
           )}
 
           <button
             type="button"
-            disabled={isConverting}
+            disabled={isConverting || isPdfLoading}
             onClick={() => {
               setShowConvertPanel((v) => !v);
               setShowCitePanel(false);
+              setShowNotePanel(false);
             }}
             className={`btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium disabled:opacity-60 ${
               showConvertPanel
@@ -473,12 +467,23 @@ export function PaperCard({
                 : "border-[#2C2E35] bg-[#1E1F23] text-[#E4E4E7] hover:border-[#3F414A] hover:text-white"
             }`}
           >
-            {isConverting ? (
+            {isConverting || isPdfLoading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F472B6]" />
             ) : (
-              <FileText className="h-3.5 w-3.5" />
+              <FileDown className="h-3.5 w-3.5" />
             )}
-            {isConverting ? "Memproses..." : "Ekspor Word"}
+            <span>
+              {isConverting
+                ? "Memproses..."
+                : isPdfLoading
+                  ? "Mengunduh..."
+                  : "Unduh / Ekspor"}
+            </span>
+            {showConvertPanel ? (
+              <ChevronUp className="h-3 w-3" />
+            ) : (
+              <ChevronDown className="h-3 w-3" />
+            )}
           </button>
 
           <button
@@ -486,6 +491,7 @@ export function PaperCard({
             onClick={() => {
               setShowCitePanel((v) => !v);
               setShowConvertPanel(false);
+              setShowNotePanel(false);
             }}
             className={`btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
               showCitePanel
@@ -497,23 +503,16 @@ export function PaperCard({
             <span>Sitasi</span>
           </button>
 
-          <button
-            type="button"
-            disabled={bookmarkPending}
-            onClick={() => void handleBookmarkClick()}
-            className={`btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
-              isBookmarked
-                ? "border-[#DB2777]/45 bg-[#DB2777]/15 text-[#F9A8D4]"
-                : "border-[#2C2E35] bg-[#1E1F23] text-[#E4E4E7] hover:border-[#3F414A] hover:text-white"
-            }`}
-          >
-            {isBookmarked ? (
-              <BookmarkCheck className="h-3.5 w-3.5" />
-            ) : (
-              <Bookmark className="h-3.5 w-3.5" />
-            )}
-            <span>{isBookmarked ? "Tersimpan" : "Simpan"}</span>
-          </button>
+          {onOpenNetwork && (
+            <button
+              type="button"
+              onClick={() => onOpenNetwork(paper)}
+              className="btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3 py-1.5 text-xs font-medium text-[#A1A1AA] hover:border-[#F472B6]/45 hover:text-[#F9A8D4]"
+            >
+              <GitBranch className="h-3.5 w-3.5 text-[#F472B6]" />
+              <span>Jejaring</span>
+            </button>
+          )}
 
           {onToggleSelectMatrix && (
             <button
@@ -534,21 +533,32 @@ export function PaperCard({
             </button>
           )}
 
-          {onOpenNetwork && (
-            <button
-              type="button"
-              onClick={() => onOpenNetwork(paper)}
-              className="btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3 py-1.5 text-xs font-medium text-[#A1A1AA] hover:border-[#F472B6]/45 hover:text-[#F9A8D4]"
-            >
-              <GitBranch className="h-3.5 w-3.5 text-[#F472B6]" />
-              <span>Jejaring</span>
-            </button>
-          )}
+          <button
+            type="button"
+            disabled={bookmarkPending}
+            onClick={() => void handleBookmarkClick()}
+            className={`btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
+              isBookmarked
+                ? "border-[#DB2777]/45 bg-[#DB2777]/15 text-[#F9A8D4]"
+                : "border-[#2C2E35] bg-[#1E1F23] text-[#E4E4E7] hover:border-[#3F414A] hover:text-white"
+            }`}
+          >
+            {isBookmarked ? (
+              <BookmarkCheck className="h-3.5 w-3.5" />
+            ) : (
+              <Bookmark className="h-3.5 w-3.5" />
+            )}
+            <span>{isBookmarked ? "Tersimpan" : "Simpan"}</span>
+          </button>
 
           {bookmarkId && onUpdateBookmarkMeta && (
             <button
               type="button"
-              onClick={() => setShowNotePanel((v) => !v)}
+              onClick={() => {
+                setShowNotePanel((v) => !v);
+                setShowConvertPanel(false);
+                setShowCitePanel(false);
+              }}
               className={`btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
                 showNotePanel || note || projectId
                   ? "border-[#DB2777]/40 bg-[#DB2777]/12 text-[#F9A8D4]"
@@ -558,17 +568,6 @@ export function PaperCard({
               <StickyNote className="h-3.5 w-3.5" />
               <span>{note ? "Catatan ✓" : "Proyek & Catatan"}</span>
             </button>
-          )}
-
-          {paper.landingUrl && (
-            <a
-              href={paper.landingUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-[40px] sm:min-h-[34px] sm:ml-auto items-center gap-1 px-2 py-1.5 text-xs font-medium text-[#A1A1AA] transition-colors hover:text-white"
-            >
-              Sumber <ExternalLink className="h-3 w-3" />
-            </a>
           )}
         </div>
 
@@ -627,15 +626,54 @@ export function PaperCard({
           </div>
         )}
 
-        {/* Inline Word Export Panel */}
+        {/* Unified Download & Word Export Panel */}
         {showConvertPanel && (
           <div className="animate-panel-open mt-3 rounded-xl border border-[#2C2E35] bg-[#151619] p-3.5">
+            <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-[#232429] pb-3">
+              {paper.pdfUrl && (
+                <button
+                  type="button"
+                  disabled={isPdfLoading}
+                  onClick={() => void onDownloadPdf(paper)}
+                  className="btn-tactile inline-flex min-h-[34px] items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3 py-1 text-xs font-medium text-[#E4E4E7] hover:border-[#DB2777] hover:text-white disabled:opacity-60"
+                >
+                  {isPdfLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F472B6]" />
+                  ) : (
+                    <FileDown className="h-3.5 w-3.5 text-[#F472B6]" />
+                  )}
+                  <span>{isPdfLoading ? "Mengunduh..." : "Unduh PDF Asli"}</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => onOpenReader(paper, true)}
+                className="btn-tactile inline-flex min-h-[34px] items-center gap-1.5 rounded-full border border-[#DB2777]/35 bg-[#DB2777]/12 px-3 py-1 text-xs font-medium text-[#F9A8D4] hover:border-[#F472B6] hover:bg-[#DB2777]/20"
+              >
+                <Languages className="h-3.5 w-3.5" />
+                <span>Baca Terjemahan Full ID</span>
+              </button>
+
+              {paper.landingUrl && (
+                <a
+                  href={paper.landingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-tactile inline-flex min-h-[34px] items-center gap-1 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3 py-1 text-xs font-medium text-[#A1A1AA] hover:text-white sm:ml-auto"
+                >
+                  <span>Buka Sumber Asli</span>
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
+
             <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="font-semibold text-[#F4F4F5]">
-                Format Dokumen Word (.docx)
+                Ekspor ke Dokumen Word (.docx)
               </span>
-              <span className="font-mono text-[11px] text-[#71717A]">
-                mv/zai-glm-5-3-flash
+              <span className="text-[11px] font-medium text-[#A1A1AA]">
+                SmartSari AI
               </span>
             </div>
 

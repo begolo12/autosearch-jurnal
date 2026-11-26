@@ -449,30 +449,34 @@ export function PdfReaderModal({
 
         {/* Desktop view mode switch */}
         <div className="hidden items-center gap-1 rounded-lg border border-[#2C2E35] bg-[#0E0F12] p-0.5 lg:flex">
-          <button
-            type="button"
-            onClick={() => setDesktopView("split")}
-            className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
-              desktopView === "split"
-                ? "bg-[#DB2777] text-white"
-                : "text-[#A1A1AA] hover:text-white"
-            }`}
-          >
-            <Columns2 className="h-3.5 w-3.5" />
-            Berdampingan
-          </button>
-          <button
-            type="button"
-            onClick={() => setDesktopView("pdf")}
-            className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
-              desktopView === "pdf"
-                ? "bg-[#DB2777] text-white"
-                : "text-[#A1A1AA] hover:text-white"
-            }`}
-          >
-            <Maximize2 className="h-3.5 w-3.5" />
-            PDF Penuh
-          </button>
+          {Boolean(paper.pdfUrl) && (
+            <>
+              <button
+                type="button"
+                onClick={() => setDesktopView("split")}
+                className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
+                  desktopView === "split"
+                    ? "bg-[#DB2777] text-white"
+                    : "text-[#A1A1AA] hover:text-white"
+                }`}
+              >
+                <Columns2 className="h-3.5 w-3.5" />
+                Berdampingan
+              </button>
+              <button
+                type="button"
+                onClick={() => setDesktopView("pdf")}
+                className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
+                  desktopView === "pdf"
+                    ? "bg-[#DB2777] text-white"
+                    : "text-[#A1A1AA] hover:text-white"
+                }`}
+              >
+                <Maximize2 className="h-3.5 w-3.5" />
+                PDF Penuh
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={() => setDesktopView("translate")}
@@ -543,18 +547,24 @@ export function PdfReaderModal({
       </header>
 
       {/* Mobile Tab Switcher */}
-      <div className="grid grid-cols-3 border-b border-[#232429] bg-[#151619] lg:hidden">
-        <button
-          type="button"
-          onClick={() => setMobileTab("pdf")}
-          className={`min-h-[42px] border-b-2 text-xs font-semibold ${
-            mobileTab === "pdf"
-              ? "border-[#DB2777] text-[#F472B6]"
-              : "border-transparent text-[#A1A1AA]"
-          }`}
-        >
-          PDF Asli
-        </button>
+      <div
+        className={`grid border-b border-[#232429] bg-[#151619] lg:hidden ${
+          paper.pdfUrl ? "grid-cols-3" : "grid-cols-2"
+        }`}
+      >
+        {paper.pdfUrl && (
+          <button
+            type="button"
+            onClick={() => setMobileTab("pdf")}
+            className={`min-h-[42px] border-b-2 text-xs font-semibold ${
+              mobileTab === "pdf"
+                ? "border-[#DB2777] text-[#F472B6]"
+                : "border-transparent text-[#A1A1AA]"
+            }`}
+          >
+            PDF Asli
+          </button>
+        )}
         <button
           type="button"
           onClick={() => {
@@ -739,8 +749,7 @@ export function PdfReaderModal({
               <div className="space-y-3 rounded-xl border border-[#232429] bg-[#151619] p-5">
                 <div className="flex items-center gap-2 text-xs font-medium text-[#F472B6]">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Mengekstrak teks &amp; menerjemahkan dengan
-                  mv/zai-glm-5-3-flash...
+                  Mengekstrak teks &amp; menerjemahkan dengan SmartSari AI...
                 </div>
                 <div className="h-4 w-3/4 animate-pulse rounded bg-[#232429]" />
                 <div className="h-4 w-full animate-pulse rounded bg-[#232429]" />
@@ -751,8 +760,8 @@ export function PdfReaderModal({
             {!translating && translatedMarkdown && (
               <article className="rounded-xl border border-[#232429] bg-[#151619] p-5 sm:p-7">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-[#232429] pb-3 text-[11px] text-[#71717A]">
-                  <span className="font-mono">
-                    {translateModel || "mv/zai-glm-5-3-flash"}
+                  <span className="font-medium text-[#A1A1AA]">
+                    SmartSari AI
                   </span>
                   {translateCached && (
                     <span className="rounded bg-[#DB2777]/15 px-2 py-0.5 font-medium text-[#F472B6]">

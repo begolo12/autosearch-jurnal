@@ -295,3 +295,24 @@ export function patchUiSessionScroll(scrollY: number): void {
     7 * DAY_MS
   );
 }
+
+export function clearAllLocalCache(): number {
+  if (!isBrowser()) return 0;
+  let cleared = 0;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const k = window.localStorage.key(i);
+      if (k && k.startsWith(PREFIX)) {
+        keysToRemove.push(k);
+      }
+    }
+    for (const k of keysToRemove) {
+      window.localStorage.removeItem(k);
+      cleared += 1;
+    }
+  } catch {
+    // Ignore storage errors
+  }
+  return cleared;
+}
