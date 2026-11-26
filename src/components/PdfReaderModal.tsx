@@ -34,6 +34,7 @@ const CHAT_STARTER_PROMPTS = [
   "Apa metode penelitian & desain studi yang digunakan?",
   "Apa temuan utama dan kontribusi jurnal ini?",
   "Apa keterbatasan penelitian dan saran riset lanjutan?",
+  "Buatkan 1 paragraf sitasi siap pakai untuk Bab 2 Tinjauan Pustaka (APA)",
 ];
 
 function renderInlineMarkdown(text: string) {
@@ -175,6 +176,7 @@ export function PdfReaderModal({
               authors: paper.authors,
               year: paper.year,
               venue: paper.venue,
+              doi: paper.doi,
               abstract: paper.abstract,
               pdfUrl: paper.pdfUrl,
             },

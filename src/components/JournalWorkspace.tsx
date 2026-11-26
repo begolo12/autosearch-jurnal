@@ -46,6 +46,7 @@ import {
   type LiteratureMatrixResult,
   type ResearchProjectRecord,
   type SearchHistoryRecord,
+  type SearchResearchBrief,
   type SearchResponse,
   type SearchSource,
   type SortOption,
@@ -178,6 +179,10 @@ export function JournalWorkspace() {
   const [buildingMatrix, setBuildingMatrix] = useState(false);
   const [matrixResult, setMatrixResult] =
     useState<LiteratureMatrixResult | null>(null);
+  const [searchBrief, setSearchBrief] = useState<SearchResearchBrief | null>(
+    null
+  );
+  const [loadingBrief, setLoadingBrief] = useState(false);
   const [exportingBibDocx, setExportingBibDocx] = useState(false);
 
   const [bookmarks, setBookmarks] = useState<BookmarkRecord[]>([]);
@@ -405,6 +410,7 @@ export function JournalWorkspace() {
           });
         } else {
           setSearchResult(data);
+          setSearchBrief(null);
           const hRes = await fetch("/api/history");
           if (hRes.ok) {
             const hJson = (await hRes.json()) as {
@@ -422,6 +428,51 @@ export function JournalWorkspace() {
     },
     [query, selectedSources, pdfOnly, tierPreset, yearFrom, sort]
   );
+
+  const handleGenerateBrief = async () => {
+    if (!searchResult || searchResult.papers.length === 0 || loadingBrief) {
+      return;
+    }
+    setLoadingBrief(true);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/ai/brief", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: searchResult.query,
+          papers: searchResult.papers.slice(0, 8).map((p) => ({
+            title: p.title,
+            authors: p.authors,
+            year: p.year,
+            venue: p.venue,
+            tierLabel: p.journalMetrics?.tierLabel ?? null,
+            abstract: p.abstract,
+            citations: p.citations,
+          })),
+        }),
+      });
+      const data = (await res.json()) as {
+        brief?: SearchResearchBrief;
+        error?: string;
+      };
+      if (!res.ok || !data.brief) {
+        setNotice({
+          type: "error",
+          message: data.error || "Gagal menyusun ringkasan AI.",
+        });
+        return;
+      }
+      setSearchBrief(data.brief);
+    } catch {
+      setNotice({
+        type: "error",
+        message: "Gangguan koneksi saat memanggil asisten AI.",
+      });
+    } finally {
+      setLoadingBrief(false);
+    }
+  };
 
   const selectedMatrixList = useMemo(
     () => Object.values(selectedPapersMap),
@@ -1541,6 +1592,116 @@ export function JournalWorkspace() {
                       );
                     })}
                   </div>
+
+                  {/* AI Research Brief & Query Optimizer */}
+                  {searchResult.papers.length > 0 && (
+                    <div className="mb-5 rounded-2xl border border-[#2C2E35] bg-[#151619] p-4">
+                      {!searchBrief ? (
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5">
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#DB2777]/15 text-[#F472B6]">
+                              <Sparkles className="h-4 w-4" />
+                            </span>
+                            <div>
+                              <p className="text-xs font-semibold text-white">
+                                Ringkasan AI &amp; Optimasi Pencarian
+                              </p>
+                              <p className="text-[11px] text-[#A1A1AA]">
+                                Rangkum temuan utama dari hasil teratas &amp;
+                                dapatkan saran kata kunci yang lebih tajam.
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={loadingBrief}
+                            onClick={() => void handleGenerateBrief()}
+                            className="btn-tactile inline-flex items-center gap-1.5 rounded-full bg-[#DB2777] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
+                          >
+                            {loadingBrief ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Sparkles className="h-3.5 w-3.5" />
+                            )}
+                            {loadingBrief
+                              ? "Menganalisis..."
+                              : "Analisis Hasil dengan AI"}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="animate-panel-open space-y-3">
+                          <div className="flex items-center justify-between gap-2 border-b border-[#232429] pb-2.5">
+                            <div className="flex items-center gap-2">
+                              <Sparkles className="h-4 w-4 text-[#F472B6]" />
+                              <span className="text-xs font-semibold text-white">
+                                Intisari Riset AI
+                              </span>
+                              <span className="font-mono text-[10px] text-[#71717A]">
+                                {searchBrief.model}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSearchBrief(null)}
+                              aria-label="Tutup ringkasan AI"
+                              className="rounded-lg p-1 text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+
+                          <p className="text-sm leading-relaxed text-[#E4E4E7]">
+                            {searchBrief.overview}
+                          </p>
+
+                          {searchBrief.keyFindings.length > 0 && (
+                            <ul className="list-disc space-y-1 pl-5 text-xs leading-relaxed text-[#D4D4D8]">
+                              {searchBrief.keyFindings.map((item, idx) => (
+                                <li key={idx}>{item}</li>
+                              ))}
+                            </ul>
+                          )}
+
+                          <div className="grid gap-2.5 pt-1 text-xs sm:grid-cols-2">
+                            <div className="rounded-xl border border-[#232429] bg-[#0E0F12] p-3">
+                              <span className="block text-[11px] font-semibold text-[#F472B6]">
+                                Tren Metode
+                              </span>
+                              <p className="mt-1 text-[#D4D4D8]">
+                                {searchBrief.dominantMethods}
+                              </p>
+                            </div>
+                            <div className="rounded-xl border border-[#232429] bg-[#0E0F12] p-3">
+                              <span className="block text-[11px] font-semibold text-[#F472B6]">
+                                Rekomendasi Baca Pertama
+                              </span>
+                              <p className="mt-1 text-[#D4D4D8]">
+                                {searchBrief.topRecommendation}
+                              </p>
+                            </div>
+                          </div>
+
+                          {searchBrief.suggestedQueries.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              <span className="text-[11px] font-medium text-[#A1A1AA]">
+                                Saran pencarian lebih tajam:
+                              </span>
+                              {searchBrief.suggestedQueries.map((sq, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => void runSearch(sq.query)}
+                                  className="btn-tactile rounded-full border border-[#DB2777]/35 bg-[#DB2777]/12 px-3 py-1 text-[11px] font-medium text-[#F9A8D4] hover:border-[#F472B6] hover:bg-[#DB2777]/20"
+                                >
+                                  {sq.label}: &ldquo;{sq.query}&rdquo;
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {searchResult.papers.length === 0 ? (
                     <div className="rounded-xl border border-[#232429] bg-[#151619] p-8 text-center">

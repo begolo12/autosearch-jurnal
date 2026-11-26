@@ -3,6 +3,8 @@ import type {
   LiteratureMatrixResult,
   LiteratureMatrixRow,
   PaperChatMessage,
+  PaperTakeaways,
+  SearchResearchBrief,
 } from "@/lib/types";
 
 export class InferHubError extends Error {
@@ -72,53 +74,118 @@ function getSystemPrompt(mode: ConversionMode): string {
   ].join("\n");
 }
 
+function extractJsonObject<T>(raw: string): T {
+  const cleaned = raw
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start !== -1 && end > start) {
+      return JSON.parse(cleaned.slice(start, end + 1)) as T;
+    }
+    throw new Error("Format JSON dari AI tidak valid.");
+  }
+}
+
+async function callInferHubMessages(params: {
+  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  temperature?: number;
+  timeoutMs?: number;
+}): Promise<{ content: string; model: string }> {
+  const { apiKey, baseUrl, model } = getInferHubConfig();
+  const maxAttempts = 3;
+  let lastError: InferHubError | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: params.temperature ?? 0.2,
+          messages: params.messages,
+        }),
+        signal: AbortSignal.timeout(params.timeoutMs ?? 45000),
+      });
+
+      if (!response.ok) {
+        const retryable =
+          response.status === 429 ||
+          response.status === 500 ||
+          response.status === 502 ||
+          response.status === 503 ||
+          response.status === 504;
+        lastError = new InferHubError(
+          "API_ERROR",
+          `Layanan AI mengembalikan status ${response.status}. Silakan coba beberapa saat lagi.`,
+          response.status
+        );
+        if (retryable && attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 600 * attempt));
+          continue;
+        }
+        throw lastError;
+      }
+
+      const data = (await response.json()) as {
+        choices?: Array<{
+          message?: { content?: string };
+        }>;
+      };
+
+      const content = data.choices?.[0]?.message?.content?.trim();
+      if (!content) {
+        throw new InferHubError(
+          "API_ERROR",
+          "Model AI tidak mengembalikan konten."
+        );
+      }
+
+      return { content, model };
+    } catch (err) {
+      if (err instanceof InferHubError) {
+        throw err;
+      }
+      lastError = new InferHubError(
+        "API_ERROR",
+        "Koneksi ke layanan AI terputus atau timeout. Silakan coba lagi."
+      );
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 600 * attempt));
+        continue;
+      }
+      throw lastError;
+    }
+  }
+
+  throw (
+    lastError ??
+    new InferHubError("API_ERROR", "Gagal menghubungi layanan AI.")
+  );
+}
+
 async function callInferHub(params: {
   system: string;
   user: string;
   temperature?: number;
 }): Promise<{ content: string; model: string }> {
-  const { apiKey, baseUrl, model } = getInferHubConfig();
-
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      temperature: params.temperature ?? 0.2,
-      messages: [
-        { role: "system", content: params.system },
-        { role: "user", content: params.user },
-      ],
-    }),
-    signal: AbortSignal.timeout(50000),
+  return callInferHubMessages({
+    messages: [
+      { role: "system", content: params.system },
+      { role: "user", content: params.user },
+    ],
+    temperature: params.temperature,
+    timeoutMs: 50000,
   });
-
-  if (!response.ok) {
-    throw new InferHubError(
-      "API_ERROR",
-      `Layanan AI mengembalikan status ${response.status}. Silakan coba beberapa saat lagi.`,
-      response.status
-    );
-  }
-
-  const data = (await response.json()) as {
-    choices?: Array<{
-      message?: { content?: string };
-    }>;
-  };
-
-  const content = data.choices?.[0]?.message?.content?.trim();
-  if (!content) {
-    throw new InferHubError(
-      "API_ERROR",
-      "Model AI tidak mengembalikan konten."
-    );
-  }
-
-  return { content, model };
 }
 
 export async function generateWordMarkdown(params: {
@@ -177,15 +244,10 @@ export async function translateAbstractToIndonesian(params: {
   });
 
   try {
-    const cleaned = content
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/```$/i, "")
-      .trim();
-    const parsed = JSON.parse(cleaned) as {
+    const parsed = extractJsonObject<{
       translatedTitle?: string;
       translatedAbstract?: string;
-    };
+    }>(content);
     return {
       translatedTitle: parsed.translatedTitle?.trim() || params.title,
       translatedAbstract: parsed.translatedAbstract?.trim() || content,
@@ -243,17 +305,11 @@ export async function generateLiteratureMatrix(
     temperature: 0.2,
   });
 
-  const cleaned = content
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/```$/i, "")
-    .trim();
-
-  const parsed = JSON.parse(cleaned) as {
+  const parsed = extractJsonObject<{
     synthesis?: string;
     researchGaps?: string;
     rows?: Partial<LiteratureMatrixRow>[];
-  };
+  }>(content);
 
   const rows: LiteratureMatrixRow[] = papers.map((p, idx) => {
     const r = parsed.rows?.[idx] || {};
@@ -289,8 +345,6 @@ export async function chatAboutPaper(params: {
   extractedText: string | null;
   messages: PaperChatMessage[];
 }): Promise<{ reply: string; model: string }> {
-  const { apiKey, baseUrl, model } = getInferHubConfig();
-
   const paperContext = [
     `Judul: ${params.title}`,
     params.authors.length > 0 ? `Penulis: ${params.authors.join(", ")}` : null,
@@ -311,40 +365,103 @@ export async function chatAboutPaper(params: {
     paperContext,
   ].join("\n");
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.25,
-      messages: [
-        { role: "system", content: system },
-        ...params.messages.slice(-8).map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
-      ],
-    }),
-    signal: AbortSignal.timeout(45000),
+  const { content, model } = await callInferHubMessages({
+    messages: [
+      { role: "system", content: system },
+      ...params.messages.slice(-8).map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+    ],
+    temperature: 0.25,
+    timeoutMs: 45000,
   });
 
-  if (!response.ok) {
-    throw new InferHubError(
-      "API_ERROR",
-      `Layanan AI mengembalikan status ${response.status}.`,
-      response.status
-    );
-  }
+  return { reply: content, model };
+}
 
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
+export async function generateSearchResearchBrief(params: {
+  query: string;
+  papers: Array<{
+    title: string;
+    authors: string[];
+    year: number | null;
+    venue: string | null;
+    tierLabel?: string | null;
+    abstract: string | null;
+    citations: number | null;
+  }>;
+}): Promise<SearchResearchBrief> {
+  const system = [
+    "Anda adalah konsultan riset akademik senior SmartSari.",
+    "Tugas Anda: buat ringkasan eksekutif cepat dari kumpulan jurnal hasil pencarian dalam Bahasa Indonesia akademik baku, rujuk artikel dengan tanda [1], [2], dst., serta sarankan 3 kata kunci pencarian lanjutan yang lebih tajam (kombinasi istilah Inggris untuk Q1-Q4 dan Indonesia untuk SINTA).",
+    "Kembalikan HANYA JSON valid dengan struktur persis:",
+    "{",
+    '  "overview": "2-3 kalimat intisari lanskap riset dengan rujukan [1], [2]",',
+    '  "keyFindings": ["temuan kunci 1 [1]", "temuan kunci 2 [2]", "temuan kunci 3"],',
+    '  "dominantMethods": "1-2 kalimat metode penelitian yang paling banyak dipakai",',
+    '  "topRecommendation": "1 kalimat rekomendasi jurnal mana yang paling layak dibaca pertama kali dan alasannya",',
+    '  "suggestedQueries": [{ "query": "kata kunci tajam", "label": "Label singkat" }]',
+    "}",
+  ].join("\n");
+
+  const list = params.papers
+    .slice(0, 8)
+    .map((p, idx) => {
+      const abs = p.abstract ? p.abstract.slice(0, 360) : "Tidak ada abstrak.";
+      return `[${idx + 1}] ${p.title} (${p.year ?? "t.t."}, ${p.tierLabel || "-"}, ${p.citations ?? 0} sitasi)\nJurnal: ${p.venue || "-"}\nAbstrak: ${abs}`;
+    })
+    .join("\n\n");
+
+  const { content, model } = await callInferHub({
+    system,
+    user: `Kata kunci pencarian: "${params.query}"\n\nDaftar jurnal teratas:\n${list}`,
+    temperature: 0.2,
+  });
+
+  const parsed = extractJsonObject<Partial<SearchResearchBrief>>(content);
+  return {
+    overview: parsed.overview?.trim() || "Ringkasan riset tidak tersedia.",
+    keyFindings: Array.isArray(parsed.keyFindings)
+      ? parsed.keyFindings.filter((k): k is string => Boolean(k)).slice(0, 4)
+      : [],
+    dominantMethods: parsed.dominantMethods?.trim() || "-",
+    topRecommendation: parsed.topRecommendation?.trim() || "-",
+    suggestedQueries: Array.isArray(parsed.suggestedQueries)
+      ? parsed.suggestedQueries
+          .filter((q) => q && typeof q.query === "string" && q.query.trim())
+          .slice(0, 3)
+      : [],
+    model,
   };
-  const reply = data.choices?.[0]?.message?.content?.trim();
-  if (!reply) {
-    throw new InferHubError("API_ERROR", "Model AI tidak mengembalikan jawaban.");
-  }
-  return { reply, model };
+}
+
+export async function extractPaperTakeaways(params: {
+  title: string;
+  abstract: string;
+  venue?: string | null;
+  year?: number | null;
+}): Promise<PaperTakeaways> {
+  const system = [
+    "Anda adalah analis jurnal ilmiah SmartSari.",
+    "Ekstrak 4 poin intisari singkat (masing-masing 1 kalimat padat dalam Bahasa Indonesia akademik baku) dari judul dan abstrak jurnal.",
+    "Kembalikan HANYA JSON valid dengan format persis:",
+    '{"problem":"...","method":"...","finding":"...","implication":"..."}',
+  ].join("\n");
+
+  const user = `Judul: ${params.title}\nJurnal: ${params.venue || "-"} (${params.year ?? "t.t."})\nAbstrak: ${params.abstract}`;
+  const { content, model } = await callInferHub({
+    system,
+    user,
+    temperature: 0.15,
+  });
+
+  const parsed = extractJsonObject<Partial<PaperTakeaways>>(content);
+  return {
+    problem: parsed.problem?.trim() || "-",
+    method: parsed.method?.trim() || "-",
+    finding: parsed.finding?.trim() || "-",
+    implication: parsed.implication?.trim() || "-",
+    model,
+  };
 }

@@ -17,6 +17,7 @@ import {
   Languages,
   Loader2,
   Quote,
+  Sparkles,
   Square,
   StickyNote,
 } from "lucide-react";
@@ -24,6 +25,7 @@ import { formatCitation, type CitationFormat } from "@/lib/citation";
 import type {
   ConversionMode,
   JournalPaper,
+  PaperTakeaways,
   ResearchProjectRecord,
 } from "@/lib/types";
 
@@ -112,6 +114,47 @@ export function PaperCard({
   const [abstractTranslateErr, setAbstractTranslateErr] = useState<
     string | null
   >(null);
+
+  const [loadingTakeaways, setLoadingTakeaways] = useState(false);
+  const [takeaways, setTakeaways] = useState<PaperTakeaways | null>(null);
+  const [showTakeaways, setShowTakeaways] = useState(false);
+  const [takeawaysErr, setTakeawaysErr] = useState<string | null>(null);
+
+  const handleExtractTakeaways = async () => {
+    if (!paper.abstract) return;
+    if (takeaways) {
+      setShowTakeaways((v) => !v);
+      return;
+    }
+    setLoadingTakeaways(true);
+    setTakeawaysErr(null);
+    try {
+      const res = await fetch("/api/ai/takeaways", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: paper.title,
+          abstract: paper.abstract,
+          venue: paper.venue,
+          year: paper.year,
+        }),
+      });
+      const data = (await res.json()) as {
+        takeaways?: PaperTakeaways;
+        error?: string;
+      };
+      if (!res.ok || !data.takeaways) {
+        setTakeawaysErr(data.error || "Gagal mengekstrak intisari AI.");
+        return;
+      }
+      setTakeaways(data.takeaways);
+      setShowTakeaways(true);
+    } catch {
+      setTakeawaysErr("Gagal menghubungi server AI.");
+    } finally {
+      setLoadingTakeaways(false);
+    }
+  };
 
   const isPdfLoading = downloadingPdfKey === paper.paperKey;
   const isConverting = convertingKey === paper.paperKey;
@@ -278,11 +321,54 @@ export function PaperCard({
                     ? "Lihat bahasa asli"
                     : "Terjemahkan abstrak"}
               </button>
+
+              {abstractText.length >= 20 && (
+                <button
+                  type="button"
+                  disabled={loadingTakeaways}
+                  onClick={() => void handleExtractTakeaways()}
+                  className="inline-flex items-center gap-1 font-medium text-[#A1A1AA] transition-colors hover:text-[#F472B6] disabled:opacity-60"
+                >
+                  {loadingTakeaways ? (
+                    <Loader2 className="h-3 w-3 animate-spin text-[#F472B6]" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5 text-[#F472B6]" />
+                  )}
+                  {loadingTakeaways
+                    ? "Meringkas..."
+                    : showTakeaways
+                      ? "Sembunyikan Intisari"
+                      : "Intisari AI"}
+                </button>
+              )}
             </div>
             {abstractTranslateErr && (
               <p className="mt-1 text-xs text-[#F87171]">
                 {abstractTranslateErr}
               </p>
+            )}
+            {takeawaysErr && (
+              <p className="mt-1 text-xs text-[#F87171]">{takeawaysErr}</p>
+            )}
+            {showTakeaways && takeaways && (
+              <div className="animate-panel-open mt-2.5 grid gap-2 rounded-xl border border-[#2C2E35] bg-[#151619] p-3 text-xs sm:grid-cols-2">
+                <div>
+                  <span className="font-semibold text-[#F472B6]">Masalah:</span>{" "}
+                  <span className="text-[#E4E4E7]">{takeaways.problem}</span>
+                </div>
+                <div>
+                  <span className="font-semibold text-[#F472B6]">Metode:</span>{" "}
+                  <span className="text-[#E4E4E7]">{takeaways.method}</span>
+                </div>
+                <div>
+                  <span className="font-semibold text-[#F472B6]">Temuan:</span>{" "}
+                  <span className="text-[#E4E4E7]">{takeaways.finding}</span>
+                </div>
+                <div>
+                  <span className="font-semibold text-[#F472B6]">Implikasi:</span>{" "}
+                  <span className="text-[#E4E4E7]">{takeaways.implication}</span>
+                </div>
+              </div>
             )}
           </div>
         ) : (

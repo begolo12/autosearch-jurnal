@@ -131,6 +131,23 @@ export interface PaperChatMessage {
   content: string;
 }
 
+export interface SearchResearchBrief {
+  overview: string;
+  keyFindings: string[];
+  dominantMethods: string;
+  topRecommendation: string;
+  suggestedQueries: Array<{ query: string; label: string }>;
+  model: string;
+}
+
+export interface PaperTakeaways {
+  problem: string;
+  method: string;
+  finding: string;
+  implication: string;
+  model: string;
+}
+
 export interface ConversionRecord {
   id: string;
   paperKey: string;

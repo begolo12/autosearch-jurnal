@@ -4,6 +4,8 @@ import { buildLiteratureMatrixDocxBuffer } from "@/lib/docx-builder";
 import { generateLiteratureMatrix, InferHubError } from "@/lib/inferhub";
 import { checkRateLimit } from "@/lib/rate-limit";
 
+export const maxDuration = 60;
+
 const matrixRequestSchema = z.object({
   papers: z
     .array(

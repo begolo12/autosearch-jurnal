@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { chatAboutPaper, InferHubError } from "@/lib/inferhub";
-import { extractPdfText, fetchPdfBuffer } from "@/lib/pdf";
+import {
+  extractPdfText,
+  fetchEuropePmcFullText,
+  fetchPdfWithFallbacks,
+} from "@/lib/pdf";
 import { checkRateLimit } from "@/lib/rate-limit";
+
+export const maxDuration = 60;
 
 const chatRequestSchema = z.object({
   paper: z.object({
@@ -10,6 +16,7 @@ const chatRequestSchema = z.object({
     authors: z.array(z.string()).default([]),
     year: z.number().nullable().optional(),
     venue: z.string().nullable().optional(),
+    doi: z.string().nullable().optional(),
     abstract: z.string().nullable().optional(),
     pdfUrl: z.string().nullable().optional(),
   }),
@@ -46,10 +53,13 @@ export async function POST(request: NextRequest) {
   let extractedText: string | null = null;
   if (body.paper.pdfUrl) {
     try {
-      const pdfBuf = await fetchPdfBuffer(body.paper.pdfUrl);
+      const pdfBuf = await fetchPdfWithFallbacks(
+        body.paper.pdfUrl,
+        body.paper.doi
+      );
       extractedText = await extractPdfText(pdfBuf);
     } catch {
-      extractedText = null;
+      extractedText = await fetchEuropePmcFullText(body.paper.pdfUrl);
     }
   }
 
