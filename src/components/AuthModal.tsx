@@ -22,8 +22,10 @@ interface AuthModalProps {
 }
 
 export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
   const [registerStep, setRegisterStep] = useState<"form" | "otp">("form");
+  const [forgotStep, setForgotStep] = useState<"email" | "reset">("email");
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,6 +42,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const fetchChallenge = useCallback(async () => {
     setLoadingChallenge(true);
@@ -60,10 +63,13 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   }, []);
 
   useEffect(() => {
-    if (mode === "register" && registerStep === "form") {
+    const needsChallenge =
+      (mode === "register" && registerStep === "form") ||
+      (mode === "forgot" && forgotStep === "email");
+    if (needsChallenge) {
       void fetchChallenge();
     }
-  }, [mode, registerStep, fetchChallenge]);
+  }, [mode, registerStep, forgotStep, fetchChallenge]);
 
   useEffect(() => {
     if (otpCooldown <= 0) return;
@@ -80,6 +86,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMsg(null);
 
     if (mode === "login") {
       setLoading(true);
@@ -97,6 +104,94 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
         onSuccess(data.user);
       } catch {
         setError("Gagal menghubungi server autentikasi.");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (mode === "forgot") {
+      if (forgotStep === "email") {
+        if (!challengeToken || !challengeAnswer.trim()) {
+          setError("Lengkapi jawaban verifikasi keamanan terlebih dahulu.");
+          return;
+        }
+        setLoading(true);
+        try {
+          const res = await fetch("/api/auth/forgot-password/request-otp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email,
+              website,
+              challengeToken,
+              challengeAnswer: challengeAnswer.trim(),
+            }),
+          });
+          const data = (await res.json()) as {
+            ok?: boolean;
+            cooldownSeconds?: number;
+            error?: string;
+          };
+          if (!res.ok || !data.ok) {
+            setError(data.error || "Gagal mengirim kode reset kata sandi.");
+            void fetchChallenge();
+            return;
+          }
+          setOtpCode("");
+          setPassword("");
+          setConfirmPassword("");
+          setOtpCooldown(data.cooldownSeconds ?? 60);
+          setForgotStep("reset");
+        } catch {
+          setError("Gagal menghubungi server reset kata sandi.");
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (!/^\d{6}$/.test(otpCode.trim())) {
+        setError("Masukkan 6 digit angka kode OTP dari email Anda.");
+        return;
+      }
+      if (!hasMinLen || !hasLetterAndDigit) {
+        setError(
+          "Kata sandi baru wajib 8–72 karakter dengan kombinasi huruf dan angka."
+        );
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError("Konfirmasi kata sandi baru tidak cocok.");
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const res = await fetch("/api/auth/forgot-password/reset", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email,
+            otp: otpCode.trim(),
+            newPassword: password,
+          }),
+        });
+        const data = (await res.json()) as { ok?: boolean; error?: string };
+        if (!res.ok || !data.ok) {
+          setError(data.error || "Gagal mengatur ulang kata sandi.");
+          return;
+        }
+        setMode("login");
+        setForgotStep("email");
+        setPassword("");
+        setConfirmPassword("");
+        setOtpCode("");
+        setSuccessMsg(
+          "Kata sandi berhasil diperbarui. Silakan masuk dengan kata sandi baru Anda."
+        );
+      } catch {
+        setError("Gagal menghubungi server reset kata sandi.");
       } finally {
         setLoading(false);
       }
@@ -154,7 +249,6 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
       return;
     }
 
-    // registerStep === "otp"
     if (!/^\d{6}$/.test(otpCode.trim())) {
       setError("Masukkan 6 digit angka kode OTP dari email Anda.");
       return;
@@ -183,6 +277,44 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
     }
   };
 
+  const renderAntiBotBox = () => (
+    <div className="rounded-xl border border-[#2C2E35] bg-[#0E0F12] p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#F9A8D4]">
+          <ShieldCheck className="h-3.5 w-3.5 text-[#F472B6]" />
+          Verifikasi Anti-Bot
+        </span>
+        <button
+          type="button"
+          onClick={() => void fetchChallenge()}
+          disabled={loadingChallenge}
+          aria-label="Muat ulang soal verifikasi"
+          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white disabled:opacity-50"
+        >
+          <RefreshCw
+            className={`h-3 w-3 ${loadingChallenge ? "animate-spin" : ""}`}
+          />
+          Ganti soal
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2.5">
+        <span className="shrink-0 rounded-lg border border-[#232429] bg-[#151619] px-3 py-1.5 font-mono text-xs font-semibold text-white">
+          {challengeQuestion || "Memuat..."}
+        </span>
+        <input
+          type="text"
+          inputMode="numeric"
+          required
+          value={challengeAnswer}
+          onChange={(e) => setChallengeAnswer(e.target.value)}
+          placeholder="Jawaban angka"
+          className="min-w-0 flex-1 rounded-lg border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-sm text-white placeholder-[#71717A] focus:border-[#F472B6] focus:outline-none"
+        />
+      </div>
+    </div>
+  );
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
@@ -198,10 +330,14 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
             </span>
             <div>
               <h2 className="text-base font-semibold text-white">
-                Sinkronkan Ruang Riset
+                {mode === "forgot"
+                  ? "Atur Ulang Kata Sandi"
+                  : "Sinkronkan Ruang Riset"}
               </h2>
               <p className="text-xs text-[#A1A1AA]">
-                Simpan proyek, catatan &amp; riwayat di semua perangkat.
+                {mode === "forgot"
+                  ? "Verifikasi email Anda dengan kode OTP 6 digit."
+                  : "Simpan proyek, catatan & riwayat di semua perangkat."}
               </p>
             </div>
           </div>
@@ -215,38 +351,55 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           </button>
         </div>
 
-        <div className="mb-4 grid grid-cols-2 rounded-xl border border-[#232429] bg-[#0E0F12] p-1">
+        {mode !== "forgot" ? (
+          <div className="mb-4 grid grid-cols-2 rounded-xl border border-[#232429] bg-[#0E0F12] p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setMode("login");
+                setRegisterStep("form");
+                setError(null);
+                setSuccessMsg(null);
+              }}
+              className={`rounded-lg py-1.5 text-xs font-semibold transition-colors ${
+                mode === "login"
+                  ? "bg-[#DB2777] text-white"
+                  : "text-[#A1A1AA] hover:text-white"
+              }`}
+            >
+              Masuk
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("register");
+                setRegisterStep("form");
+                setError(null);
+                setSuccessMsg(null);
+              }}
+              className={`rounded-lg py-1.5 text-xs font-semibold transition-colors ${
+                mode === "register"
+                  ? "bg-[#DB2777] text-white"
+                  : "text-[#A1A1AA] hover:text-white"
+              }`}
+            >
+              Daftar Akun Baru
+            </button>
+          </div>
+        ) : (
           <button
             type="button"
             onClick={() => {
               setMode("login");
-              setRegisterStep("form");
+              setForgotStep("email");
               setError(null);
             }}
-            className={`rounded-lg py-1.5 text-xs font-semibold transition-colors ${
-              mode === "login"
-                ? "bg-[#DB2777] text-white"
-                : "text-[#A1A1AA] hover:text-white"
-            }`}
+            className="mb-4 inline-flex items-center gap-1.5 text-xs text-[#A1A1AA] hover:text-white"
           >
-            Masuk
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Kembali ke halaman Masuk
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode("register");
-              setRegisterStep("form");
-              setError(null);
-            }}
-            className={`rounded-lg py-1.5 text-xs font-semibold transition-colors ${
-              mode === "register"
-                ? "bg-[#DB2777] text-white"
-                : "text-[#A1A1AA] hover:text-white"
-            }`}
-          >
-            Daftar Akun Baru
-          </button>
-        </div>
+        )}
 
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
           {/* Off-screen honeypot trap for automated spam bots */}
@@ -263,7 +416,132 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
             />
           </div>
 
-          {mode === "register" && registerStep === "otp" ? (
+          {mode === "forgot" && forgotStep === "email" && (
+            <>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-[#D4D4D8]">
+                  Email Akun Terdaftar
+                </span>
+                <div className="flex items-center gap-2 rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2 focus-within:border-[#F472B6]">
+                  <Mail className="h-4 w-4 text-[#71717A]" />
+                  <input
+                    type="email"
+                    required
+                    maxLength={160}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="nama@kampus.ac.id"
+                    className="w-full bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
+                  />
+                </div>
+              </label>
+              {renderAntiBotBox()}
+            </>
+          )}
+
+          {mode === "forgot" && forgotStep === "reset" && (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-[#DB2777]/35 bg-[#DB2777]/10 p-3.5 text-xs leading-relaxed text-[#FBCFE8]">
+                Jika <strong className="text-white">{email}</strong> terdaftar,
+                kode OTP 6 digit telah dikirim (berlaku 10 menit).
+              </div>
+
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-[#D4D4D8]">
+                  Kode OTP Email (6 Digit)
+                </span>
+                <div className="flex items-center gap-2 rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2.5 focus-within:border-[#F472B6]">
+                  <KeyRound className="h-4 w-4 text-[#F472B6]" />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    required
+                    value={otpCode}
+                    onChange={(e) =>
+                      setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
+                    placeholder="000000"
+                    className="w-full bg-transparent text-center font-mono text-lg font-bold tracking-[0.45em] text-white placeholder-[#52525B] focus:outline-none"
+                  />
+                </div>
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-[#D4D4D8]">
+                  Kata Sandi Baru
+                </span>
+                <div className="flex items-center gap-2 rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2 focus-within:border-[#F472B6]">
+                  <Lock className="h-4 w-4 text-[#71717A]" />
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    maxLength={72}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Min. 8 karakter (huruf & angka)"
+                    className="w-full bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
+                  />
+                </div>
+              </label>
+
+              <div className="flex flex-wrap gap-3 text-[11px]">
+                <span
+                  className={`inline-flex items-center gap-1 ${
+                    hasMinLen ? "text-[#4ADE80]" : "text-[#71717A]"
+                  }`}
+                >
+                  <Check className="h-3 w-3" />
+                  8–72 karakter
+                </span>
+                <span
+                  className={`inline-flex items-center gap-1 ${
+                    hasLetterAndDigit ? "text-[#4ADE80]" : "text-[#71717A]"
+                  }`}
+                >
+                  <Check className="h-3 w-3" />
+                  Kombinasi huruf &amp; angka
+                </span>
+              </div>
+
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-[#D4D4D8]">
+                  Konfirmasi Kata Sandi Baru
+                </span>
+                <div className="flex items-center gap-2 rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2 focus-within:border-[#F472B6]">
+                  <Lock className="h-4 w-4 text-[#71717A]" />
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    maxLength={72}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Ulangi kata sandi baru"
+                    className="w-full bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
+                  />
+                </div>
+              </label>
+
+              <button
+                type="button"
+                disabled={otpCooldown > 0}
+                onClick={() => {
+                  setForgotStep("email");
+                  setError(null);
+                }}
+                className="inline-flex items-center gap-1.5 text-xs text-[#A1A1AA] hover:text-white disabled:opacity-50"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                {otpCooldown > 0
+                  ? `Minta kode reset baru (${otpCooldown}d)`
+                  : "Minta kode reset baru"}
+              </button>
+            </div>
+          )}
+
+          {mode === "register" && registerStep === "otp" && (
             <div className="space-y-3">
               <div className="rounded-xl border border-[#DB2777]/35 bg-[#DB2777]/10 p-3.5 text-xs leading-relaxed text-[#FBCFE8]">
                 Kode OTP 6 digit telah dikirim ke{" "}
@@ -307,7 +585,10 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                   : "Ubah email / minta kode baru"}
               </button>
             </div>
-          ) : (
+          )}
+
+          {(mode === "login" ||
+            (mode === "register" && registerStep === "form")) && (
             <>
               {mode === "register" && (
                 <label className="block">
@@ -371,6 +652,23 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                 </div>
               </label>
 
+              {mode === "login" && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode("forgot");
+                      setForgotStep("email");
+                      setError(null);
+                      setSuccessMsg(null);
+                    }}
+                    className="text-xs font-medium text-[#F472B6] hover:text-[#F9A8D4]"
+                  >
+                    Lupa kata sandi?
+                  </button>
+                </div>
+              )}
+
               {mode === "register" && (
                 <>
                   <div className="flex flex-wrap gap-3 text-[11px]">
@@ -411,47 +709,16 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                     </div>
                   </label>
 
-                  {/* Signed Single-Use Anti-Bot Challenge */}
-                  <div className="rounded-xl border border-[#2C2E35] bg-[#0E0F12] p-3">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#F9A8D4]">
-                        <ShieldCheck className="h-3.5 w-3.5 text-[#F472B6]" />
-                        Verifikasi Anti-Bot
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => void fetchChallenge()}
-                        disabled={loadingChallenge}
-                        aria-label="Muat ulang soal verifikasi"
-                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white disabled:opacity-50"
-                      >
-                        <RefreshCw
-                          className={`h-3 w-3 ${
-                            loadingChallenge ? "animate-spin" : ""
-                          }`}
-                        />
-                        Ganti soal
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-2.5">
-                      <span className="shrink-0 rounded-lg border border-[#232429] bg-[#151619] px-3 py-1.5 font-mono text-xs font-semibold text-white">
-                        {challengeQuestion || "Memuat..."}
-                      </span>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        required
-                        value={challengeAnswer}
-                        onChange={(e) => setChallengeAnswer(e.target.value)}
-                        placeholder="Jawaban angka"
-                        className="min-w-0 flex-1 rounded-lg border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-sm text-white placeholder-[#71717A] focus:border-[#F472B6] focus:outline-none"
-                      />
-                    </div>
-                  </div>
+                  {renderAntiBotBox()}
                 </>
               )}
             </>
+          )}
+
+          {successMsg && (
+            <p className="rounded-lg border border-[#4ADE80]/30 bg-[#4ADE80]/10 px-3 py-2 text-xs text-[#86EFAC]">
+              {successMsg}
+            </p>
           )}
 
           {error && (
@@ -461,9 +728,9 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           )}
 
           <p className="text-[11px] leading-relaxed text-[#71717A]">
-            {mode === "register"
-              ? "Dilindungi OTP email, anti-bot, rate-limit berlapis, blokir email sementara & enkripsi scrypt."
-              : "Jurnal tersimpan, proyek riset, dan riwayat di perangkat ini akan otomatis digabungkan ke akun Anda."}
+            {mode === "login"
+              ? "Jurnal tersimpan, proyek riset, dan riwayat di perangkat ini akan otomatis digabungkan ke akun Anda."
+              : "Dilindungi OTP email, anti-bot, rate-limit berlapis & enkripsi scrypt."}
           </p>
 
           <button
@@ -474,9 +741,13 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {mode === "login"
               ? "Masuk & Sinkronkan"
-              : registerStep === "form"
-                ? "Kirim Kode OTP ke Email"
-                : "Verifikasi & Buat Akun"}
+              : mode === "register"
+                ? registerStep === "form"
+                  ? "Kirim Kode OTP ke Email"
+                  : "Verifikasi & Buat Akun"
+                : forgotStep === "email"
+                  ? "Kirim Kode Reset ke Email"
+                  : "Simpan Kata Sandi Baru"}
           </button>
         </form>
       </div>

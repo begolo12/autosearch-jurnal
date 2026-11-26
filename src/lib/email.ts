@@ -57,10 +57,13 @@ async function postResendEmail(params: {
   };
 }
 
-export async function sendRegistrationOtpEmail(params: {
+async function sendBrandedOtpEmail(params: {
   to: string;
   name: string;
   otp: string;
+  subject: string;
+  introText: string;
+  ignoreText: string;
 }): Promise<{ ok: true; usedSandbox: boolean } | { ok: false; error: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   if (!apiKey) {
@@ -73,7 +76,6 @@ export async function sendRegistrationOtpEmail(params: {
   const primaryFrom =
     process.env.RESEND_FROM_EMAIL?.trim() ||
     "SmartSari <no-reply@smartsari.my.id>";
-  const subject = `${params.otp} — Kode Verifikasi Akun SmartSari`;
   const safeName = escapeHtml(params.name);
 
   const html = `
@@ -86,7 +88,7 @@ export async function sendRegistrationOtpEmail(params: {
         Halo <strong>${safeName}</strong>,
       </p>
       <p style="font-size:14px;line-height:1.6;color:#A1A1AA;margin:0 0 20px;">
-        Gunakan kode OTP berikut untuk menyelesaikan pendaftaran akun SmartSari Anda. Kode ini berlaku selama <strong>10 menit</strong>.
+        ${escapeHtml(params.introText)} Kode ini berlaku selama <strong>10 menit</strong>.
       </p>
       <div style="background:#0E0F12;border:1px solid #DB2777;border-radius:12px;padding:16px;text-align:center;margin:0 0 20px;">
         <span style="font-family:'JetBrains Mono',Consolas,monospace;font-size:30px;font-weight:700;letter-spacing:8px;color:#F9A8D4;">
@@ -94,18 +96,18 @@ export async function sendRegistrationOtpEmail(params: {
         </span>
       </div>
       <p style="font-size:12px;line-height:1.5;color:#71717A;margin:0;">
-        Jika Anda tidak merasa mendaftar di SmartSari, abaikan email ini. Jangan bagikan kode ini kepada siapa pun.
+        ${escapeHtml(params.ignoreText)} Jangan bagikan kode ini kepada siapa pun.
       </p>
     </div>
   </div>`;
 
-  const text = `Halo ${params.name},\n\nKode OTP verifikasi akun SmartSari Anda adalah: ${params.otp}\nBerlaku selama 10 menit. Jangan bagikan kode ini kepada siapa pun.`;
+  const text = `Halo ${params.name},\n\n${params.introText}\nKode OTP Anda: ${params.otp} (berlaku 10 menit).\n\n${params.ignoreText}`;
 
   const firstTry = await postResendEmail({
     apiKey,
     from: primaryFrom,
     to: params.to,
-    subject,
+    subject: params.subject,
     html,
     text,
   });
@@ -114,27 +116,18 @@ export async function sendRegistrationOtpEmail(params: {
     return { ok: true, usedSandbox: false };
   }
 
-  // Fallback to Resend onboarding sender if custom domain is not yet verified
   if (firstTry.status === 403 && !primaryFrom.includes("resend.dev")) {
     const fallbackTry = await postResendEmail({
       apiKey,
       from: "SmartSari <onboarding@resend.dev>",
       to: params.to,
-      subject,
+      subject: params.subject,
       html,
       text,
     });
 
     if (fallbackTry.ok) {
       return { ok: true, usedSandbox: true };
-    }
-
-    if (fallbackTry.status === 403) {
-      return {
-        ok: false,
-        error:
-          "Domain smartsari.my.id belum diverifikasi di Resend Dashboard, sehingga mode uji Resend saat ini hanya dapat mengirim ke email pemilik akun Resend.",
-      };
     }
 
     return {
@@ -147,4 +140,37 @@ export async function sendRegistrationOtpEmail(params: {
     ok: false,
     error: firstTry.message || "Gagal mengirim email OTP.",
   };
+}
+
+export async function sendRegistrationOtpEmail(params: {
+  to: string;
+  name: string;
+  otp: string;
+}) {
+  return sendBrandedOtpEmail({
+    to: params.to,
+    name: params.name,
+    otp: params.otp,
+    subject: `${params.otp} — Kode Verifikasi Akun SmartSari`,
+    introText:
+      "Gunakan kode OTP berikut untuk menyelesaikan pendaftaran akun SmartSari Anda.",
+    ignoreText: "Jika Anda tidak merasa mendaftar di SmartSari, abaikan email ini.",
+  });
+}
+
+export async function sendPasswordResetOtpEmail(params: {
+  to: string;
+  name: string;
+  otp: string;
+}) {
+  return sendBrandedOtpEmail({
+    to: params.to,
+    name: params.name,
+    otp: params.otp,
+    subject: `${params.otp} — Kode Reset Kata Sandi SmartSari`,
+    introText:
+      "Kami menerima permintaan untuk mengatur ulang kata sandi akun SmartSari Anda. Masukkan kode OTP berikut:",
+    ignoreText:
+      "Jika Anda tidak meminta reset kata sandi, abaikan email ini — akun Anda tetap aman.",
+  });
 }
