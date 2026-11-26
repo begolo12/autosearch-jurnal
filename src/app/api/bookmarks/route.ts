@@ -17,6 +17,9 @@ const bookmarkSchema = z.object({
   landingUrl: z.string().nullable().optional(),
   doi: z.string().nullable().optional(),
   citations: z.number().nullable().optional(),
+  projectId: z.string().uuid().nullable().optional(),
+  note: z.string().max(2000).nullable().optional(),
+  tierLabel: z.string().max(40).nullable().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -92,6 +95,9 @@ export async function POST(request: NextRequest) {
         landingUrl: body.landingUrl ?? null,
         doi: body.doi ?? null,
         citations: body.citations ?? null,
+        projectId: body.projectId ?? null,
+        note: body.note ?? null,
+        tierLabel: body.tierLabel ?? null,
       })
       .returning();
 

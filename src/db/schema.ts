@@ -27,6 +27,27 @@ export const searchHistory = pgTable("search_history", {
     .notNull(),
 });
 
+export const users = pgTable("users", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: text("email").notNull().unique(),
+  name: text("name").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const researchProjects = pgTable("research_projects", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  sessionId: text("session_id").notNull().default("global"),
+  name: text("name").notNull(),
+  description: text("description"),
+  color: text("color").notNull().default("#F472B6"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 export const bookmarks = pgTable(
   "bookmarks",
   {
@@ -43,6 +64,11 @@ export const bookmarks = pgTable(
     landingUrl: text("landing_url"),
     doi: text("doi"),
     citations: integer("citations"),
+    projectId: uuid("project_id").references(() => researchProjects.id, {
+      onDelete: "set null",
+    }),
+    note: text("note"),
+    tierLabel: text("tier_label"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

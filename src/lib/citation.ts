@@ -93,6 +93,30 @@ export function formatCitation(
   return formatApa(paper);
 }
 
+export function formatRis(paper: JournalPaper): string {
+  const lines: string[] = ["TY  - JOUR", `TI  - ${paper.title}`];
+  for (const author of paper.authors) {
+    if (author.trim()) lines.push(`AU  - ${author.trim()}`);
+  }
+  if (paper.year) lines.push(`PY  - ${paper.year}`);
+  if (paper.venue) lines.push(`JO  - ${paper.venue}`);
+  if (paper.doi) lines.push(`DO  - ${paper.doi}`);
+  if (paper.landingUrl) lines.push(`UR  - ${paper.landingUrl}`);
+  if (paper.abstract) {
+    lines.push(`AB  - ${paper.abstract.replace(/\s+/g, " ").trim()}`);
+  }
+  lines.push("ER  - ");
+  return lines.join("\n");
+}
+
+export function exportCitationsBib(papers: JournalPaper[]): string {
+  return papers.map((p) => formatBibtex(p)).join("\n\n");
+}
+
+export function exportCitationsRis(papers: JournalPaper[]): string {
+  return papers.map((p) => formatRis(p)).join("\n\n");
+}
+
 export function formatRelativeTimeId(isoDate: string): string {
   const time = new Date(isoDate).getTime();
   if (Number.isNaN(time)) return "";

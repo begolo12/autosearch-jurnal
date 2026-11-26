@@ -1,0 +1,52 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { buildBibliographyDocxBuffer } from "@/lib/docx-builder";
+
+const exportSchema = z.object({
+  title: z.string().trim().min(1).max(120).default("Daftar Pustaka SmartSari"),
+  format: z.enum(["apa", "ieee"]).default("apa"),
+  items: z
+    .array(
+      z.object({
+        citation: z.string().min(1),
+        note: z.string().nullable().optional(),
+      })
+    )
+    .min(1)
+    .max(100),
+});
+
+export async function POST(request: NextRequest) {
+  let body: z.infer<typeof exportSchema>;
+  try {
+    body = exportSchema.parse(await request.json());
+  } catch {
+    return NextResponse.json(
+      { error: "Data daftar pustaka tidak valid." },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const buffer = await buildBibliographyDocxBuffer({
+      title: body.title,
+      formatLabel: body.format.toUpperCase(),
+      items: body.items,
+    });
+
+    return new NextResponse(new Uint8Array(buffer), {
+      status: 200,
+      headers: {
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "Content-Disposition": `attachment; filename="daftar-pustaka-smartsari.docx"`,
+      },
+    });
+  } catch (err) {
+    console.error("POST /api/bookmarks/export-docx error:", err);
+    return NextResponse.json(
+      { error: "Gagal membuat file Word daftar pustaka." },
+      { status: 500 }
+    );
+  }
+}

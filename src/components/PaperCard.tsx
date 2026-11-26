@@ -6,22 +6,31 @@ import {
   BookmarkCheck,
   BookOpenText,
   Check,
+  CheckSquare,
   ChevronDown,
   ChevronUp,
   Copy,
   ExternalLink,
   FileDown,
   FileText,
+  FolderOpen,
   Languages,
   Loader2,
   Quote,
+  Square,
+  StickyNote,
 } from "lucide-react";
 import { formatCitation, type CitationFormat } from "@/lib/citation";
-import type { ConversionMode, JournalPaper } from "@/lib/types";
+import type {
+  ConversionMode,
+  JournalPaper,
+  ResearchProjectRecord,
+} from "@/lib/types";
 
 const SOURCE_LABELS: Record<string, string> = {
   openalex: "OpenAlex",
   europepmc: "Europe PMC",
+  crossref: "Crossref",
 };
 
 const MODE_OPTIONS: Array<{
@@ -55,6 +64,16 @@ interface PaperCardProps {
   onConvertWord: (paper: JournalPaper, mode: ConversionMode) => Promise<void>;
   downloadingPdfKey: string | null;
   convertingKey: string | null;
+  selectedForMatrix?: boolean;
+  onToggleSelectMatrix?: (paper: JournalPaper) => void;
+  bookmarkId?: string;
+  projectId?: string | null;
+  note?: string | null;
+  projects?: ResearchProjectRecord[];
+  onUpdateBookmarkMeta?: (
+    bookmarkId: string,
+    patch: { projectId?: string | null; note?: string | null }
+  ) => Promise<void>;
 }
 
 export function PaperCard({
@@ -66,10 +85,20 @@ export function PaperCard({
   onConvertWord,
   downloadingPdfKey,
   convertingKey,
+  selectedForMatrix = false,
+  onToggleSelectMatrix,
+  bookmarkId,
+  projectId,
+  note,
+  projects,
+  onUpdateBookmarkMeta,
 }: PaperCardProps) {
   const [expandedAbstract, setExpandedAbstract] = useState(false);
   const [showConvertPanel, setShowConvertPanel] = useState(false);
   const [showCitePanel, setShowCitePanel] = useState(false);
+  const [showNotePanel, setShowNotePanel] = useState(false);
+  const [noteDraft, setNoteDraft] = useState(note || "");
+  const [savingMeta, setSavingMeta] = useState(false);
   const [citeFormat, setCiteFormat] = useState<CitationFormat>("apa");
   const [copiedCite, setCopiedCite] = useState(false);
   const [selectedMode, setSelectedMode] = useState<ConversionMode>("clean");
@@ -366,6 +395,40 @@ export function PaperCard({
             <span>{isBookmarked ? "Tersimpan" : "Simpan"}</span>
           </button>
 
+          {onToggleSelectMatrix && (
+            <button
+              type="button"
+              onClick={() => onToggleSelectMatrix(paper)}
+              className={`btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
+                selectedForMatrix
+                  ? "border-[#F472B6] bg-[#DB2777]/20 text-[#FBCFE8]"
+                  : "border-[#2C2E35] bg-[#1E1F23] text-[#A1A1AA] hover:border-[#3F414A] hover:text-white"
+              }`}
+            >
+              {selectedForMatrix ? (
+                <CheckSquare className="h-3.5 w-3.5 text-[#F472B6]" />
+              ) : (
+                <Square className="h-3.5 w-3.5" />
+              )}
+              <span>{selectedForMatrix ? "Dipilih" : "Bandingkan"}</span>
+            </button>
+          )}
+
+          {bookmarkId && onUpdateBookmarkMeta && (
+            <button
+              type="button"
+              onClick={() => setShowNotePanel((v) => !v)}
+              className={`btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
+                showNotePanel || note || projectId
+                  ? "border-[#DB2777]/40 bg-[#DB2777]/12 text-[#F9A8D4]"
+                  : "border-[#2C2E35] bg-[#1E1F23] text-[#A1A1AA] hover:border-[#3F414A] hover:text-white"
+              }`}
+            >
+              <StickyNote className="h-3.5 w-3.5" />
+              <span>{note ? "Catatan ✓" : "Proyek & Catatan"}</span>
+            </button>
+          )}
+
           {paper.landingUrl && (
             <a
               href={paper.landingUrl}
@@ -489,6 +552,67 @@ export function PaperCard({
                 )}
                 {isConverting ? "Memproses..." : "Unduh .docx"}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Inline Project & Note Panel (Saved Papers) */}
+        {showNotePanel && bookmarkId && onUpdateBookmarkMeta && (
+          <div className="animate-panel-open mt-3 space-y-3 rounded-xl border border-[#2C2E35] bg-[#151619] p-3.5">
+            {projects && projects.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-[#A1A1AA]">
+                  <FolderOpen className="h-3.5 w-3.5 text-[#F472B6]" />
+                  Proyek:
+                </span>
+                <select
+                  value={projectId || ""}
+                  onChange={(e) => {
+                    const nextProjectId = e.target.value || null;
+                    void onUpdateBookmarkMeta(bookmarkId, {
+                      projectId: nextProjectId,
+                    });
+                  }}
+                  className="rounded-lg border border-[#2C2E35] bg-[#0E0F12] px-2.5 py-1 text-xs text-[#F4F4F5] focus:border-[#F472B6] focus:outline-none"
+                >
+                  <option value="">Tanpa Proyek</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div>
+              <textarea
+                rows={2}
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
+                placeholder="Tulis catatan riset pribadi untuk jurnal ini (metode, kutipan penting, dll)..."
+                className="w-full rounded-lg border border-[#2C2E35] bg-[#0E0F12] px-3 py-2 text-xs text-[#F4F4F5] placeholder-[#71717A] focus:border-[#F472B6] focus:outline-none"
+              />
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  disabled={savingMeta}
+                  onClick={async () => {
+                    setSavingMeta(true);
+                    try {
+                      await onUpdateBookmarkMeta(bookmarkId, {
+                        note: noteDraft.trim() || null,
+                      });
+                    } finally {
+                      setSavingMeta(false);
+                    }
+                  }}
+                  className="btn-tactile inline-flex items-center gap-1.5 rounded-full bg-[#DB2777] px-3.5 py-1 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
+                >
+                  {savingMeta && <Loader2 className="h-3 w-3 animate-spin" />}
+                  Simpan Catatan
+                </button>
+              </div>
             </div>
           </div>
         )}

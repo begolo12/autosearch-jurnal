@@ -7,9 +7,13 @@ import {
   Packer,
   PageNumber,
   Paragraph,
+  Table,
+  TableCell,
+  TableRow,
   TextRun,
+  WidthType,
 } from "docx";
-import type { ConversionMode } from "@/lib/types";
+import type { ConversionMode, LiteratureMatrixResult } from "@/lib/types";
 
 const MODE_LABEL: Record<ConversionMode, string> = {
   clean: "Konversi Rapi Utuh",
@@ -331,6 +335,235 @@ export async function buildDocxBuffer(params: {
           }),
         },
         children,
+      },
+    ],
+  });
+
+  return Packer.toBuffer(doc);
+}
+
+export async function buildBibliographyDocxBuffer(params: {
+  title: string;
+  formatLabel: string;
+  items: Array<{
+    citation: string;
+    note?: string | null;
+  }>;
+}): Promise<Buffer> {
+  const children: Paragraph[] = [
+    new Paragraph({
+      spacing: { after: 80 },
+      children: [
+        new TextRun({
+          text: `SMARTSARI · DAFTAR PUSTAKA (${params.formatLabel.toUpperCase()})`,
+          bold: true,
+          size: 18,
+          color: "BE185D",
+          font: "Calibri",
+        }),
+      ],
+    }),
+    new Paragraph({
+      heading: HeadingLevel.TITLE,
+      spacing: { after: 200 },
+      children: [
+        new TextRun({
+          text: params.title,
+          bold: true,
+          size: 30,
+          color: "1C1917",
+          font: "Georgia",
+        }),
+      ],
+    }),
+  ];
+
+  params.items.forEach((item, index) => {
+    children.push(
+      new Paragraph({
+        spacing: { after: item.note ? 60 : 140, line: 276 },
+        indent: { left: 480, hanging: 480 },
+        children: [
+          new TextRun({
+            text: `${index + 1}. ${item.citation}`,
+            size: 22,
+            font: "Georgia",
+          }),
+        ],
+      })
+    );
+
+    if (item.note && item.note.trim()) {
+      children.push(
+        new Paragraph({
+          spacing: { after: 140, line: 240 },
+          indent: { left: 480 },
+          children: [
+            new TextRun({
+              text: `Catatan: ${item.note.trim()}`,
+              italics: true,
+              size: 20,
+              color: "57534E",
+              font: "Calibri",
+            }),
+          ],
+        })
+      );
+    }
+  });
+
+  const doc = new Document({
+    creator: "SmartSari",
+    title: params.title,
+    sections: [
+      {
+        properties: {
+          page: {
+            margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+          },
+        },
+        children,
+      },
+    ],
+  });
+
+  return Packer.toBuffer(doc);
+}
+
+export async function buildLiteratureMatrixDocxBuffer(
+  matrix: LiteratureMatrixResult
+): Promise<Buffer> {
+  const headers = [
+    "Judul Jurnal",
+    "Penulis & Tahun",
+    "Tier",
+    "Tujuan",
+    "Metode",
+    "Sampel / Data",
+    "Temuan Utama",
+    "Keterbatasan",
+  ];
+
+  const makeCell = (text: string, isHeader = false) =>
+    new TableCell({
+      shading: isHeader ? { fill: "FCE7F3" } : undefined,
+      margins: { top: 100, bottom: 100, left: 120, right: 120 },
+      children: [
+        new Paragraph({
+          spacing: { after: 0, line: 240 },
+          children: [
+            new TextRun({
+              text: text || "-",
+              bold: isHeader,
+              size: isHeader ? 18 : 17,
+              color: isHeader ? "9D174D" : "1C1917",
+              font: "Calibri",
+            }),
+          ],
+        }),
+      ],
+    });
+
+  const table = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: headers.map((h) => makeCell(h, true)),
+      }),
+      ...matrix.rows.map(
+        (row) =>
+          new TableRow({
+            children: [
+              makeCell(row.title),
+              makeCell(row.authorsYear),
+              makeCell(row.tier),
+              makeCell(row.objective),
+              makeCell(row.method),
+              makeCell(row.sample),
+              makeCell(row.findings),
+              makeCell(row.limitations),
+            ],
+          })
+      ),
+    ],
+  });
+
+  const doc = new Document({
+    creator: "SmartSari",
+    title: "Matriks Literatur & Sintesis Riset",
+    sections: [
+      {
+        properties: {
+          page: {
+            size: {
+              orientation: "landscape",
+            },
+            margin: { top: 960, right: 960, bottom: 960, left: 960 },
+          },
+        },
+        children: [
+          new Paragraph({
+            spacing: { after: 80 },
+            children: [
+              new TextRun({
+                text: `SMARTSARI · MATRIKS LITERATUR AI (${matrix.model})`,
+                bold: true,
+                size: 18,
+                color: "BE185D",
+                font: "Calibri",
+              }),
+            ],
+          }),
+          new Paragraph({
+            heading: HeadingLevel.TITLE,
+            spacing: { after: 180 },
+            children: [
+              new TextRun({
+                text: "Matriks Perbandingan & Sintesis Literatur",
+                bold: true,
+                size: 30,
+                color: "1C1917",
+                font: "Georgia",
+              }),
+            ],
+          }),
+          new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 120, after: 80 },
+            children: [
+              new TextRun({
+                text: "Sintesis Lintas Jurnal",
+                bold: true,
+                size: 24,
+                color: "9D174D",
+                font: "Georgia",
+              }),
+            ],
+          }),
+          new Paragraph({
+            spacing: { after: 160, line: 276 },
+            children: parseInlineRuns(matrix.synthesis),
+          }),
+          new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 120, after: 80 },
+            children: [
+              new TextRun({
+                text: "Celah Penelitian (Research Gaps)",
+                bold: true,
+                size: 24,
+                color: "9D174D",
+                font: "Georgia",
+              }),
+            ],
+          }),
+          new Paragraph({
+            spacing: { after: 220, line: 276 },
+            children: parseInlineRuns(matrix.researchGaps),
+          }),
+          table,
+        ],
       },
     ],
   });

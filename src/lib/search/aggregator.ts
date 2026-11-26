@@ -1,4 +1,5 @@
 import {
+  searchCrossrefByTiers,
   searchEuropePmcByTiers,
   searchOpenAlexByTiers,
 } from "@/lib/search/sources";
@@ -12,7 +13,7 @@ import {
   type SourceStat,
 } from "@/lib/types";
 
-const ALL_SOURCES: SearchSource[] = ["openalex", "europepmc"];
+const ALL_SOURCES: SearchSource[] = ["openalex", "europepmc", "crossref"];
 
 function normalizeTitle(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -88,8 +89,10 @@ export async function aggregateJournalSearch(params: {
   pdfOnly?: boolean;
   yearFrom?: number | null;
   sort?: SortOption;
+  page?: number;
 }): Promise<SearchResponse> {
   const query = params.query.trim();
+  const page = Math.min(5, Math.max(1, params.page ?? 1));
   const activeSources =
     params.sources && params.sources.length > 0 ? params.sources : ALL_SOURCES;
   const activeTiers: JournalTier[] =
@@ -105,9 +108,12 @@ export async function aggregateJournalSearch(params: {
               query,
               activeTiers,
               45,
-              Boolean(params.pdfOnly)
+              Boolean(params.pdfOnly),
+              page
             )
-          : await searchEuropePmcByTiers(query, activeTiers, 20);
+          : source === "europepmc"
+            ? await searchEuropePmcByTiers(query, activeTiers, 20, page)
+            : await searchCrossrefByTiers(query, activeTiers, 20, page);
       return { source, papers };
     })
   );
@@ -216,10 +222,21 @@ export async function aggregateJournalSearch(params: {
     return a.paperKey.localeCompare(b.paperKey);
   });
 
+  const tierCounts: Partial<Record<JournalTier, number>> = {};
+  for (const p of papers) {
+    const t = p.journalMetrics?.primaryTier;
+    if (t) {
+      tierCounts[t] = (tierCounts[t] ?? 0) + 1;
+    }
+  }
+
   return {
     query,
     total: papers.length,
     papers,
     sourceStats,
+    page,
+    hasMore: page < 5 && rawPapers.length >= 15,
+    tierCounts,
   };
 }

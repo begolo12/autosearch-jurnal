@@ -1,4 +1,9 @@
-import type { ConversionMode } from "@/lib/types";
+import type {
+  ConversionMode,
+  LiteratureMatrixResult,
+  LiteratureMatrixRow,
+  PaperChatMessage,
+} from "@/lib/types";
 
 export class InferHubError extends Error {
   code: "MISSING_API_KEY" | "API_ERROR";
@@ -193,4 +198,153 @@ export async function translateAbstractToIndonesian(params: {
       model,
     };
   }
+}
+
+export async function generateLiteratureMatrix(
+  papers: Array<{
+    title: string;
+    authors: string[];
+    year: number | null;
+    venue: string | null;
+    tierLabel?: string | null;
+    abstract: string | null;
+  }>
+): Promise<LiteratureMatrixResult> {
+  const system = [
+    "Anda adalah asisten riset akademik senior yang menyusun Matriks Literatur (Literature Review Matrix) dalam Bahasa Indonesia akademik baku.",
+    "Analisislah setiap jurnal yang diberikan lalu kembalikan HANYA JSON valid (tanpa markdown code fence) dengan struktur persis:",
+    "{",
+    '  "synthesis": "paragraf sintesis lintas jurnal (persamaan, tren metode, dan temuan utama bersama)",',
+    '  "researchGaps": "paragraf celah penelitian (research gaps) dan peluang riset lanjutan",',
+    '  "rows": [',
+    '    { "title": "...", "authorsYear": "...", "tier": "...", "objective": "...", "method": "...", "sample": "...", "findings": "...", "limitations": "..." }',
+    "  ]",
+    "}",
+    "Jika informasi tertentu (mis. ukuran sampel) tidak tertulis eksplisit di abstrak, tuliskan singkat berdasarkan konteks atau 'Tidak disebutkan eksplisit di abstrak'.",
+  ].join("\n");
+
+  const paperBlocks = papers
+    .map((p, idx) => {
+      const authorsShort =
+        p.authors.length > 0 ? p.authors.slice(0, 3).join(", ") : "Anonim";
+      return [
+        `[Jurnal ${idx + 1}]`,
+        `Judul: ${p.title}`,
+        `Penulis & Tahun: ${authorsShort} (${p.year ?? "t.t."})`,
+        `Jurnal & Tier: ${p.venue || "-"} (${p.tierLabel || "-"})`,
+        `Abstrak: ${p.abstract || "Abstrak tidak tersedia."}`,
+      ].join("\n");
+    })
+    .join("\n\n");
+
+  const { content, model } = await callInferHub({
+    system,
+    user: `Susun matriks literatur dari ${papers.length} jurnal berikut:\n\n${paperBlocks}`,
+    temperature: 0.2,
+  });
+
+  const cleaned = content
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+
+  const parsed = JSON.parse(cleaned) as {
+    synthesis?: string;
+    researchGaps?: string;
+    rows?: Partial<LiteratureMatrixRow>[];
+  };
+
+  const rows: LiteratureMatrixRow[] = papers.map((p, idx) => {
+    const r = parsed.rows?.[idx] || {};
+    return {
+      title: r.title || p.title,
+      authorsYear:
+        r.authorsYear ||
+        `${p.authors[0] || "Anonim"} (${p.year ?? "t.t."})`,
+      tier: r.tier || p.tierLabel || "-",
+      objective: r.objective || "-",
+      method: r.method || "-",
+      sample: r.sample || "-",
+      findings: r.findings || "-",
+      limitations: r.limitations || "-",
+    };
+  });
+
+  return {
+    synthesis: parsed.synthesis?.trim() || "Sintesis tidak tersedia.",
+    researchGaps:
+      parsed.researchGaps?.trim() || "Celah penelitian tidak tersedia.",
+    rows,
+    model,
+  };
+}
+
+export async function chatAboutPaper(params: {
+  title: string;
+  authors: string[];
+  year: number | null;
+  venue: string | null;
+  abstract: string | null;
+  extractedText: string | null;
+  messages: PaperChatMessage[];
+}): Promise<{ reply: string; model: string }> {
+  const { apiKey, baseUrl, model } = getInferHubConfig();
+
+  const paperContext = [
+    `Judul: ${params.title}`,
+    params.authors.length > 0 ? `Penulis: ${params.authors.join(", ")}` : null,
+    params.year ? `Tahun: ${params.year}` : null,
+    params.venue ? `Jurnal: ${params.venue}` : null,
+    params.extractedText
+      ? `TEKS JURNAL:\n${params.extractedText.slice(0, 26000)}`
+      : `ABSTRAK:\n${params.abstract || "Abstrak tidak tersedia."}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const system = [
+    "Anda adalah asisten riset AI SmartSari yang membantu pengguna memahami isi jurnal ilmiah.",
+    "Jawablah dalam Bahasa Indonesia akademik yang jelas, terstruktur, dan ringkas.",
+    "Dasarkan jawaban Anda HANYA pada konteks jurnal di bawah ini. Jika sesuatu tidak terdapat pada teks/abstrak yang tersedia, nyatakan dengan jujur bahwa informasi tersebut tidak tercantum dalam bagian yang tersedia.",
+    "",
+    paperContext,
+  ].join("\n");
+
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.25,
+      messages: [
+        { role: "system", content: system },
+        ...params.messages.slice(-8).map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+      ],
+    }),
+    signal: AbortSignal.timeout(45000),
+  });
+
+  if (!response.ok) {
+    throw new InferHubError(
+      "API_ERROR",
+      `Layanan AI mengembalikan status ${response.status}.`,
+      response.status
+    );
+  }
+
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const reply = data.choices?.[0]?.message?.content?.trim();
+  if (!reply) {
+    throw new InferHubError("API_ERROR", "Model AI tidak mengembalikan jawaban.");
+  }
+  return { reply, model };
 }

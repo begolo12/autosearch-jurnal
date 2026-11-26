@@ -1,4 +1,4 @@
-export type SearchSource = "openalex" | "europepmc";
+export type SearchSource = "openalex" | "europepmc" | "crossref";
 
 export type ConversionMode = "clean" | "translate_id" | "summary_id";
 
@@ -69,6 +69,9 @@ export interface SearchResponse {
   total: number;
   papers: JournalPaper[];
   sourceStats: SourceStat[];
+  page?: number;
+  hasMore?: boolean;
+  tierCounts?: Partial<Record<JournalTier, number>>;
 }
 
 export interface BookmarkRecord {
@@ -84,7 +87,48 @@ export interface BookmarkRecord {
   landingUrl: string | null;
   doi: string | null;
   citations: number | null;
+  projectId?: string | null;
+  note?: string | null;
+  tierLabel?: string | null;
   createdAt: string;
+}
+
+export interface ResearchProjectRecord {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string;
+  bookmarkCount: number;
+  createdAt: string;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export interface LiteratureMatrixRow {
+  title: string;
+  authorsYear: string;
+  tier: string;
+  objective: string;
+  method: string;
+  sample: string;
+  findings: string;
+  limitations: string;
+}
+
+export interface LiteratureMatrixResult {
+  synthesis: string;
+  researchGaps: string;
+  rows: LiteratureMatrixRow[];
+  model: string;
+}
+
+export interface PaperChatMessage {
+  role: "user" | "assistant";
+  content: string;
 }
 
 export interface ConversionRecord {

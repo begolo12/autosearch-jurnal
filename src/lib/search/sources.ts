@@ -254,13 +254,15 @@ async function fetchOpenAlexSourcesByIssns(
 async function fetchOpenAlexWorks(
   query: string,
   filter: string,
-  limit: number
+  limit: number,
+  page = 1
 ): Promise<OpenAlexWork[]> {
   const url = new URL("https://api.openalex.org/works");
   url.searchParams.set("search", query);
   url.searchParams.set("filter", filter);
   url.searchParams.set("sort", "relevance_score:desc");
   url.searchParams.set("per-page", String(limit));
+  url.searchParams.set("page", String(page));
   url.searchParams.set("mailto", "pustakacari@autosearch.app");
 
   const res = await fetch(url.toString(), {
@@ -280,7 +282,8 @@ export async function searchOpenAlexByTiers(
   query: string,
   tiers: JournalTier[],
   limit = 45,
-  pdfOnly = false
+  pdfOnly = false,
+  page = 1
 ): Promise<JournalPaper[]> {
   const wantsQ = tiers.some((t) => t.startsWith("Q"));
   const wantsSinta = tiers.some((t) => t.startsWith("SINTA"));
@@ -292,7 +295,8 @@ export async function searchOpenAlexByTiers(
       fetchOpenAlexWorks(
         query,
         `primary_location.source.type:journal${oaPart}`,
-        limit
+        limit,
+        page
       )
     );
   }
@@ -301,7 +305,8 @@ export async function searchOpenAlexByTiers(
       fetchOpenAlexWorks(
         query,
         `primary_location.source.type:journal,primary_location.source.country_code:ID${oaPart}`,
-        35
+        35,
+        page
       )
     );
   }
@@ -396,7 +401,8 @@ export async function searchOpenAlexByTiers(
 export async function searchEuropePmcByTiers(
   query: string,
   tiers: JournalTier[],
-  limit = 20
+  limit = 20,
+  page = 1
 ): Promise<JournalPaper[]> {
   if (!tiers.some((t) => t.startsWith("Q"))) {
     return [];
@@ -408,7 +414,7 @@ export async function searchEuropePmcByTiers(
   url.searchParams.set("query", query);
   url.searchParams.set("format", "json");
   url.searchParams.set("resultType", "core");
-  url.searchParams.set("pageSize", String(limit));
+  url.searchParams.set("pageSize", String(Math.min(100, limit * page)));
 
   const res = await fetch(url.toString(), {
     headers: REQUEST_HEADERS,
@@ -450,7 +456,10 @@ export async function searchEuropePmcByTiers(
     };
   };
 
-  const results = data.resultList?.result ?? [];
+  const results = (data.resultList?.result ?? []).slice(
+    (page - 1) * limit,
+    page * limit
+  );
   const issns = results
     .flatMap((r) => [
       r.journalInfo?.journal?.issn,
@@ -521,6 +530,119 @@ export async function searchEuropePmcByTiers(
       doi,
       citations: item.citedByCount ?? null,
       openAccess: item.isOpenAccess === "Y" || Boolean(pdfUrl),
+      language: item.language?.toUpperCase() || null,
+      journalMetrics: metrics,
+    });
+  }
+
+  return matchedPapers;
+}
+
+export async function searchCrossrefByTiers(
+  query: string,
+  tiers: JournalTier[],
+  limit = 20,
+  page = 1
+): Promise<JournalPaper[]> {
+  const url = new URL("https://api.crossref.org/works");
+  url.searchParams.set("query", query);
+  url.searchParams.set("rows", String(limit));
+  url.searchParams.set("offset", String((page - 1) * limit));
+  url.searchParams.set("filter", "type:journal-article");
+
+  const res = await fetch(url.toString(), {
+    headers: {
+      "User-Agent": "SmartSari/2.0 (mailto:hello@smartsari.my.id)",
+      Accept: "application/json",
+    },
+    signal: AbortSignal.timeout(9000),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Crossref HTTP ${res.status}`);
+  }
+
+  const data = (await res.json()) as {
+    message?: {
+      items?: Array<{
+        DOI?: string;
+        title?: string[];
+        author?: Array<{ given?: string; family?: string }>;
+        "container-title"?: string[];
+        ISSN?: string[];
+        issued?: { "date-parts"?: number[][] };
+        published?: { "date-parts"?: number[][] };
+        "is-referenced-by-count"?: number;
+        abstract?: string;
+        URL?: string;
+        language?: string;
+        link?: Array<{ URL?: string; "content-type"?: string }>;
+      }>;
+    };
+  };
+
+  const items = data.message?.items ?? [];
+  const issns = items
+    .flatMap((it) => it.ISSN ?? [])
+    .filter((v): v is string => Boolean(v));
+
+  const issnMap = await fetchOpenAlexSourcesByIssns(issns);
+  const matchedPapers: JournalPaper[] = [];
+
+  for (const item of items) {
+    const rawTitle = item.title?.[0]?.replace(/<[^>]+>/g, "").trim();
+    if (!rawTitle) continue;
+
+    let sourceMeta: OpenAlexSourceMeta | undefined;
+    for (const issn of item.ISSN ?? []) {
+      const found = issnMap.get(issn.toUpperCase());
+      if (found) {
+        sourceMeta = found;
+        break;
+      }
+    }
+    if (!sourceMeta) continue;
+
+    const metrics = classifyJournalMetrics(sourceMeta, tiers);
+    if (!metrics) continue;
+
+    const doi = cleanDoi(item.DOI);
+    const pdfLink = item.link?.find(
+      (l) => l["content-type"]?.toLowerCase().includes("pdf") && l.URL
+    );
+    const pdfUrl = pdfLink?.URL ?? null;
+    const landingUrl = item.URL || (doi ? `https://doi.org/${doi}` : null);
+
+    const authors = (item.author ?? [])
+      .map((a) => [a.given, a.family].filter(Boolean).join(" ").trim())
+      .filter(Boolean)
+      .slice(0, 8);
+
+    const year =
+      item.issued?.["date-parts"]?.[0]?.[0] ??
+      item.published?.["date-parts"]?.[0]?.[0] ??
+      null;
+
+    const abstract = item.abstract
+      ? item.abstract
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+      : null;
+
+    matchedPapers.push({
+      paperKey: makePaperKey("crossref", doi, rawTitle),
+      title: rawTitle,
+      authors,
+      year,
+      venue: sourceMeta.display_name || item["container-title"]?.[0] || null,
+      source: "crossref",
+      abstract,
+      pdfUrl,
+      landingUrl,
+      doi,
+      citations: item["is-referenced-by-count"] ?? null,
+      openAccess: Boolean(pdfUrl),
       language: item.language?.toUpperCase() || null,
       journalMetrics: metrics,
     });

@@ -6,30 +6,45 @@ import {
   ArrowUp,
   BookOpen,
   Bookmark,
+  Cloud,
   FileDown,
   FileText,
+  FolderOpen,
   History,
   Loader2,
+  LogOut,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
   Search,
   Send,
+  Sparkles,
   SquarePen,
   Trash2,
+  User,
   X,
 } from "lucide-react";
+import { AuthModal } from "@/components/AuthModal";
+import { LiteratureMatrixModal } from "@/components/LiteratureMatrixModal";
 import { PaperCard } from "@/components/PaperCard";
 import { PdfReaderModal } from "@/components/PdfReaderModal";
 import { PwaRegistrar } from "@/components/PwaRegistrar";
-import { formatRelativeTimeId } from "@/lib/citation";
+import {
+  exportCitationsBib,
+  exportCitationsRis,
+  formatCitation,
+  formatRelativeTimeId,
+} from "@/lib/citation";
 import {
   TIER_PRIORITY_ORDER,
+  type AuthUser,
   type BookmarkRecord,
   type ConversionMode,
   type ConversionRecord,
   type JournalPaper,
   type JournalTier,
+  type LiteratureMatrixResult,
+  type ResearchProjectRecord,
   type SearchHistoryRecord,
   type SearchResponse,
   type SearchSource,
@@ -37,10 +52,28 @@ import {
 } from "@/lib/types";
 
 type ActiveTab = "search" | "bookmarks" | "conversions" | "history";
+type TierPresetId = "all" | "q1" | "q1_q2" | "q1_q4" | "sinta";
+
+const TIER_PRESETS: Array<{
+  id: TierPresetId;
+  label: string;
+  tiers: JournalTier[];
+}> = [
+  { id: "all", label: "Semua Tier", tiers: [...TIER_PRIORITY_ORDER] },
+  { id: "q1", label: "Khusus Q1", tiers: ["Q1"] },
+  { id: "q1_q2", label: "Q1–Q2", tiers: ["Q1", "Q2"] },
+  { id: "q1_q4", label: "Q1–Q4", tiers: ["Q1", "Q2", "Q3", "Q4"] },
+  {
+    id: "sinta",
+    label: "SINTA 1–6",
+    tiers: ["SINTA1", "SINTA2", "SINTA3", "SINTA4", "SINTA5", "SINTA6"],
+  },
+];
 
 const ALL_SOURCES: Array<{ id: SearchSource; label: string }> = [
   { id: "openalex", label: "OpenAlex" },
   { id: "europepmc", label: "Europe PMC" },
+  { id: "crossref", label: "Crossref" },
 ];
 
 const RANK_SECTION_META: Record<
@@ -116,7 +149,9 @@ export function JournalWorkspace() {
   const [selectedSources, setSelectedSources] = useState<SearchSource[]>([
     "openalex",
     "europepmc",
+    "crossref",
   ]);
+  const [tierPreset, setTierPreset] = useState<TierPresetId>("all");
   const [pdfOnly, setPdfOnly] = useState(false);
   const [yearFrom, setYearFrom] = useState<string>("");
   const [sort, setSort] = useState<SortOption>("relevance");
@@ -124,7 +159,26 @@ export function JournalWorkspace() {
 
   const [searchResult, setSearchResult] = useState<SearchResponse | null>(null);
   const [searching, setSearching] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [projects, setProjects] = useState<ResearchProjectRecord[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    null
+  );
+  const [showNewProjectInput, setShowNewProjectInput] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [creatingProject, setCreatingProject] = useState(false);
+
+  const [selectedPapersMap, setSelectedPapersMap] = useState<
+    Record<string, JournalPaper>
+  >({});
+  const [buildingMatrix, setBuildingMatrix] = useState(false);
+  const [matrixResult, setMatrixResult] =
+    useState<LiteratureMatrixResult | null>(null);
+  const [exportingBibDocx, setExportingBibDocx] = useState(false);
 
   const [bookmarks, setBookmarks] = useState<BookmarkRecord[]>([]);
   const [history, setHistory] = useState<SearchHistoryRecord[]>([]);
@@ -154,45 +208,52 @@ export function JournalWorkspace() {
     actionLabel?: string;
   } | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    async function initLoad() {
-      try {
-        const [bRes, hRes, cRes] = await Promise.all([
-          fetch("/api/bookmarks"),
-          fetch("/api/history"),
-          fetch("/api/conversions"),
-        ]);
+  const reloadWorkspaceData = useCallback(async () => {
+    try {
+      const [meRes, pRes, bRes, hRes, cRes] = await Promise.all([
+        fetch("/api/auth/me"),
+        fetch("/api/projects"),
+        fetch("/api/bookmarks"),
+        fetch("/api/history"),
+        fetch("/api/conversions"),
+      ]);
 
-        if (!active) return;
-
-        if (bRes.ok) {
-          const bJson = (await bRes.json()) as { bookmarks?: BookmarkRecord[] };
-          setBookmarks(bJson.bookmarks ?? []);
-        }
-        if (hRes.ok) {
-          const hJson = (await hRes.json()) as {
-            history?: SearchHistoryRecord[];
-          };
-          setHistory(hJson.history ?? []);
-        }
-        if (cRes.ok) {
-          const cJson = (await cRes.json()) as {
-            conversions?: ConversionRecord[];
-          };
-          setConversions(cJson.conversions ?? []);
-        }
-      } catch {
-        // Non-fatal
-      } finally {
-        if (active) setLoadingSidebar(false);
+      if (meRes.ok) {
+        const meJson = (await meRes.json()) as { user?: AuthUser | null };
+        setAuthUser(meJson.user ?? null);
       }
+      if (pRes.ok) {
+        const pJson = (await pRes.json()) as {
+          projects?: ResearchProjectRecord[];
+        };
+        setProjects(pJson.projects ?? []);
+      }
+      if (bRes.ok) {
+        const bJson = (await bRes.json()) as { bookmarks?: BookmarkRecord[] };
+        setBookmarks(bJson.bookmarks ?? []);
+      }
+      if (hRes.ok) {
+        const hJson = (await hRes.json()) as {
+          history?: SearchHistoryRecord[];
+        };
+        setHistory(hJson.history ?? []);
+      }
+      if (cRes.ok) {
+        const cJson = (await cRes.json()) as {
+          conversions?: ConversionRecord[];
+        };
+        setConversions(cJson.conversions ?? []);
+      }
+    } catch {
+      // Non-fatal
+    } finally {
+      setLoadingSidebar(false);
     }
-    void initLoad();
-    return () => {
-      active = false;
-    };
   }, []);
+
+  useEffect(() => {
+    void reloadWorkspaceData();
+  }, [reloadWorkspaceData]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -204,7 +265,11 @@ export function JournalWorkspace() {
           target.tagName === "SELECT" ||
           target.isContentEditable);
 
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      if (e.key === "Escape") {
+        setShowFilterMenu(false);
+        setShowAuthModal(false);
+        setMatrixResult(null);
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setActiveTab("search");
         setTimeout(() => {
@@ -241,14 +306,19 @@ export function JournalWorkspace() {
 
   const filteredBookmarks = useMemo(() => {
     const q = bookmarksFilter.trim().toLowerCase();
-    if (!q) return bookmarks;
-    return bookmarks.filter(
-      (b) =>
+    return bookmarks.filter((b) => {
+      if (selectedProjectId && b.projectId !== selectedProjectId) {
+        return false;
+      }
+      if (!q) return true;
+      return (
         b.title.toLowerCase().includes(q) ||
         (b.venue || "").toLowerCase().includes(q) ||
+        (b.note || "").toLowerCase().includes(q) ||
         b.authors.some((a) => a.toLowerCase().includes(q))
-    );
-  }, [bookmarks, bookmarksFilter]);
+      );
+    });
+  }, [bookmarks, bookmarksFilter, selectedProjectId]);
 
   const filteredConversions = useMemo(() => {
     const q = conversionsFilter.trim().toLowerCase();
@@ -265,7 +335,13 @@ export function JournalWorkspace() {
   }, [bookmarks]);
 
   const runSearch = useCallback(
-    async (overrideQuery?: string, overridePdfOnly?: boolean) => {
+    async (
+      overrideQuery?: string,
+      overridePdfOnly?: boolean,
+      overrideTierPreset?: TierPresetId,
+      pageNum = 1,
+      append = false
+    ) => {
       const q = (overrideQuery ?? query).trim();
       if (q.length < 2) {
         setSearchError("Masukkan kata kunci minimal 2 karakter.");
@@ -276,22 +352,36 @@ export function JournalWorkspace() {
       }
 
       const effectivePdfOnly = overridePdfOnly ?? pdfOnly;
+      const effectivePresetId = overrideTierPreset ?? tierPreset;
+      const preset =
+        TIER_PRESETS.find((p) => p.id === effectivePresetId) ?? TIER_PRESETS[0];
 
       setActiveTab("search");
       setShowFilterMenu(false);
-      setSearching(true);
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setSearching(true);
+      }
       setSearchError(null);
       setNotice(null);
 
       try {
         const params = new URLSearchParams();
         params.set("q", q);
-        if (selectedSources.length > 0 && selectedSources.length < 2) {
+        if (
+          selectedSources.length > 0 &&
+          selectedSources.length < ALL_SOURCES.length
+        ) {
           params.set("sources", selectedSources.join(","));
+        }
+        if (effectivePresetId !== "all") {
+          params.set("tiers", preset.tiers.join(","));
         }
         if (effectivePdfOnly) params.set("pdfOnly", "true");
         if (yearFrom) params.set("yearFrom", yearFrom);
         params.set("sort", sort);
+        params.set("page", String(pageNum));
 
         const res = await fetch(`/api/search?${params.toString()}`);
         const data = (await res.json()) as SearchResponse & { error?: string };
@@ -301,22 +391,239 @@ export function JournalWorkspace() {
           return;
         }
 
-        setSearchResult(data);
-        const hRes = await fetch("/api/history");
-        if (hRes.ok) {
-          const hJson = (await hRes.json()) as {
-            history?: SearchHistoryRecord[];
-          };
-          setHistory(hJson.history ?? []);
+        if (append) {
+          setSearchResult((prev) => {
+            if (!prev) return data;
+            const seen = new Set(prev.papers.map((p) => p.paperKey));
+            const extra = data.papers.filter((p) => !seen.has(p.paperKey));
+            const merged = [...prev.papers, ...extra];
+            return {
+              ...data,
+              total: merged.length,
+              papers: merged,
+            };
+          });
+        } else {
+          setSearchResult(data);
+          const hRes = await fetch("/api/history");
+          if (hRes.ok) {
+            const hJson = (await hRes.json()) as {
+              history?: SearchHistoryRecord[];
+            };
+            setHistory(hJson.history ?? []);
+          }
         }
       } catch {
         setSearchError("Tidak dapat terhubung ke server pencarian.");
       } finally {
         setSearching(false);
+        setLoadingMore(false);
       }
     },
-    [query, selectedSources, pdfOnly, yearFrom, sort]
+    [query, selectedSources, pdfOnly, tierPreset, yearFrom, sort]
   );
+
+  const selectedMatrixList = useMemo(
+    () => Object.values(selectedPapersMap),
+    [selectedPapersMap]
+  );
+
+  const handleToggleSelectMatrix = (paper: JournalPaper) => {
+    setSelectedPapersMap((prev) => {
+      if (prev[paper.paperKey]) {
+        const next = { ...prev };
+        delete next[paper.paperKey];
+        return next;
+      }
+      if (Object.keys(prev).length >= 5) {
+        setNotice({
+          type: "info",
+          message: "Maksimal 5 jurnal yang dapat dibandingkan sekaligus.",
+        });
+        return prev;
+      }
+      return { ...prev, [paper.paperKey]: paper };
+    });
+  };
+
+  const handleBuildMatrix = async (papersToAnalyze?: JournalPaper[]) => {
+    const list = papersToAnalyze ?? selectedMatrixList;
+    if (list.length < 2) {
+      setNotice({
+        type: "info",
+        message: "Pilih minimal 2 jurnal untuk membuat Matriks Literatur.",
+      });
+      return;
+    }
+
+    setBuildingMatrix(true);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/ai/matrix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          papers: list.slice(0, 5).map((p) => ({
+            title: p.title,
+            authors: p.authors,
+            year: p.year,
+            venue: p.venue,
+            tierLabel: p.journalMetrics?.tierLabel ?? null,
+            abstract: p.abstract,
+          })),
+        }),
+      });
+      const data = (await res.json()) as {
+        matrix?: LiteratureMatrixResult;
+        error?: string;
+      };
+      if (!res.ok || !data.matrix) {
+        setNotice({
+          type: "error",
+          message: data.error || "Gagal menyusun Matriks Literatur AI.",
+        });
+        return;
+      }
+      setMatrixResult(data.matrix);
+    } catch {
+      setNotice({
+        type: "error",
+        message: "Gangguan koneksi saat menyusun Matriks Literatur.",
+      });
+    } finally {
+      setBuildingMatrix(false);
+    }
+  };
+
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newProjectName.trim();
+    if (!name || creatingProject) return;
+    setCreatingProject(true);
+    try {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { project: ResearchProjectRecord };
+        setProjects((prev) => [data.project, ...prev]);
+        setNewProjectName("");
+        setShowNewProjectInput(false);
+        setSelectedProjectId(data.project.id);
+        setActiveTab("bookmarks");
+      }
+    } finally {
+      setCreatingProject(false);
+    }
+  };
+
+  const handleDeleteProject = async (id: string) => {
+    const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setProjects((prev) => prev.filter((p) => p.id !== id));
+      if (selectedProjectId === id) setSelectedProjectId(null);
+      setBookmarks((prev) =>
+        prev.map((b) => (b.projectId === id ? { ...b, projectId: null } : b))
+      );
+    }
+  };
+
+  const handleUpdateBookmarkMeta = async (
+    bookmarkId: string,
+    patch: { projectId?: string | null; note?: string | null }
+  ) => {
+    const res = await fetch(`/api/bookmarks/${bookmarkId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { bookmark: BookmarkRecord };
+      setBookmarks((prev) =>
+        prev.map((b) => (b.id === bookmarkId ? data.bookmark : b))
+      );
+      setNotice({ type: "success", message: "Perubahan jurnal tersimpan." });
+      const pRes = await fetch("/api/projects");
+      if (pRes.ok) {
+        const pJson = (await pRes.json()) as {
+          projects?: ResearchProjectRecord[];
+        };
+        setProjects(pJson.projects ?? []);
+      }
+    }
+  };
+
+  const handleBulkExport = async (kind: "bib" | "ris" | "docx") => {
+    if (filteredBookmarks.length === 0) return;
+    const papers: JournalPaper[] = filteredBookmarks.map((b) => ({
+      paperKey: b.paperKey,
+      title: b.title,
+      authors: b.authors,
+      year: b.year,
+      venue: b.venue,
+      source: b.source as SearchSource,
+      abstract: b.abstract,
+      pdfUrl: b.pdfUrl,
+      landingUrl: b.landingUrl,
+      doi: b.doi,
+      citations: b.citations,
+      openAccess: Boolean(b.pdfUrl),
+    }));
+
+    if (kind === "bib") {
+      const content = exportCitationsBib(papers);
+      triggerBlobDownload(
+        new Blob([content], { type: "application/x-bibtex;charset=utf-8" }),
+        "daftar-pustaka-smartsari.bib"
+      );
+      return;
+    }
+
+    if (kind === "ris") {
+      const content = exportCitationsRis(papers);
+      triggerBlobDownload(
+        new Blob([content], {
+          type: "application/x-research-info-systems;charset=utf-8",
+        }),
+        "daftar-pustaka-smartsari.ris"
+      );
+      return;
+    }
+
+    setExportingBibDocx(true);
+    try {
+      const activeProject = projects.find((p) => p.id === selectedProjectId);
+      const res = await fetch("/api/bookmarks/export-docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: activeProject
+            ? `Daftar Pustaka — ${activeProject.name}`
+            : "Daftar Pustaka SmartSari",
+          format: "apa",
+          items: filteredBookmarks.map((b, i) => ({
+            citation: formatCitation(papers[i], "apa"),
+            note: b.note ?? null,
+          })),
+        }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        triggerBlobDownload(blob, "daftar-pustaka-smartsari.docx");
+      }
+    } finally {
+      setExportingBibDocx(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setAuthUser(null);
+    setSelectedProjectId(null);
+    await reloadWorkspaceData();
+  };
 
   const groupedResults = useMemo(() => {
     if (!searchResult?.papers) return [];
@@ -784,8 +1091,91 @@ export function JournalWorkspace() {
           </button>
         </nav>
 
-        {/* Flat Arsip Word & Searchable History */}
+        {/* Flat Proyek Riset, Arsip Word & Searchable History */}
         <div className="mt-4 flex-1 space-y-5 overflow-y-auto px-3 pb-4">
+          <section>
+            <div className="mb-1.5 flex items-center justify-between px-1">
+              <span className="text-[11px] font-medium text-[#71717A]">
+                Proyek Riset
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowNewProjectInput((v) => !v)}
+                className="inline-flex items-center gap-0.5 text-[11px] font-medium text-[#F472B6] hover:text-[#F9A8D4]"
+              >
+                <Plus className="h-3 w-3" />
+                Baru
+              </button>
+            </div>
+
+            {showNewProjectInput && (
+              <form
+                onSubmit={(e) => void handleCreateProject(e)}
+                className="mb-2 flex items-center gap-1"
+              >
+                <input
+                  type="text"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  placeholder="Nama proyek..."
+                  className="min-w-0 flex-1 rounded-lg border border-[#2C2E35] bg-[#0E0F12] px-2.5 py-1 text-xs text-white placeholder:text-[#71717A] focus:border-[#F472B6] focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={creatingProject || !newProjectName.trim()}
+                  className="rounded-lg bg-[#DB2777] px-2 py-1 text-[11px] font-semibold text-white hover:bg-[#BE185D] disabled:opacity-50"
+                >
+                  Simpan
+                </button>
+              </form>
+            )}
+
+            {projects.length === 0 ? (
+              <p className="px-1 text-[11px] text-[#71717A]">
+                Belum ada proyek riset.
+              </p>
+            ) : (
+              <ul className="space-y-0.5">
+                {projects.map((proj) => (
+                  <li
+                    key={proj.id}
+                    className="group flex items-center gap-1 rounded-lg px-2 py-1.5 transition-colors hover:bg-[#1E1F23]"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedProjectId(proj.id);
+                        setActiveTab("bookmarks");
+                      }}
+                      className={`flex min-w-0 flex-1 items-center justify-between gap-2 text-left text-xs ${
+                        activeTab === "bookmarks" &&
+                        selectedProjectId === proj.id
+                          ? "font-semibold text-[#F472B6]"
+                          : "text-[#D4D4D8] group-hover:text-white"
+                      }`}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[#F472B6]" />
+                        <span className="truncate">{proj.name}</span>
+                      </span>
+                      <span className="shrink-0 font-mono text-[10px] text-[#71717A]">
+                        {proj.bookmarkCount}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Hapus proyek ${proj.name}`}
+                      onClick={() => void handleDeleteProject(proj.id)}
+                      className="shrink-0 rounded p-0.5 text-[#71717A] opacity-0 transition-opacity hover:text-[#F87171] group-hover:opacity-100 focus:opacity-100"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           {conversions.length > 0 && (
             <section>
               <div className="mb-1.5 px-1 text-[11px] font-medium text-[#71717A]">
@@ -880,6 +1270,44 @@ export function JournalWorkspace() {
               </ul>
             )}
           </section>
+        </div>
+
+        {/* Account & Cross-Device Sync Footer */}
+        <div className="border-t border-[#232429] p-3">
+          {authUser ? (
+            <div className="flex items-center justify-between gap-2 rounded-xl bg-[#1E1F23] px-3 py-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#DB2777]/20 text-[#F472B6]">
+                  <User className="h-3.5 w-3.5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold text-white">
+                    {authUser.name}
+                  </p>
+                  <p className="truncate text-[10px] text-[#A1A1AA]">
+                    Tersinkronisasi
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleLogout()}
+                aria-label="Keluar dari akun"
+                className="rounded-lg p-1.5 text-[#A1A1AA] hover:bg-[#232429] hover:text-[#F87171]"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAuthModal(true)}
+              className="btn-tactile flex w-full items-center justify-center gap-2 rounded-xl border border-[#2C2E35] bg-[#1E1F23] px-3 py-2 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/45 hover:text-white"
+            >
+              <Cloud className="h-3.5 w-3.5 text-[#F472B6]" />
+              <span>Masuk &amp; Sinkronkan</span>
+            </button>
+          )}
         </div>
       </aside>
 
@@ -1069,7 +1497,7 @@ export function JournalWorkspace() {
 
               {!searching && searchResult && (
                 <div>
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-xs text-[#A1A1AA]">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[#A1A1AA]">
                     <span>
                       Menampilkan{" "}
                       <strong className="font-mono tabular-nums text-white">
@@ -1082,6 +1510,36 @@ export function JournalWorkspace() {
                         .map((st) => `${st.source}: ${st.ok ? st.count : "err"}`)
                         .join(" · ")}
                     </span>
+                  </div>
+
+                  {/* Quick Tier Filter Chips */}
+                  <div className="mb-4 flex flex-wrap items-center gap-1.5">
+                    {TIER_PRESETS.map((preset) => {
+                      const active = tierPreset === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => {
+                            setTierPreset(preset.id);
+                            void runSearch(
+                              searchResult.query,
+                              undefined,
+                              preset.id,
+                              1,
+                              false
+                            );
+                          }}
+                          className={`btn-tactile rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                            active
+                              ? "bg-[#DB2777] text-white"
+                              : "border border-[#2C2E35] bg-[#151619] text-[#A1A1AA] hover:border-[#F472B6]/40 hover:text-white"
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      );
+                    })}
                   </div>
 
                   {searchResult.papers.length === 0 ? (
@@ -1172,12 +1630,44 @@ export function JournalWorkspace() {
                                   onConvertWord={handleConvertWord}
                                   downloadingPdfKey={downloadingPdfKey}
                                   convertingKey={convertingKey}
+                                  selectedForMatrix={Boolean(
+                                    selectedPapersMap[paper.paperKey]
+                                  )}
+                                  onToggleSelectMatrix={
+                                    handleToggleSelectMatrix
+                                  }
                                 />
                               ))}
                             </div>
                           </section>
                         ))}
                       </div>
+
+                      {searchResult.hasMore && (
+                        <div className="mt-8 flex justify-center">
+                          <button
+                            type="button"
+                            disabled={loadingMore}
+                            onClick={() =>
+                              void runSearch(
+                                searchResult.query,
+                                undefined,
+                                undefined,
+                                (searchResult.page ?? 1) + 1,
+                                true
+                              )
+                            }
+                            className="btn-tactile inline-flex items-center gap-2 rounded-full border border-[#2C2E35] bg-[#151619] px-6 py-2.5 text-xs font-semibold text-[#F4F4F5] hover:border-[#F472B6] hover:text-white disabled:opacity-60"
+                          >
+                            {loadingMore && (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F472B6]" />
+                            )}
+                            {loadingMore
+                              ? "Memuat jurnal berikutnya..."
+                              : "Muat Lebih Banyak Jurnal"}
+                          </button>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -1188,9 +1678,24 @@ export function JournalWorkspace() {
           {activeTab === "bookmarks" && (
             <section>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-[#232429] pb-3">
-                <h2 className="text-lg font-semibold text-white">
-                  Jurnal Tersimpan ({bookmarks.length})
-                </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg font-semibold text-white">
+                    {selectedProjectId
+                      ? projects.find((p) => p.id === selectedProjectId)
+                          ?.name || "Proyek Riset"
+                      : "Jurnal Tersimpan"}{" "}
+                    ({filteredBookmarks.length})
+                  </h2>
+                  {selectedProjectId && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedProjectId(null)}
+                      className="rounded-full border border-[#2C2E35] bg-[#1E1F23] px-2.5 py-0.5 text-[11px] text-[#A1A1AA] hover:text-white"
+                    >
+                      Lihat Semua
+                    </button>
+                  )}
+                </div>
                 {bookmarks.length > 0 && (
                   <div className="relative w-full sm:w-64">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#71717A]" />
@@ -1205,6 +1710,72 @@ export function JournalWorkspace() {
                 )}
               </div>
 
+              {filteredBookmarks.length > 0 && (
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleBulkExport("bib")}
+                    className="btn-tactile inline-flex items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/40 hover:text-white"
+                  >
+                    <FileDown className="h-3.5 w-3.5 text-[#F472B6]" />
+                    Ekspor .bib
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleBulkExport("ris")}
+                    className="btn-tactile inline-flex items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/40 hover:text-white"
+                  >
+                    <FileDown className="h-3.5 w-3.5 text-[#F472B6]" />
+                    Ekspor .ris
+                  </button>
+                  <button
+                    type="button"
+                    disabled={exportingBibDocx}
+                    onClick={() => void handleBulkExport("docx")}
+                    className="btn-tactile inline-flex items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/40 hover:text-white disabled:opacity-60"
+                  >
+                    {exportingBibDocx ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F472B6]" />
+                    ) : (
+                      <FileText className="h-3.5 w-3.5 text-[#F472B6]" />
+                    )}
+                    Daftar Pustaka .docx
+                  </button>
+                  {filteredBookmarks.length >= 2 && (
+                    <button
+                      type="button"
+                      disabled={buildingMatrix}
+                      onClick={() =>
+                        void handleBuildMatrix(
+                          filteredBookmarks.slice(0, 5).map((b) => ({
+                            paperKey: b.paperKey,
+                            title: b.title,
+                            authors: b.authors,
+                            year: b.year,
+                            venue: b.venue,
+                            source: b.source as SearchSource,
+                            abstract: b.abstract,
+                            pdfUrl: b.pdfUrl,
+                            landingUrl: b.landingUrl,
+                            doi: b.doi,
+                            citations: b.citations,
+                            openAccess: Boolean(b.pdfUrl),
+                          }))
+                        )
+                      }
+                      className="btn-tactile inline-flex items-center gap-1.5 rounded-full bg-[#DB2777] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60 sm:ml-auto"
+                    >
+                      {buildingMatrix ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3.5 w-3.5" />
+                      )}
+                      Matriks Literatur AI ({Math.min(5, filteredBookmarks.length)})
+                    </button>
+                  )}
+                </div>
+              )}
+
               {bookmarks.length === 0 ? (
                 <div className="rounded-xl border border-[#232429] bg-[#151619] p-8 text-center">
                   <p className="text-base font-semibold text-white">
@@ -1217,39 +1788,50 @@ export function JournalWorkspace() {
                 </div>
               ) : filteredBookmarks.length === 0 ? (
                 <div className="rounded-xl border border-[#232429] bg-[#151619] p-6 text-center text-sm text-[#A1A1AA]">
-                  Tidak ada jurnal tersimpan yang cocok dengan &ldquo;
-                  {bookmarksFilter}&rdquo;.
+                  Tidak ada jurnal tersimpan yang cocok dengan filter saat ini.
                 </div>
               ) : (
                 <div className="divide-y divide-[#232429]">
-                  {filteredBookmarks.map((b) => (
-                    <PaperCard
-                      key={b.id}
-                      paper={{
-                        paperKey: b.paperKey,
-                        title: b.title,
-                        authors: b.authors,
-                        year: b.year,
-                        venue: b.venue,
-                        source: b.source as SearchSource,
-                        abstract: b.abstract,
-                        pdfUrl: b.pdfUrl,
-                        landingUrl: b.landingUrl,
-                        doi: b.doi,
-                        citations: b.citations,
-                        openAccess: Boolean(b.pdfUrl),
-                      }}
-                      isBookmarked={true}
-                      onToggleBookmark={handleToggleBookmark}
-                      onDownloadPdf={handleDownloadPdf}
-                      onOpenReader={(p, autoTranslate = false) =>
-                        setReaderState({ paper: p, autoTranslate })
-                      }
-                      onConvertWord={handleConvertWord}
-                      downloadingPdfKey={downloadingPdfKey}
-                      convertingKey={convertingKey}
-                    />
-                  ))}
+                  {filteredBookmarks.map((b) => {
+                    const mappedPaper: JournalPaper = {
+                      paperKey: b.paperKey,
+                      title: b.title,
+                      authors: b.authors,
+                      year: b.year,
+                      venue: b.venue,
+                      source: b.source as SearchSource,
+                      abstract: b.abstract,
+                      pdfUrl: b.pdfUrl,
+                      landingUrl: b.landingUrl,
+                      doi: b.doi,
+                      citations: b.citations,
+                      openAccess: Boolean(b.pdfUrl),
+                    };
+                    return (
+                      <PaperCard
+                        key={b.id}
+                        paper={mappedPaper}
+                        isBookmarked={true}
+                        onToggleBookmark={handleToggleBookmark}
+                        onDownloadPdf={handleDownloadPdf}
+                        onOpenReader={(p, autoTranslate = false) =>
+                          setReaderState({ paper: p, autoTranslate })
+                        }
+                        onConvertWord={handleConvertWord}
+                        downloadingPdfKey={downloadingPdfKey}
+                        convertingKey={convertingKey}
+                        selectedForMatrix={Boolean(
+                          selectedPapersMap[b.paperKey]
+                        )}
+                        onToggleSelectMatrix={handleToggleSelectMatrix}
+                        bookmarkId={b.id}
+                        projectId={b.projectId}
+                        note={b.note}
+                        projects={projects}
+                        onUpdateBookmarkMeta={handleUpdateBookmarkMeta}
+                      />
+                    );
+                  })}
                 </div>
               )}
             </section>
@@ -1483,7 +2065,44 @@ export function JournalWorkspace() {
         </button>
       </nav>
 
-      {/* In-App PDF Reader & Universal Auto-Translate Modal */}
+      {/* Floating Literature Matrix Selection Bar */}
+      {selectedMatrixList.length > 0 && (
+        <div className="animate-panel-open fixed bottom-16 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[#DB2777]/45 bg-[#151619]/95 px-4 py-2 text-xs text-[#F4F4F5] shadow-2xl backdrop-blur-md md:bottom-6">
+          <span className="font-medium">
+            <strong className="font-mono text-[#F472B6]">
+              {selectedMatrixList.length}
+            </strong>{" "}
+            jurnal dipilih
+          </span>
+          <button
+            type="button"
+            disabled={selectedMatrixList.length < 2 || buildingMatrix}
+            onClick={() => void handleBuildMatrix()}
+            className="btn-tactile inline-flex items-center gap-1.5 rounded-full bg-[#DB2777] px-3.5 py-1.5 font-semibold text-white hover:bg-[#BE185D] disabled:opacity-50"
+          >
+            {buildingMatrix ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
+            {buildingMatrix
+              ? "Menyusun..."
+              : selectedMatrixList.length < 2
+                ? "Pilih min. 2"
+                : "Buat Matriks Literatur"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedPapersMap({})}
+            aria-label="Bersihkan pilihan matriks"
+            className="rounded-full p-1 text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* In-App PDF Reader & Universal Auto-Translate + Tanya AI Modal */}
       {readerState && (
         <PdfReaderModal
           paper={readerState.paper}
@@ -1493,6 +2112,30 @@ export function JournalWorkspace() {
           onDownloadTranslatedDocx={(p) =>
             handleConvertWord(p, "translate_id")
           }
+        />
+      )}
+
+      {/* AI Literature Matrix Modal */}
+      {matrixResult && (
+        <LiteratureMatrixModal
+          matrix={matrixResult}
+          onClose={() => setMatrixResult(null)}
+        />
+      )}
+
+      {/* Cross-Device Account & Sync Modal */}
+      {showAuthModal && (
+        <AuthModal
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={(user) => {
+            setAuthUser(user);
+            setShowAuthModal(false);
+            setNotice({
+              type: "success",
+              message: `Masuk sebagai ${user.name}. Ruang riset Anda tersinkronisasi.`,
+            });
+            void reloadWorkspaceData();
+          }}
         />
       )}
     </div>

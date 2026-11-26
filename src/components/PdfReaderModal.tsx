@@ -3,16 +3,21 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   AlertCircle,
+  Check,
   Columns2,
+  Copy,
   ExternalLink,
   FileDown,
   FileText,
   Languages,
   Loader2,
   Maximize2,
+  MessageSquare,
+  Send,
+  Sparkles,
   X,
 } from "lucide-react";
-import type { JournalPaper } from "@/lib/types";
+import type { JournalPaper, PaperChatMessage } from "@/lib/types";
 
 interface PdfReaderModalProps {
   paper: JournalPaper;
@@ -22,8 +27,14 @@ interface PdfReaderModalProps {
   onDownloadTranslatedDocx: (paper: JournalPaper) => Promise<void>;
 }
 
-type DesktopView = "split" | "pdf" | "translate";
-type MobileTab = "pdf" | "translate";
+type DesktopView = "split" | "pdf" | "translate" | "chat";
+type MobileTab = "pdf" | "translate" | "chat";
+
+const CHAT_STARTER_PROMPTS = [
+  "Apa metode penelitian & desain studi yang digunakan?",
+  "Apa temuan utama dan kontribusi jurnal ini?",
+  "Apa keterbatasan penelitian dan saran riset lanjutan?",
+];
 
 function renderInlineMarkdown(text: string) {
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
@@ -132,6 +143,66 @@ export function PdfReaderModal({
   const [pdfLoading, setPdfLoading] = useState(Boolean(paper.pdfUrl));
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
+
+  const [chatMessages, setChatMessages] = useState<PaperChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [chatUsedFullText, setChatUsedFullText] = useState<boolean | null>(null);
+  const [copiedChatIdx, setCopiedChatIdx] = useState<number | null>(null);
+
+  const sendChatMessage = useCallback(
+    async (question: string) => {
+      const trimmed = question.trim();
+      if (!trimmed || chatLoading) return;
+
+      const nextMessages: PaperChatMessage[] = [
+        ...chatMessages,
+        { role: "user", content: trimmed },
+      ];
+      setChatMessages(nextMessages);
+      setChatInput("");
+      setChatLoading(true);
+      setChatError(null);
+
+      try {
+        const res = await fetch("/api/ai/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            paper: {
+              title: paper.title,
+              authors: paper.authors,
+              year: paper.year,
+              venue: paper.venue,
+              abstract: paper.abstract,
+              pdfUrl: paper.pdfUrl,
+            },
+            messages: nextMessages,
+          }),
+        });
+        const data = (await res.json()) as {
+          reply?: string;
+          usedFullText?: boolean;
+          error?: string;
+        };
+        if (!res.ok || !data.reply) {
+          setChatError(data.error || "Gagal mendapatkan jawaban AI.");
+          return;
+        }
+        setChatUsedFullText(Boolean(data.usedFullText));
+        setChatMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: data.reply! },
+        ]);
+      } catch {
+        setChatError("Gangguan koneksi saat menghubungi asisten AI.");
+      } finally {
+        setChatLoading(false);
+      }
+    },
+    [chatLoading, chatMessages, paper]
+  );
 
   const runTranslate = useCallback(async () => {
     setTranslating(true);
@@ -363,6 +434,18 @@ export function PdfReaderModal({
             <Languages className="h-3.5 w-3.5" />
             Terjemahan ID
           </button>
+          <button
+            type="button"
+            onClick={() => setDesktopView("chat")}
+            className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
+              desktopView === "chat"
+                ? "bg-[#DB2777] text-white"
+                : "text-[#A1A1AA] hover:text-white"
+            }`}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            Tanya AI
+          </button>
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -409,7 +492,7 @@ export function PdfReaderModal({
       </header>
 
       {/* Mobile Tab Switcher */}
-      <div className="grid grid-cols-2 border-b border-[#232429] bg-[#151619] lg:hidden">
+      <div className="grid grid-cols-3 border-b border-[#232429] bg-[#151619] lg:hidden">
         <button
           type="button"
           onClick={() => setMobileTab("pdf")}
@@ -435,7 +518,18 @@ export function PdfReaderModal({
               : "border-transparent text-[#A1A1AA]"
           }`}
         >
-          Terjemahan Indonesia
+          Terjemahan
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab("chat")}
+          className={`min-h-[42px] border-b-2 text-xs font-semibold ${
+            mobileTab === "chat"
+              ? "border-[#DB2777] text-[#F472B6]"
+              : "border-transparent text-[#A1A1AA]"
+          }`}
+        >
+          Tanya AI
         </button>
       </div>
 
@@ -445,7 +539,7 @@ export function PdfReaderModal({
         <section
           className={`min-h-0 flex-1 flex-col border-[#232429] bg-[#151619] lg:border-r ${
             mobileTab === "pdf" ? "flex" : "hidden lg:flex"
-          } ${desktopView === "translate" ? "lg:hidden" : ""}`}
+          } ${desktopView === "translate" || desktopView === "chat" ? "lg:hidden" : ""}`}
         >
           {pdfProxyUrl ? (
             <div className="relative flex h-full w-full flex-col">
@@ -549,7 +643,7 @@ export function PdfReaderModal({
         <section
           className={`min-h-0 flex-1 flex-col overflow-y-auto bg-[#0E0F12] ${
             mobileTab === "translate" ? "flex" : "hidden lg:flex"
-          } ${desktopView === "pdf" ? "lg:hidden" : ""}`}
+          } ${desktopView === "pdf" || desktopView === "chat" ? "lg:hidden" : ""}`}
         >
           <div className="mx-auto w-full max-w-[70ch] p-4 sm:p-6">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-[#232429] pb-4">
@@ -630,6 +724,142 @@ export function PdfReaderModal({
                 </p>
               </div>
             )}
+          </div>
+        </section>
+
+        {/* Tanya AI (Chat with PDF / Paper) Pane */}
+        <section
+          className={`min-h-0 flex-1 flex-col bg-[#0E0F12] ${
+            mobileTab === "chat"
+              ? "flex"
+              : desktopView === "chat"
+                ? "hidden lg:flex"
+                : "hidden"
+          }`}
+        >
+          <div className="mx-auto flex h-full w-full max-w-[74ch] flex-col p-4 sm:p-6">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-[#232429] pb-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#DB2777]/15 text-[#F472B6]">
+                  <Sparkles className="h-3.5 w-3.5" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-semibold text-white">
+                    Tanya AI tentang Jurnal Ini
+                  </h3>
+                  <p className="text-[11px] text-[#71717A]">
+                    {chatUsedFullText === true
+                      ? "Konteks: teks lengkap PDF"
+                      : paper.pdfUrl
+                        ? "Konteks: PDF penuh / abstrak otomatis"
+                        : "Konteks: metadata & abstrak"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 space-y-3 overflow-y-auto pr-1">
+              {chatMessages.length === 0 && (
+                <div className="rounded-xl border border-[#232429] bg-[#151619] p-5">
+                  <p className="text-xs font-medium text-[#D4D4D8]">
+                    Ajukan pertanyaan apa saja tentang metode, temuan, sampel,
+                    atau keterbatasan jurnal ini:
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {CHAT_STARTER_PROMPTS.map((prompt) => (
+                      <button
+                        key={prompt}
+                        type="button"
+                        onClick={() => void sendChatMessage(prompt)}
+                        className="btn-tactile rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3 py-1.5 text-left text-xs text-[#E4E4E7] hover:border-[#F472B6]/45 hover:text-white"
+                      >
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {chatMessages.map((msg, idx) => (
+                <div
+                  key={idx}
+                  className={`flex flex-col ${
+                    msg.role === "user" ? "items-end" : "items-start"
+                  }`}
+                >
+                  <div
+                    className={`max-w-[88%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                      msg.role === "user"
+                        ? "bg-[#DB2777] text-white"
+                        : "border border-[#232429] bg-[#151619] text-[#E4E4E7]"
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    {msg.role === "assistant" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(msg.content);
+                          setCopiedChatIdx(idx);
+                          setTimeout(() => setCopiedChatIdx(null), 1500);
+                        }}
+                        className="mt-2 inline-flex items-center gap-1 text-[11px] text-[#A1A1AA] hover:text-[#F472B6]"
+                      >
+                        {copiedChatIdx === idx ? (
+                          <>
+                            <Check className="h-3 w-3 text-[#4ADE80]" />
+                            Tersalin
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3 w-3" />
+                            Salin jawaban
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {chatLoading && (
+                <div className="flex items-center gap-2 rounded-xl border border-[#232429] bg-[#151619] px-4 py-3 text-xs text-[#F472B6]">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Membaca isi jurnal &amp; menyusun jawaban...
+                </div>
+              )}
+
+              {chatError && (
+                <div className="flex items-center gap-2 rounded-xl border border-[#EF4444]/30 bg-[#EF4444]/10 px-4 py-3 text-xs text-[#FCA5A5]">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  <span>{chatError}</span>
+                </div>
+              )}
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void sendChatMessage(chatInput);
+              }}
+              className="mt-3 flex items-center gap-2 rounded-full border border-[#2C2E35] bg-[#151619] p-1.5 pl-4 focus-within:border-[#F472B6]"
+            >
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Tanyakan metode, hasil, atau rincian isi jurnal..."
+                className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={chatLoading || !chatInput.trim()}
+                className="btn-tactile inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#DB2777] text-white hover:bg-[#BE185D] disabled:opacity-50"
+                aria-label="Kirim pertanyaan"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </form>
           </div>
         </section>
       </div>

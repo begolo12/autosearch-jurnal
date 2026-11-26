@@ -15,10 +15,35 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://smartsari.my.id"),
   title: "SmartSari — Pencarian Jurnal Terfilter & Akurat",
   description:
-    "SmartSari: pencarian jurnal ilmiah Q1–Q4 & SINTA 1–6, baca PDF langsung, terjemahan otomatis ke Bahasa Indonesia, dan ekspor ke Word (.docx).",
+    "SmartSari: pencarian jurnal ilmiah Q1–Q4 & SINTA 1–6, matriks literatur AI, tanya-jawab PDF, terjemahan Indonesia, dan ekspor Word (.docx).",
   manifest: "/manifest.webmanifest",
+  openGraph: {
+    title: "SmartSari — Pencarian Jurnal Terfilter & Akurat",
+    description:
+      "Cari jurnal Q1–Q4 & SINTA 1–6, susun matriks literatur AI, tanya isi PDF, terjemahkan ke Bahasa Indonesia, dan ekspor ke Word/BibTeX/RIS.",
+    url: "https://smartsari.my.id",
+    siteName: "SmartSari",
+    locale: "id_ID",
+    type: "website",
+    images: [
+      {
+        url: "/icons/icon-512.png",
+        width: 512,
+        height: 512,
+        alt: "SmartSari",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "SmartSari — Pencarian Jurnal Terfilter & Akurat",
+    description:
+      "Pencarian jurnal ilmiah Q1–Q4 & SINTA 1–6 dengan asisten riset AI & ekspor Word.",
+    images: ["/icons/icon-512.png"],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",

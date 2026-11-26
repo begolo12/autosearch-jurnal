@@ -14,7 +14,7 @@ import {
   type SortOption,
 } from "@/lib/types";
 
-const VALID_SOURCES = new Set<SearchSource>(["openalex", "europepmc"]);
+const VALID_SOURCES = new Set<SearchSource>(["openalex", "europepmc", "crossref"]);
 const VALID_TIERS = new Set<JournalTier>(TIER_PRIORITY_ORDER);
 const SEARCH_CACHE_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
 
@@ -25,15 +25,17 @@ function buildSearchCacheKey(params: {
   pdfOnly: boolean;
   yearFrom: number | null;
   sort: SortOption;
+  page: number;
 }): string {
   const canonical = JSON.stringify({
-    v: 2,
+    v: 3,
     q: params.query.toLowerCase().replace(/\s+/g, " ").trim(),
     sources: [...params.sources].sort(),
     tiers: [...params.tiers].sort(),
     pdfOnly: params.pdfOnly,
     yearFrom: params.yearFrom,
     sort: params.sort,
+    page: params.page,
   });
   return crypto.createHash("sha256").update(canonical).digest("hex");
 }
@@ -69,7 +71,9 @@ export async function GET(request: NextRequest) {
     .filter((s): s is SearchSource => VALID_SOURCES.has(s as SearchSource));
 
   const activeSources: SearchSource[] =
-    rawSources.length > 0 ? rawSources : ["openalex", "europepmc"];
+    rawSources.length > 0
+      ? rawSources
+      : ["openalex", "europepmc", "crossref"];
 
   const rawTiers = (searchParams.get("tiers") || "")
     .split(",")
@@ -87,6 +91,7 @@ export async function GET(request: NextRequest) {
     sortRaw === "impact" || sortRaw === "newest" || sortRaw === "citations"
       ? sortRaw
       : "relevance";
+  const page = Math.min(5, Math.max(1, Number(searchParams.get("page")) || 1));
 
   const cacheKey = buildSearchCacheKey({
     query,
@@ -95,6 +100,7 @@ export async function GET(request: NextRequest) {
     pdfOnly,
     yearFrom,
     sort,
+    page,
   });
 
   const db = getDb();
@@ -114,21 +120,23 @@ export async function GET(request: NextRequest) {
 
     if (cached.length > 0) {
       const payload = cached[0].payload as SearchResponse;
-      try {
-        await db.insert(searchHistory).values({
-          sessionId,
-          query,
-          filters: {
-            sources: activeSources,
-            tiers: activeTiers,
-            pdfOnly,
-            yearFrom,
-            sort,
-          },
-          resultCount: payload.total,
-        });
-      } catch {
-        // Non-fatal
+      if (page === 1) {
+        try {
+          await db.insert(searchHistory).values({
+            sessionId,
+            query,
+            filters: {
+              sources: activeSources,
+              tiers: activeTiers,
+              pdfOnly,
+              yearFrom,
+              sort,
+            },
+            resultCount: payload.total,
+          });
+        } catch {
+          // Non-fatal
+        }
       }
 
       const res = NextResponse.json(payload, {
@@ -148,6 +156,7 @@ export async function GET(request: NextRequest) {
     pdfOnly,
     yearFrom,
     sort,
+    page,
   });
 
   // 3. Persist to shared search_cache when at least one source succeeded & returned papers
@@ -174,22 +183,24 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 4. Log per-session search history (best-effort)
-  try {
-    await db.insert(searchHistory).values({
-      sessionId,
-      query,
-      filters: {
-        sources: activeSources,
-        tiers: activeTiers,
-        pdfOnly,
-        yearFrom,
-        sort,
-      },
-      resultCount: result.total,
-    });
-  } catch (err) {
-    console.warn("Failed to log search history:", err);
+  // 4. Log per-session search history (best-effort, page 1 only)
+  if (page === 1) {
+    try {
+      await db.insert(searchHistory).values({
+        sessionId,
+        query,
+        filters: {
+          sources: activeSources,
+          tiers: activeTiers,
+          pdfOnly,
+          yearFrom,
+          sort,
+        },
+        resultCount: result.total,
+      });
+    } catch (err) {
+      console.warn("Failed to log search history:", err);
+    }
   }
 
   const res = NextResponse.json(result, {

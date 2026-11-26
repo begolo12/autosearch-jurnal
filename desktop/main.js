@@ -1,7 +1,7 @@
 const { app, BrowserWindow, shell } = require("electron");
 
 const APP_URL =
-  process.env.PUSTAKACARI_URL || "https://autosearch-jurnal.vercel.app";
+  process.env.PUSTAKACARI_URL || "https://smartsari.my.id";
 
 function createWindow() {
   const win = new BrowserWindow({

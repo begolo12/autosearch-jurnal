@@ -3,7 +3,7 @@
   "appName": "SmartSari",
   "webDir": "www",
   "server": {
-    "url": "https://autosearch-jurnal.vercel.app",
+    "url": "https://smartsari.my.id",
     "cleartext": false
   },
   "android": {
