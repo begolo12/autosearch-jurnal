@@ -1,13 +1,15 @@
 import {
-  searchEuropePmcQ1,
-  searchOpenAlexQ1,
+  searchEuropePmcByTiers,
+  searchOpenAlexByTiers,
 } from "@/lib/search/sources";
-import type {
-  JournalPaper,
-  SearchResponse,
-  SearchSource,
-  SortOption,
-  SourceStat,
+import {
+  TIER_PRIORITY_ORDER,
+  type JournalPaper,
+  type JournalTier,
+  type SearchResponse,
+  type SearchSource,
+  type SortOption,
+  type SourceStat,
 } from "@/lib/types";
 
 const ALL_SOURCES: SearchSource[] = ["openalex", "europepmc"];
@@ -16,12 +18,24 @@ function normalizeTitle(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function tierRank(tier?: JournalTier): number {
+  if (!tier) return 999;
+  const idx = TIER_PRIORITY_ORDER.indexOf(tier);
+  return idx === -1 ? 999 : idx;
+}
+
 function mergePapers(existing: JournalPaper, incoming: JournalPaper): JournalPaper {
+  const existingRank = tierRank(existing.journalMetrics?.primaryTier);
+  const incomingRank = tierRank(incoming.journalMetrics?.primaryTier);
   const bestMetrics =
-    (existing.journalMetrics?.impactFactor ?? 0) >=
-    (incoming.journalMetrics?.impactFactor ?? 0)
+    existingRank < incomingRank
       ? existing.journalMetrics
-      : incoming.journalMetrics;
+      : incomingRank < existingRank
+        ? incoming.journalMetrics
+        : (existing.journalMetrics?.impactFactor ?? 0) >=
+            (incoming.journalMetrics?.impactFactor ?? 0)
+          ? existing.journalMetrics
+          : incoming.journalMetrics;
 
   return {
     ...existing,
@@ -51,6 +65,7 @@ function mergePapers(existing: JournalPaper, incoming: JournalPaper): JournalPap
 export async function aggregateJournalSearch(params: {
   query: string;
   sources?: SearchSource[];
+  tiers?: JournalTier[];
   pdfOnly?: boolean;
   yearFrom?: number | null;
   sort?: SortOption;
@@ -58,13 +73,20 @@ export async function aggregateJournalSearch(params: {
   const query = params.query.trim();
   const activeSources =
     params.sources && params.sources.length > 0 ? params.sources : ALL_SOURCES;
+  const activeTiers: JournalTier[] =
+    params.tiers && params.tiers.length > 0 ? params.tiers : ["Q1"];
 
   const settled = await Promise.allSettled(
     activeSources.map(async (source) => {
       const papers =
         source === "openalex"
-          ? await searchOpenAlexQ1(query, 45, Boolean(params.pdfOnly))
-          : await searchEuropePmcQ1(query, 20);
+          ? await searchOpenAlexByTiers(
+              query,
+              activeTiers,
+              45,
+              Boolean(params.pdfOnly)
+            )
+          : await searchEuropePmcByTiers(query, activeTiers, 20);
       return { source, papers };
     })
   );
@@ -94,15 +116,11 @@ export async function aggregateJournalSearch(params: {
     }
   });
 
-  // Deduplicate by normalized DOI or normalized title
   const dedupedMap = new Map<string, JournalPaper>();
   const titleIndex = new Map<string, string>();
 
   for (const paper of rawPapers) {
-    // Safety guard: strictly Q1 verified only
-    if (!paper.journalMetrics || paper.journalMetrics.quartile !== "Q1") {
-      continue;
-    }
+    if (!paper.journalMetrics) continue;
 
     const doiKey = paper.doi ? `doi:${paper.doi.toLowerCase()}` : null;
     const titleKey = `t:${normalizeTitle(paper.title)}`;
@@ -133,19 +151,27 @@ export async function aggregateJournalSearch(params: {
   }
 
   const sort = params.sort ?? "relevance";
-  if (sort === "impact") {
-    papers.sort(
-      (a, b) =>
+  // Primary sort: ALWAYS prioritize Q1 first, followed by Q2, Q3, Q4, SINTA1..SINTA6
+  papers.sort((a, b) => {
+    const rankDiff =
+      tierRank(a.journalMetrics?.primaryTier) -
+      tierRank(b.journalMetrics?.primaryTier);
+    if (rankDiff !== 0) return rankDiff;
+
+    if (sort === "impact") {
+      return (
         (b.journalMetrics?.impactFactor ?? 0) -
         (a.journalMetrics?.impactFactor ?? 0)
-    );
-  } else if (sort === "newest") {
-    papers.sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
-  } else if (sort === "citations") {
-    papers.sort((a, b) => (b.citations ?? -1) - (a.citations ?? -1));
-  } else {
-    papers.sort((a, b) => Number(Boolean(b.pdfUrl)) - Number(Boolean(a.pdfUrl)));
-  }
+      );
+    }
+    if (sort === "newest") {
+      return (b.year ?? 0) - (a.year ?? 0);
+    }
+    if (sort === "citations") {
+      return (b.citations ?? -1) - (a.citations ?? -1);
+    }
+    return Number(Boolean(b.pdfUrl)) - Number(Boolean(a.pdfUrl));
+  });
 
   return {
     query,

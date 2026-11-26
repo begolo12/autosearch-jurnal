@@ -37,12 +37,13 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk ../PustakaCari-android.apk
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: PustakaCari-android-apk
-          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          path: mobile/PustakaCari-android.apk
 
   build-ios:
     name: iOS App (Unsigned .xcarchive / .app)
@@ -61,7 +62,7 @@ jobs:
           npx cap add ios
           npx cap sync ios
 
-      - name: Build Unsigned iOS App
+      - name: Build Unsigned iOS App & Package IPA
         working-directory: mobile/ios/App
         run: |
           xcodebuild \
@@ -74,12 +75,15 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             build
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/App.app Payload/App.app
+          zip -r ../../PustakaCari-ios-unsigned.ipa Payload
 
       - name: Upload iOS App Artifact
         uses: actions/upload-artifact@v4
         with:
           name: PustakaCari-ios-app
-          path: mobile/ios/App/build/Build/Products/Release-iphoneos/App.app
+          path: mobile/PustakaCari-ios-unsigned.ipa
 
   build-windows:
     name: Windows (.exe)

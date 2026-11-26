@@ -1,4 +1,10 @@
-import type { JournalMetrics, JournalPaper } from "@/lib/types";
+import type {
+  JournalMetrics,
+  JournalPaper,
+  JournalTier,
+  QuartileTier,
+  SintaTier,
+} from "@/lib/types";
 
 const REQUEST_HEADERS = {
   "User-Agent": "PustakaCari/2.0 (mailto:pustakacari@autosearch.app)",
@@ -23,10 +29,38 @@ interface OpenAlexSourceMeta {
   issn_l?: string;
   issn?: string[];
   type?: string;
+  country_code?: string;
   summary_stats?: {
     "2yr_mean_citedness"?: number;
     h_index?: number;
   };
+}
+
+interface OpenAlexWork {
+  id?: string;
+  title?: string;
+  publication_year?: number;
+  cited_by_count?: number;
+  doi?: string;
+  language?: string;
+  abstract_inverted_index?: Record<string, number[]>;
+  open_access?: {
+    is_oa?: boolean;
+    oa_url?: string;
+  };
+  best_oa_location?: {
+    pdf_url?: string;
+    landing_page_url?: string;
+    source?: { id?: string; display_name?: string };
+  };
+  primary_location?: {
+    pdf_url?: string;
+    landing_page_url?: string;
+    source?: { id?: string; display_name?: string };
+  };
+  authorships?: Array<{
+    author?: { display_name?: string };
+  }>;
 }
 
 function cleanDoi(raw: string | null | undefined): string | null {
@@ -69,7 +103,17 @@ function reconstructOpenAlexAbstract(
   return text.length > 0 ? text : null;
 }
 
-function toQ1Metrics(src: OpenAlexSourceMeta): JournalMetrics | null {
+function formatTierLabel(tier: JournalTier): string {
+  if (tier.startsWith("SINTA")) {
+    return `SINTA ${tier.slice(5)}`;
+  }
+  return tier;
+}
+
+export function classifyJournalMetrics(
+  src: OpenAlexSourceMeta,
+  selectedTiers: JournalTier[]
+): JournalMetrics | null {
   if (src.type !== "journal") return null;
   const nameLower = (src.display_name || "").toLowerCase();
   if (PREPRINT_BLOCKLIST.some((blocked) => nameLower.includes(blocked))) {
@@ -79,14 +123,56 @@ function toQ1Metrics(src: OpenAlexSourceMeta): JournalMetrics | null {
   const c2y = src.summary_stats?.["2yr_mean_citedness"] ?? 0;
   const hIndex = src.summary_stats?.h_index ?? 0;
 
-  const qualifiesQ1 = (c2y >= 3.5 && hIndex >= 50) || c2y >= 5.0;
-  if (!qualifiesQ1) return null;
+  let quartile: QuartileTier;
+  if ((c2y >= 3.5 && hIndex >= 50) || c2y >= 5.0) {
+    quartile = "Q1";
+  } else if ((c2y >= 1.8 && hIndex >= 25) || c2y >= 2.5) {
+    quartile = "Q2";
+  } else if ((c2y >= 0.8 && hIndex >= 10) || c2y >= 1.1) {
+    quartile = "Q3";
+  } else {
+    quartile = "Q4";
+  }
+
+  let sinta: SintaTier | undefined;
+  if (src.country_code === "ID") {
+    if (c2y >= 1.5 || hIndex >= 25) {
+      sinta = "SINTA1";
+    } else if (c2y >= 0.8 || hIndex >= 15) {
+      sinta = "SINTA2";
+    } else if (c2y >= 0.4 || hIndex >= 8) {
+      sinta = "SINTA3";
+    } else if (c2y >= 0.2 || hIndex >= 4) {
+      sinta = "SINTA4";
+    } else if (c2y >= 0.05 || hIndex >= 2) {
+      sinta = "SINTA5";
+    } else {
+      sinta = "SINTA6";
+    }
+  }
+
+  const tierSet = new Set(selectedTiers);
+  // Q1 always takes highest priority if selected
+  let primaryTier: JournalTier | null = null;
+  if (quartile === "Q1" && tierSet.has("Q1")) {
+    primaryTier = "Q1";
+  } else if (tierSet.has(quartile)) {
+    primaryTier = quartile;
+  } else if (sinta && tierSet.has(sinta)) {
+    primaryTier = sinta;
+  }
+
+  if (!primaryTier) return null;
 
   return {
-    quartile: "Q1",
+    quartile,
+    sinta,
+    primaryTier,
+    tierLabel: formatTierLabel(primaryTier),
     impactFactor: Number(c2y.toFixed(2)),
     hIndex,
     issn: src.issn_l ?? src.issn?.[0] ?? null,
+    countryCode: src.country_code ?? null,
   };
 }
 
@@ -94,29 +180,42 @@ async function fetchOpenAlexSourcesByIds(
   ids: string[]
 ): Promise<Map<string, OpenAlexSourceMeta>> {
   const map = new Map<string, OpenAlexSourceMeta>();
-  const unique = Array.from(new Set(ids)).slice(0, 50);
+  const unique = Array.from(new Set(ids));
   if (unique.length === 0) return map;
 
-  const url = new URL("https://api.openalex.org/sources");
-  url.searchParams.set("filter", `openalex:${unique.join("|")}`);
-  url.searchParams.set("per-page", "50");
-  url.searchParams.set("select", "id,display_name,issn_l,issn,type,summary_stats");
-  url.searchParams.set("mailto", "pustakacari@autosearch.app");
-
-  const res = await fetch(url.toString(), {
-    headers: REQUEST_HEADERS,
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!res.ok) return map;
-
-  const data = (await res.json()) as { results?: OpenAlexSourceMeta[] };
-  for (const s of data.results ?? []) {
-    if (s.id) {
-      const shortId = s.id.replace("https://openalex.org/", "");
-      map.set(shortId, s);
-      map.set(s.id, s);
-    }
+  const chunks: string[][] = [];
+  for (let i = 0; i < unique.length; i += 50) {
+    chunks.push(unique.slice(i, i + 50));
   }
+
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      const url = new URL("https://api.openalex.org/sources");
+      url.searchParams.set("filter", `openalex:${chunk.join("|")}`);
+      url.searchParams.set("per-page", "50");
+      url.searchParams.set(
+        "select",
+        "id,display_name,issn_l,issn,type,country_code,summary_stats"
+      );
+      url.searchParams.set("mailto", "pustakacari@autosearch.app");
+
+      const res = await fetch(url.toString(), {
+        headers: REQUEST_HEADERS,
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return;
+
+      const data = (await res.json()) as { results?: OpenAlexSourceMeta[] };
+      for (const s of data.results ?? []) {
+        if (s.id) {
+          const shortId = s.id.replace("https://openalex.org/", "");
+          map.set(shortId, s);
+          map.set(s.id, s);
+        }
+      }
+    })
+  );
+
   return map;
 }
 
@@ -130,7 +229,10 @@ async function fetchOpenAlexSourcesByIssns(
   const url = new URL("https://api.openalex.org/sources");
   url.searchParams.set("filter", `issn:${unique.join("|")}`);
   url.searchParams.set("per-page", "50");
-  url.searchParams.set("select", "id,display_name,issn_l,issn,type,summary_stats");
+  url.searchParams.set(
+    "select",
+    "id,display_name,issn_l,issn,type,country_code,summary_stats"
+  );
   url.searchParams.set("mailto", "pustakacari@autosearch.app");
 
   const res = await fetch(url.toString(), {
@@ -149,19 +251,14 @@ async function fetchOpenAlexSourcesByIssns(
   return map;
 }
 
-export async function searchOpenAlexQ1(
+async function fetchOpenAlexWorks(
   query: string,
-  limit = 45,
-  pdfOnly = false
-): Promise<JournalPaper[]> {
+  filter: string,
+  limit: number
+): Promise<OpenAlexWork[]> {
   const url = new URL("https://api.openalex.org/works");
   url.searchParams.set("search", query);
-  url.searchParams.set(
-    "filter",
-    pdfOnly
-      ? "primary_location.source.type:journal,open_access.is_oa:true"
-      : "primary_location.source.type:journal"
-  );
+  url.searchParams.set("filter", filter);
   url.searchParams.set("per-page", String(limit));
   url.searchParams.set("mailto", "pustakacari@autosearch.app");
 
@@ -174,36 +271,53 @@ export async function searchOpenAlexQ1(
     throw new Error(`OpenAlex HTTP ${res.status}`);
   }
 
-  const data = (await res.json()) as {
-    results?: Array<{
-      id?: string;
-      title?: string;
-      publication_year?: number;
-      cited_by_count?: number;
-      doi?: string;
-      language?: string;
-      abstract_inverted_index?: Record<string, number[]>;
-      open_access?: {
-        is_oa?: boolean;
-        oa_url?: string;
-      };
-      best_oa_location?: {
-        pdf_url?: string;
-        landing_page_url?: string;
-        source?: { id?: string; display_name?: string };
-      };
-      primary_location?: {
-        pdf_url?: string;
-        landing_page_url?: string;
-        source?: { id?: string; display_name?: string };
-      };
-      authorships?: Array<{
-        author?: { display_name?: string };
-      }>;
-    }>;
-  };
+  const data = (await res.json()) as { results?: OpenAlexWork[] };
+  return data.results ?? [];
+}
 
-  const results = data.results ?? [];
+export async function searchOpenAlexByTiers(
+  query: string,
+  tiers: JournalTier[],
+  limit = 45,
+  pdfOnly = false
+): Promise<JournalPaper[]> {
+  const wantsQ = tiers.some((t) => t.startsWith("Q"));
+  const wantsSinta = tiers.some((t) => t.startsWith("SINTA"));
+  const oaPart = pdfOnly ? ",open_access.is_oa:true" : "";
+
+  const workBatches: Promise<OpenAlexWork[]>[] = [];
+  if (wantsQ) {
+    workBatches.push(
+      fetchOpenAlexWorks(
+        query,
+        `primary_location.source.type:journal${oaPart}`,
+        limit
+      )
+    );
+  }
+  if (wantsSinta) {
+    workBatches.push(
+      fetchOpenAlexWorks(
+        query,
+        `primary_location.source.type:journal,primary_location.source.country_code:ID${oaPart}`,
+        35
+      )
+    );
+  }
+
+  const settled = await Promise.allSettled(workBatches);
+  const results: OpenAlexWork[] = [];
+  let anySuccess = false;
+  for (const s of settled) {
+    if (s.status === "fulfilled") {
+      anySuccess = true;
+      results.push(...s.value);
+    }
+  }
+  if (!anySuccess && settled[0]?.status === "rejected") {
+    throw settled[0].reason;
+  }
+
   const sourceIds = results
     .map((w) =>
       (w.primary_location?.source?.id || w.best_oa_location?.source?.id || "")
@@ -214,7 +328,7 @@ export async function searchOpenAlexQ1(
 
   const sourceMap = await fetchOpenAlexSourcesByIds(sourceIds);
 
-  const q1Papers: JournalPaper[] = [];
+  const matchedPapers: JournalPaper[] = [];
   for (const item of results) {
     if (!item.title) continue;
     const rawSourceId = (
@@ -228,7 +342,7 @@ export async function searchOpenAlexQ1(
     const sourceMeta = rawSourceId ? sourceMap.get(rawSourceId) : undefined;
     if (!sourceMeta) continue;
 
-    const metrics = toQ1Metrics(sourceMeta);
+    const metrics = classifyJournalMetrics(sourceMeta, tiers);
     if (!metrics) continue;
 
     const title = item.title.trim();
@@ -257,7 +371,7 @@ export async function searchOpenAlexQ1(
       item.best_oa_location?.source?.display_name ||
       null;
 
-    q1Papers.push({
+    matchedPapers.push({
       paperKey: makePaperKey("openalex", doi, title, item.id),
       title,
       authors,
@@ -275,13 +389,18 @@ export async function searchOpenAlexQ1(
     });
   }
 
-  return q1Papers;
+  return matchedPapers;
 }
 
-export async function searchEuropePmcQ1(
+export async function searchEuropePmcByTiers(
   query: string,
+  tiers: JournalTier[],
   limit = 20
 ): Promise<JournalPaper[]> {
+  if (!tiers.some((t) => t.startsWith("Q"))) {
+    return [];
+  }
+
   const url = new URL(
     "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
   );
@@ -339,7 +458,7 @@ export async function searchEuropePmcQ1(
     .filter((v): v is string => Boolean(v));
 
   const issnMap = await fetchOpenAlexSourcesByIssns(issns);
-  const q1Papers: JournalPaper[] = [];
+  const matchedPapers: JournalPaper[] = [];
 
   for (const item of results) {
     if (!item.title) continue;
@@ -351,7 +470,7 @@ export async function searchEuropePmcQ1(
       (issn2 ? issnMap.get(issn2) : undefined);
 
     if (!sourceMeta) continue;
-    const metrics = toQ1Metrics(sourceMeta);
+    const metrics = classifyJournalMetrics(sourceMeta, tiers);
     if (!metrics) continue;
 
     const title = item.title.replace(/<[^>]+>/g, "").trim();
@@ -382,7 +501,7 @@ export async function searchEuropePmcQ1(
 
     const year = item.pubYear ? Number(item.pubYear) || null : null;
 
-    q1Papers.push({
+    matchedPapers.push({
       paperKey: makePaperKey("europepmc", doi, title, item.id),
       title,
       authors,
@@ -391,7 +510,7 @@ export async function searchEuropePmcQ1(
         sourceMeta.display_name ||
         item.journalTitle ||
         item.journalInfo?.journal?.title ||
-        "Europe PMC Q1",
+        "Europe PMC",
       source: "europepmc",
       abstract: item.abstractText
         ? item.abstractText.replace(/<[^>]+>/g, "").trim()
@@ -406,5 +525,5 @@ export async function searchEuropePmcQ1(
     });
   }
 
-  return q1Papers;
+  return matchedPapers;
 }

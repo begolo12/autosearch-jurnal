@@ -17,9 +17,18 @@ import {
 import type { ConversionMode, JournalPaper } from "@/lib/types";
 
 const SOURCE_LABELS: Record<string, string> = {
-  openalex: "OpenAlex Q1",
-  europepmc: "Europe PMC Q1",
+  openalex: "OpenAlex",
+  europepmc: "Europe PMC",
 };
+
+function getTierBadgeStyle(tier?: string): string {
+  if (tier === "Q1" || tier === "SINTA1") return "bg-[#1B4D3E] text-white";
+  if (tier === "Q2" || tier === "SINTA2") return "bg-[#1E5F5B] text-white";
+  if (tier === "Q3" || tier === "Q4" || tier === "SINTA3" || tier === "SINTA4") {
+    return "bg-[#44403C] text-white";
+  }
+  return "bg-[#9A3412] text-white";
+}
 
 const MODE_OPTIONS: Array<{
   value: ConversionMode;
@@ -137,11 +146,22 @@ export function PaperCard({
 
   return (
     <article className="rounded-xl border border-[#E5DFD5] bg-white p-4 transition-colors duration-150 hover:border-[#CFC6B8] sm:p-5">
-      {/* Q1 & Metadata strip */}
+      {/* Rank & Metadata strip */}
       <div className="mb-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs">
-        <span className="inline-flex items-center rounded-md bg-[#1B4D3E] px-2 py-0.5 font-mono text-[11px] font-bold text-white">
-          Q1
+        <span
+          className={`inline-flex items-center rounded-md px-2 py-0.5 font-mono text-[11px] font-bold ${getTierBadgeStyle(paper.journalMetrics?.primaryTier)}`}
+        >
+          {paper.journalMetrics?.tierLabel || "Q1"}
         </span>
+
+        {paper.journalMetrics &&
+          paper.journalMetrics.sinta &&
+          paper.journalMetrics.quartile &&
+          paper.journalMetrics.primaryTier !== paper.journalMetrics.quartile && (
+            <span className="inline-flex items-center rounded-md border border-[#CFC6B8] bg-[#FAF8F4] px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#57534E]">
+              {paper.journalMetrics.quartile}
+            </span>
+          )}
 
         {paper.journalMetrics && (
           <span className="inline-flex items-center rounded-md border border-[#1B4D3E]/25 bg-[#1B4D3E]/8 px-2 py-0.5 font-mono text-[11px] font-medium tabular-nums text-[#1B4D3E]">

@@ -317,7 +317,7 @@ export function PdfReaderModal({
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           {paper.journalMetrics && (
             <span className="shrink-0 rounded-md bg-[#1B4D3E] px-2 py-0.5 font-mono text-xs font-bold text-white">
-              Q1 · IF {paper.journalMetrics.impactFactor}
+              {paper.journalMetrics.tierLabel} · IF {paper.journalMetrics.impactFactor}
             </span>
           )}
           <h2 className="truncate font-serif text-sm font-semibold text-[#1C1917] sm:text-base">

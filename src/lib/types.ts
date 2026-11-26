@@ -4,11 +4,40 @@ export type ConversionMode = "clean" | "translate_id" | "summary_id";
 
 export type SortOption = "relevance" | "impact" | "newest" | "citations";
 
+export type QuartileTier = "Q1" | "Q2" | "Q3" | "Q4";
+
+export type SintaTier =
+  | "SINTA1"
+  | "SINTA2"
+  | "SINTA3"
+  | "SINTA4"
+  | "SINTA5"
+  | "SINTA6";
+
+export type JournalTier = QuartileTier | SintaTier;
+
+export const TIER_PRIORITY_ORDER: JournalTier[] = [
+  "Q1",
+  "Q2",
+  "Q3",
+  "Q4",
+  "SINTA1",
+  "SINTA2",
+  "SINTA3",
+  "SINTA4",
+  "SINTA5",
+  "SINTA6",
+];
+
 export interface JournalMetrics {
-  quartile: "Q1";
+  quartile?: QuartileTier;
+  sinta?: SintaTier;
+  primaryTier: JournalTier;
+  tierLabel: string;
   impactFactor: number;
   hIndex: number;
   issn: string | null;
+  countryCode?: string | null;
 }
 
 export interface JournalPaper {
@@ -76,6 +105,7 @@ export interface SearchHistoryRecord {
   query: string;
   filters: {
     sources?: string[];
+    tiers?: JournalTier[];
     pdfOnly?: boolean;
     yearFrom?: number | null;
     sort?: string;

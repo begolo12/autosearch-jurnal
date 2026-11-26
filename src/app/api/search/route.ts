@@ -4,9 +4,15 @@ import { searchHistory } from "@/db/schema";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { aggregateJournalSearch } from "@/lib/search/aggregator";
 import { attachSessionCookie, getSessionContext } from "@/lib/session";
-import type { SearchSource, SortOption } from "@/lib/types";
+import {
+  TIER_PRIORITY_ORDER,
+  type JournalTier,
+  type SearchSource,
+  type SortOption,
+} from "@/lib/types";
 
 const VALID_SOURCES = new Set<SearchSource>(["openalex", "europepmc"]);
+const VALID_TIERS = new Set<JournalTier>(TIER_PRIORITY_ORDER);
 
 export async function GET(request: NextRequest) {
   const { sessionId, isNew } = getSessionContext(request);
@@ -38,6 +44,14 @@ export async function GET(request: NextRequest) {
     .map((s) => s.trim().toLowerCase())
     .filter((s): s is SearchSource => VALID_SOURCES.has(s as SearchSource));
 
+  const rawTiers = (searchParams.get("tiers") || "")
+    .split(",")
+    .map((t) => t.trim().toUpperCase())
+    .filter((t): t is JournalTier => VALID_TIERS.has(t as JournalTier));
+
+  const activeTiers: JournalTier[] =
+    rawTiers.length > 0 ? rawTiers : ["Q1"];
+
   const pdfOnly = searchParams.get("pdfOnly") === "true";
   const yearParam = searchParams.get("yearFrom");
   const yearFrom = yearParam ? Number(yearParam) || null : null;
@@ -50,12 +64,12 @@ export async function GET(request: NextRequest) {
   const result = await aggregateJournalSearch({
     query,
     sources: rawSources.length > 0 ? rawSources : undefined,
+    tiers: activeTiers,
     pdfOnly,
     yearFrom,
     sort,
   });
 
-  // Log search history per session (best-effort)
   try {
     const db = getDb();
     await db.insert(searchHistory).values({

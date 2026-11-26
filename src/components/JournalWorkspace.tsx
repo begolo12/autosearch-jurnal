@@ -21,29 +21,99 @@ import {
 import { PaperCard } from "@/components/PaperCard";
 import { PdfReaderModal } from "@/components/PdfReaderModal";
 import { PwaRegistrar } from "@/components/PwaRegistrar";
-import type {
-  BookmarkRecord,
-  ConversionMode,
-  ConversionRecord,
-  JournalPaper,
-  SearchHistoryRecord,
-  SearchResponse,
-  SearchSource,
-  SortOption,
+import {
+  TIER_PRIORITY_ORDER,
+  type BookmarkRecord,
+  type ConversionMode,
+  type ConversionRecord,
+  type JournalPaper,
+  type JournalTier,
+  type QuartileTier,
+  type SearchHistoryRecord,
+  type SearchResponse,
+  type SearchSource,
+  type SintaTier,
+  type SortOption,
 } from "@/lib/types";
 
 type ActiveTab = "search" | "bookmarks" | "conversions" | "history";
 
 const ALL_SOURCES: Array<{ id: SearchSource; label: string }> = [
-  { id: "openalex", label: "OpenAlex Q1" },
-  { id: "europepmc", label: "Europe PMC Q1" },
+  { id: "openalex", label: "OpenAlex" },
+  { id: "europepmc", label: "Europe PMC" },
 ];
+
+const QUARTILE_TIERS: QuartileTier[] = ["Q1", "Q2", "Q3", "Q4"];
+const SINTA_TIERS: Array<{ id: SintaTier; label: string }> = [
+  { id: "SINTA1", label: "SINTA 1" },
+  { id: "SINTA2", label: "SINTA 2" },
+  { id: "SINTA3", label: "SINTA 3" },
+  { id: "SINTA4", label: "SINTA 4" },
+  { id: "SINTA5", label: "SINTA 5" },
+  { id: "SINTA6", label: "SINTA 6" },
+];
+
+const RANK_SECTION_META: Record<
+  JournalTier,
+  { badge: string; title: string; badgeClass: string }
+> = {
+  Q1: {
+    badge: "Q1",
+    title: "Kuartil 1 Internasional · Prioritas Utama",
+    badgeClass: "bg-[#1B4D3E] text-white",
+  },
+  Q2: {
+    badge: "Q2",
+    title: "Kuartil 2 Internasional",
+    badgeClass: "bg-[#1E5F5B] text-white",
+  },
+  Q3: {
+    badge: "Q3",
+    title: "Kuartil 3 Internasional",
+    badgeClass: "bg-[#44403C] text-white",
+  },
+  Q4: {
+    badge: "Q4",
+    title: "Kuartil 4 Internasional",
+    badgeClass: "bg-[#57534E] text-white",
+  },
+  SINTA1: {
+    badge: "SINTA 1",
+    title: "Jurnal Nasional Terakreditasi Peringkat 1",
+    badgeClass: "bg-[#1B4D3E] text-white",
+  },
+  SINTA2: {
+    badge: "SINTA 2",
+    title: "Jurnal Nasional Terakreditasi Peringkat 2",
+    badgeClass: "bg-[#1E5F5B] text-white",
+  },
+  SINTA3: {
+    badge: "SINTA 3",
+    title: "Jurnal Nasional Terakreditasi Peringkat 3",
+    badgeClass: "bg-[#44403C] text-white",
+  },
+  SINTA4: {
+    badge: "SINTA 4",
+    title: "Jurnal Nasional Terakreditasi Peringkat 4",
+    badgeClass: "bg-[#57534E] text-white",
+  },
+  SINTA5: {
+    badge: "SINTA 5",
+    title: "Jurnal Nasional Terakreditasi Peringkat 5",
+    badgeClass: "bg-[#9A3412] text-white",
+  },
+  SINTA6: {
+    badge: "SINTA 6",
+    title: "Jurnal Nasional Terakreditasi Peringkat 6",
+    badgeClass: "bg-[#7C2D12] text-white",
+  },
+};
 
 const STARTER_QUERIES = [
   "machine learning healthcare",
+  "ekonomi digital UMKM",
   "renewable energy policy",
-  "large language models",
-  "pembelajaran mesin kesehatan",
+  "pendidikan karakter Indonesia",
 ];
 
 const MODE_BADGE: Record<string, string> = {
@@ -81,6 +151,7 @@ export function JournalWorkspace() {
     "openalex",
     "europepmc",
   ]);
+  const [selectedTiers, setSelectedTiers] = useState<JournalTier[]>(["Q1"]);
   const [pdfOnly, setPdfOnly] = useState(false);
   const [yearFrom, setYearFrom] = useState<string>("");
   const [sort, setSort] = useState<SortOption>("relevance");
@@ -181,6 +252,7 @@ export function JournalWorkspace() {
       try {
         const params = new URLSearchParams();
         params.set("q", q);
+        params.set("tiers", selectedTiers.join(","));
         if (selectedSources.length > 0 && selectedSources.length < 2) {
           params.set("sources", selectedSources.join(","));
         }
@@ -210,8 +282,35 @@ export function JournalWorkspace() {
         setSearching(false);
       }
     },
-    [query, selectedSources, pdfOnly, yearFrom, sort]
+    [query, selectedSources, selectedTiers, pdfOnly, yearFrom, sort]
   );
+
+  const toggleTier = (tier: JournalTier) => {
+    setSelectedTiers((prev) => {
+      if (prev.includes(tier)) {
+        return prev.length > 1 ? prev.filter((t) => t !== tier) : prev;
+      }
+      return [...prev, tier];
+    });
+  };
+
+  const groupedResults = useMemo(() => {
+    if (!searchResult?.papers) return [];
+    const buckets = new Map<JournalTier, JournalPaper[]>();
+    for (const paper of searchResult.papers) {
+      const tier = paper.journalMetrics?.primaryTier || "Q1";
+      const list = buckets.get(tier) ?? [];
+      list.push(paper);
+      buckets.set(tier, list);
+    }
+    return TIER_PRIORITY_ORDER.filter((tier) => buckets.has(tier)).map(
+      (tier) => ({
+        tier,
+        meta: RANK_SECTION_META[tier],
+        papers: buckets.get(tier)!,
+      })
+    );
+  }, [searchResult]);
 
   const toggleSource = (source: SearchSource) => {
     setSelectedSources((prev) => {
@@ -407,11 +506,13 @@ export function JournalWorkspace() {
                   PustakaCari
                 </h1>
                 <span className="rounded bg-[#1B4D3E] px-1.5 py-0.5 font-mono text-[10px] font-bold text-white">
-                  Q1 ONLY
+                  {selectedTiers.length === 1
+                    ? selectedTiers[0].replace("SINTA", "SINTA ")
+                    : `${selectedTiers.length} RANK`}
                 </span>
               </div>
               <p className="hidden text-xs text-[#57534E] sm:block">
-                Jurnal Ilmiah Q1 Terverifikasi · Baca PDF &amp; Terjemahan Otomatis
+                Jurnal Q1–Q4 &amp; SINTA 1–6 · Baca PDF &amp; Terjemahan Otomatis
               </p>
             </div>
           </div>
@@ -533,7 +634,7 @@ export function JournalWorkspace() {
                       type="search"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Cari jurnal Q1 (Bahasa Indonesia / Inggris)..."
+                      placeholder="Cari jurnal Q1–Q4 / SINTA 1–6 (ID / EN)..."
                       className="min-h-[44px] w-full rounded-lg border border-[#CFC6B8] bg-[#FAF8F4] py-2.5 pl-10 pr-4 text-base text-[#1C1917] placeholder:text-[#78716C] focus:border-[#1B4D3E] focus:bg-white focus:outline-none sm:text-sm"
                     />
                   </div>
@@ -547,9 +648,99 @@ export function JournalWorkspace() {
                     ) : (
                       <Search className="h-4 w-4" />
                     )}
-                    {searching ? "Mencari Q1..." : "Cari Jurnal Q1"}
+                    {searching ? "Mencari..." : "Cari Jurnal"}
                   </button>
                 </form>
+
+                {/* Tier / Rank Filter Strip */}
+                <div className="mt-3.5 border-t border-[#F2EFE9] pt-3">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-[#1C1917]">
+                      Peringkat Jurnal (Prioritas Q1):
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTiers(["Q1"])}
+                        className="rounded border border-[#CFC6B8] bg-[#FAF8F4] px-2 py-0.5 font-medium text-[#1C1917] hover:border-[#1B4D3E]"
+                      >
+                        Prioritas Q1
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedTiers(["Q1", "Q2", "Q3", "Q4"])
+                        }
+                        className="rounded border border-[#CFC6B8] bg-[#FAF8F4] px-2 py-0.5 font-medium text-[#1C1917] hover:border-[#1B4D3E]"
+                      >
+                        Q1–Q4
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedTiers([
+                            "SINTA1",
+                            "SINTA2",
+                            "SINTA3",
+                            "SINTA4",
+                            "SINTA5",
+                            "SINTA6",
+                          ])
+                        }
+                        className="rounded border border-[#CFC6B8] bg-[#FAF8F4] px-2 py-0.5 font-medium text-[#1C1917] hover:border-[#1B4D3E]"
+                      >
+                        SINTA 1–6
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTiers([...TIER_PRIORITY_ORDER])}
+                        className="rounded border border-[#CFC6B8] bg-[#FAF8F4] px-2 py-0.5 font-medium text-[#1C1917] hover:border-[#1B4D3E]"
+                      >
+                        Semua Rank
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {QUARTILE_TIERS.map((q) => {
+                      const active = selectedTiers.includes(q);
+                      return (
+                        <button
+                          key={q}
+                          type="button"
+                          onClick={() => toggleTier(q)}
+                          className={`min-h-[34px] rounded-md border px-2.5 py-1 font-mono text-xs font-semibold transition-colors ${
+                            active
+                              ? "border-[#1B4D3E] bg-[#1B4D3E] text-white"
+                              : "border-[#E5DFD5] bg-[#FAF8F4] text-[#57534E] hover:border-[#CFC6B8]"
+                          }`}
+                        >
+                          {q}
+                        </button>
+                      );
+                    })}
+                    <span aria-hidden="true" className="mx-1 text-[#CFC6B8]">
+                      |
+                    </span>
+                    {SINTA_TIERS.map((s) => {
+                      const active = selectedTiers.includes(s.id);
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => toggleTier(s.id)}
+                          className={`min-h-[34px] rounded-md border px-2.5 py-1 font-mono text-xs font-semibold transition-colors ${
+                            active
+                              ? "border-[#9A3412] bg-[#9A3412] text-white"
+                              : "border-[#E5DFD5] bg-[#FAF8F4] text-[#57534E] hover:border-[#CFC6B8]"
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
                 {/* Mobile Filter Toggle */}
                 <div className="mt-3 flex items-center justify-between border-t border-[#F2EFE9] pt-2.5 sm:hidden">
@@ -705,21 +896,51 @@ export function JournalWorkspace() {
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      {searchResult.papers.map((paper) => (
-                        <PaperCard
-                          key={paper.paperKey}
-                          paper={paper}
-                          isBookmarked={bookmarkedMap.has(paper.paperKey)}
-                          onToggleBookmark={handleToggleBookmark}
-                          onDownloadPdf={handleDownloadPdf}
-                          onOpenReader={(p, autoTranslate = false) =>
-                            setReaderState({ paper: p, autoTranslate })
+                    <div className="space-y-8">
+                      {groupedResults.map((group, groupIdx) => (
+                        <section
+                          key={group.tier}
+                          aria-label={group.meta.title}
+                          className={
+                            groupIdx > 0
+                              ? "border-t-2 border-[#E5DFD5] pt-6"
+                              : ""
                           }
-                          onConvertWord={handleConvertWord}
-                          downloadingPdfKey={downloadingPdfKey}
-                          convertingKey={convertingKey}
-                        />
+                        >
+                          <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#E5DFD5] bg-[#F2EFE9]/80 px-3.5 py-2.5">
+                            <div className="flex items-center gap-2.5">
+                              <span
+                                className={`rounded-md px-2.5 py-0.5 font-mono text-xs font-bold ${group.meta.badgeClass}`}
+                              >
+                                {group.meta.badge}
+                              </span>
+                              <h3 className="font-serif text-sm font-semibold text-[#1C1917]">
+                                {group.meta.title}
+                              </h3>
+                            </div>
+                            <span className="font-mono text-xs font-medium tabular-nums text-[#57534E]">
+                              {group.papers.length} jurnal
+                            </span>
+                          </div>
+
+                          <div className="space-y-4">
+                            {group.papers.map((paper) => (
+                              <PaperCard
+                                key={paper.paperKey}
+                                paper={paper}
+                                isBookmarked={bookmarkedMap.has(paper.paperKey)}
+                                onToggleBookmark={handleToggleBookmark}
+                                onDownloadPdf={handleDownloadPdf}
+                                onOpenReader={(p, autoTranslate = false) =>
+                                  setReaderState({ paper: p, autoTranslate })
+                                }
+                                onConvertWord={handleConvertWord}
+                                downloadingPdfKey={downloadingPdfKey}
+                                convertingKey={convertingKey}
+                              />
+                            ))}
+                          </div>
+                        </section>
                       ))}
                     </div>
                   )}
