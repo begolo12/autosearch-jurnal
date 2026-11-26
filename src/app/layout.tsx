@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import {
   JetBrains_Mono,
   Source_Sans_3,
@@ -25,9 +25,26 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PustakaCari — Pencarian Jurnal Otomatis & Konversi Word AI",
+  title: "PustakaCari — Jurnal Q1 Terverifikasi, Baca PDF & Terjemahan AI",
   description:
-    "Cari jurnal ilmiah open-access dari OpenAlex, arXiv, Europe PMC, dan DOAJ, unduh PDF langsung, serta konversi ke Microsoft Word (.docx) dengan mv/zai-glm-5-3-flash.",
+    "Cari jurnal ilmiah Q1 terverifikasi, baca PDF langsung di aplikasi, terjemahkan otomatis ke Bahasa Indonesia dari bahasa apa pun, dan konversi ke Word (.docx).",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "PustakaCari",
+  },
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: "/icons/apple-touch-icon.png",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#1B4D3E",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

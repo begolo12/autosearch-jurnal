@@ -1,0 +1,15 @@
+{
+  "appId": "app.pustakacari.jurnal",
+  "appName": "PustakaCari",
+  "webDir": "www",
+  "server": {
+    "url": "https://autosearch-jurnal.vercel.app",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "automatic"
+  }
+}

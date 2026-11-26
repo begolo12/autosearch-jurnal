@@ -1,10 +1,33 @@
-import { XMLParser } from "fast-xml-parser";
-import type { JournalPaper } from "@/lib/types";
+import type { JournalMetrics, JournalPaper } from "@/lib/types";
 
 const REQUEST_HEADERS = {
-  "User-Agent": "PustakaCari/1.0 (mailto:pustakacari@autosearch.app)",
-  Accept: "application/json, application/xml, text/xml;q=0.9, */*;q=0.8",
+  "User-Agent": "PustakaCari/2.0 (mailto:pustakacari@autosearch.app)",
+  Accept: "application/json",
 };
+
+const PREPRINT_BLOCKLIST = [
+  "arxiv",
+  "biorxiv",
+  "medrxiv",
+  "ssrn",
+  "zenodo",
+  "research square",
+  "preprints",
+  "osf preprints",
+  "chemrxiv",
+];
+
+interface OpenAlexSourceMeta {
+  id?: string;
+  display_name?: string;
+  issn_l?: string;
+  issn?: string[];
+  type?: string;
+  summary_stats?: {
+    "2yr_mean_citedness"?: number;
+    h_index?: number;
+  };
+}
 
 function cleanDoi(raw: string | null | undefined): string | null {
   if (!raw) return null;
@@ -46,18 +69,105 @@ function reconstructOpenAlexAbstract(
   return text.length > 0 ? text : null;
 }
 
-export async function searchOpenAlex(
-  query: string,
-  limit = 15
-): Promise<JournalPaper[]> {
-  const url = new URL("https://api.openalex.org/works");
-  url.searchParams.set("search", query);
-  url.searchParams.set("per-page", String(limit));
+function toQ1Metrics(src: OpenAlexSourceMeta): JournalMetrics | null {
+  if (src.type !== "journal") return null;
+  const nameLower = (src.display_name || "").toLowerCase();
+  if (PREPRINT_BLOCKLIST.some((blocked) => nameLower.includes(blocked))) {
+    return null;
+  }
+
+  const c2y = src.summary_stats?.["2yr_mean_citedness"] ?? 0;
+  const hIndex = src.summary_stats?.h_index ?? 0;
+
+  const qualifiesQ1 = (c2y >= 3.5 && hIndex >= 50) || c2y >= 5.0;
+  if (!qualifiesQ1) return null;
+
+  return {
+    quartile: "Q1",
+    impactFactor: Number(c2y.toFixed(2)),
+    hIndex,
+    issn: src.issn_l ?? src.issn?.[0] ?? null,
+  };
+}
+
+async function fetchOpenAlexSourcesByIds(
+  ids: string[]
+): Promise<Map<string, OpenAlexSourceMeta>> {
+  const map = new Map<string, OpenAlexSourceMeta>();
+  const unique = Array.from(new Set(ids)).slice(0, 50);
+  if (unique.length === 0) return map;
+
+  const url = new URL("https://api.openalex.org/sources");
+  url.searchParams.set("filter", `openalex:${unique.join("|")}`);
+  url.searchParams.set("per-page", "50");
+  url.searchParams.set("select", "id,display_name,issn_l,issn,type,summary_stats");
   url.searchParams.set("mailto", "pustakacari@autosearch.app");
 
   const res = await fetch(url.toString(), {
     headers: REQUEST_HEADERS,
     signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) return map;
+
+  const data = (await res.json()) as { results?: OpenAlexSourceMeta[] };
+  for (const s of data.results ?? []) {
+    if (s.id) {
+      const shortId = s.id.replace("https://openalex.org/", "");
+      map.set(shortId, s);
+      map.set(s.id, s);
+    }
+  }
+  return map;
+}
+
+async function fetchOpenAlexSourcesByIssns(
+  issns: string[]
+): Promise<Map<string, OpenAlexSourceMeta>> {
+  const map = new Map<string, OpenAlexSourceMeta>();
+  const unique = Array.from(new Set(issns)).slice(0, 50);
+  if (unique.length === 0) return map;
+
+  const url = new URL("https://api.openalex.org/sources");
+  url.searchParams.set("filter", `issn:${unique.join("|")}`);
+  url.searchParams.set("per-page", "50");
+  url.searchParams.set("select", "id,display_name,issn_l,issn,type,summary_stats");
+  url.searchParams.set("mailto", "pustakacari@autosearch.app");
+
+  const res = await fetch(url.toString(), {
+    headers: REQUEST_HEADERS,
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) return map;
+
+  const data = (await res.json()) as { results?: OpenAlexSourceMeta[] };
+  for (const s of data.results ?? []) {
+    if (s.issn_l) map.set(s.issn_l.toUpperCase(), s);
+    for (const issn of s.issn ?? []) {
+      map.set(issn.toUpperCase(), s);
+    }
+  }
+  return map;
+}
+
+export async function searchOpenAlexQ1(
+  query: string,
+  limit = 45,
+  pdfOnly = false
+): Promise<JournalPaper[]> {
+  const url = new URL("https://api.openalex.org/works");
+  url.searchParams.set("search", query);
+  url.searchParams.set(
+    "filter",
+    pdfOnly
+      ? "primary_location.source.type:journal,open_access.is_oa:true"
+      : "primary_location.source.type:journal"
+  );
+  url.searchParams.set("per-page", String(limit));
+  url.searchParams.set("mailto", "pustakacari@autosearch.app");
+
+  const res = await fetch(url.toString(), {
+    headers: REQUEST_HEADERS,
+    signal: AbortSignal.timeout(12000),
   });
 
   if (!res.ok) {
@@ -71,6 +181,7 @@ export async function searchOpenAlex(
       publication_year?: number;
       cited_by_count?: number;
       doi?: string;
+      language?: string;
       abstract_inverted_index?: Record<string, number[]>;
       open_access?: {
         is_oa?: boolean;
@@ -79,12 +190,12 @@ export async function searchOpenAlex(
       best_oa_location?: {
         pdf_url?: string;
         landing_page_url?: string;
-        source?: { display_name?: string };
+        source?: { id?: string; display_name?: string };
       };
       primary_location?: {
         pdf_url?: string;
         landing_page_url?: string;
-        source?: { display_name?: string };
+        source?: { id?: string; display_name?: string };
       };
       authorships?: Array<{
         author?: { display_name?: string };
@@ -93,148 +204,83 @@ export async function searchOpenAlex(
   };
 
   const results = data.results ?? [];
-  return results
-    .filter((item) => Boolean(item.title))
-    .map((item) => {
-      const title = (item.title ?? "").trim();
-      const doi = cleanDoi(item.doi);
-      const pdfUrl =
-        item.best_oa_location?.pdf_url ||
-        item.primary_location?.pdf_url ||
-        (item.open_access?.oa_url?.toLowerCase().includes(".pdf")
-          ? item.open_access.oa_url
-          : null) ||
-        null;
-      const landingUrl =
-        item.best_oa_location?.landing_page_url ||
-        item.primary_location?.landing_page_url ||
-        item.open_access?.oa_url ||
-        (doi ? `https://doi.org/${doi}` : item.id || null);
+  const sourceIds = results
+    .map((w) =>
+      (w.primary_location?.source?.id || w.best_oa_location?.source?.id || "")
+        .replace("https://openalex.org/", "")
+        .trim()
+    )
+    .filter(Boolean);
 
-      const authors = (item.authorships ?? [])
-        .map((a) => a.author?.display_name)
-        .filter((name): name is string => Boolean(name))
-        .slice(0, 8);
+  const sourceMap = await fetchOpenAlexSourcesByIds(sourceIds);
 
-      const venue =
-        item.best_oa_location?.source?.display_name ||
-        item.primary_location?.source?.display_name ||
-        null;
+  const q1Papers: JournalPaper[] = [];
+  for (const item of results) {
+    if (!item.title) continue;
+    const rawSourceId = (
+      item.primary_location?.source?.id ||
+      item.best_oa_location?.source?.id ||
+      ""
+    )
+      .replace("https://openalex.org/", "")
+      .trim();
 
-      return {
-        paperKey: makePaperKey("openalex", doi, title, item.id),
-        title,
-        authors,
-        year: item.publication_year ?? null,
-        venue,
-        source: "openalex" as const,
-        abstract: reconstructOpenAlexAbstract(item.abstract_inverted_index),
-        pdfUrl,
-        landingUrl,
-        doi,
-        citations: item.cited_by_count ?? null,
-        openAccess: Boolean(item.open_access?.is_oa || pdfUrl),
-      };
+    const sourceMeta = rawSourceId ? sourceMap.get(rawSourceId) : undefined;
+    if (!sourceMeta) continue;
+
+    const metrics = toQ1Metrics(sourceMeta);
+    if (!metrics) continue;
+
+    const title = item.title.trim();
+    const doi = cleanDoi(item.doi);
+    const pdfUrl =
+      item.best_oa_location?.pdf_url ||
+      item.primary_location?.pdf_url ||
+      (item.open_access?.oa_url?.toLowerCase().includes(".pdf")
+        ? item.open_access.oa_url
+        : null) ||
+      null;
+    const landingUrl =
+      item.best_oa_location?.landing_page_url ||
+      item.primary_location?.landing_page_url ||
+      item.open_access?.oa_url ||
+      (doi ? `https://doi.org/${doi}` : item.id || null);
+
+    const authors = (item.authorships ?? [])
+      .map((a) => a.author?.display_name)
+      .filter((name): name is string => Boolean(name))
+      .slice(0, 8);
+
+    const venue =
+      sourceMeta.display_name ||
+      item.primary_location?.source?.display_name ||
+      item.best_oa_location?.source?.display_name ||
+      null;
+
+    q1Papers.push({
+      paperKey: makePaperKey("openalex", doi, title, item.id),
+      title,
+      authors,
+      year: item.publication_year ?? null,
+      venue,
+      source: "openalex",
+      abstract: reconstructOpenAlexAbstract(item.abstract_inverted_index),
+      pdfUrl,
+      landingUrl,
+      doi,
+      citations: item.cited_by_count ?? null,
+      openAccess: Boolean(item.open_access?.is_oa || pdfUrl),
+      language: item.language?.toUpperCase() || null,
+      journalMetrics: metrics,
     });
-}
-
-export async function searchArxiv(
-  query: string,
-  limit = 12
-): Promise<JournalPaper[]> {
-  const url = new URL("https://export.arxiv.org/api/query");
-  url.searchParams.set("search_query", `all:${query}`);
-  url.searchParams.set("start", "0");
-  url.searchParams.set("max_results", String(limit));
-
-  const res = await fetch(url.toString(), {
-    headers: { "User-Agent": REQUEST_HEADERS["User-Agent"] },
-    signal: AbortSignal.timeout(10000),
-  });
-
-  if (!res.ok) {
-    throw new Error(`arXiv HTTP ${res.status}`);
   }
 
-  const xml = await res.text();
-  const parser = new XMLParser({
-    ignoreAttributes: false,
-    attributeNamePrefix: "@_",
-  });
-  const parsed = parser.parse(xml) as {
-    feed?: {
-      entry?:
-        | Array<Record<string, unknown>>
-        | Record<string, unknown>;
-    };
-  };
-
-  const rawEntries = parsed.feed?.entry;
-  const entries = Array.isArray(rawEntries)
-    ? rawEntries
-    : rawEntries
-      ? [rawEntries]
-      : [];
-
-  return entries
-    .map((entry): JournalPaper | null => {
-      const title = String(entry.title ?? "")
-        .replace(/\s+/g, " ")
-        .trim();
-      if (!title) return null;
-
-      const rawId = String(entry.id ?? "").trim();
-      const arxivId = rawId
-        .replace(/^https?:\/\/arxiv\.org\/abs\//i, "")
-        .replace(/v\d+$/, "");
-
-      const pdfUrl = arxivId ? `https://arxiv.org/pdf/${arxivId}.pdf` : null;
-      const landingUrl = rawId || (arxivId ? `https://arxiv.org/abs/${arxivId}` : null);
-
-      const published = String(entry.published ?? "");
-      const yearMatch = published.match(/^(\d{4})/);
-      const year = yearMatch ? Number(yearMatch[1]) : null;
-
-      const rawAuthors = entry.author;
-      const authorList = Array.isArray(rawAuthors)
-        ? rawAuthors
-        : rawAuthors
-          ? [rawAuthors]
-          : [];
-      const authors = authorList
-        .map((a) => String((a as { name?: unknown }).name ?? "").trim())
-        .filter(Boolean)
-        .slice(0, 8);
-
-      const abstract = String(entry.summary ?? "")
-        .replace(/\s+/g, " ")
-        .trim();
-
-      const doi = cleanDoi(
-        entry["arxiv:doi"] ? String(entry["arxiv:doi"]) : null
-      );
-
-      return {
-        paperKey: makePaperKey("arxiv", doi, title, arxivId),
-        title,
-        authors,
-        year,
-        venue: "arXiv Preprint",
-        source: "arxiv" as const,
-        abstract: abstract || null,
-        pdfUrl,
-        landingUrl,
-        doi,
-        citations: null,
-        openAccess: true,
-      };
-    })
-    .filter((p): p is JournalPaper => p !== null);
+  return q1Papers;
 }
 
-export async function searchEuropePmc(
+export async function searchEuropePmcQ1(
   query: string,
-  limit = 12
+  limit = 20
 ): Promise<JournalPaper[]> {
   const url = new URL(
     "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
@@ -262,6 +308,14 @@ export async function searchEuropePmc(
         authorString?: string;
         pubYear?: string;
         journalTitle?: string;
+        journalInfo?: {
+          journal?: {
+            issn?: string;
+            essn?: string;
+            title?: string;
+          };
+        };
+        language?: string;
         abstractText?: string;
         doi?: string;
         citedByCount?: number;
@@ -269,7 +323,6 @@ export async function searchEuropePmc(
         fullTextUrlList?: {
           fullTextUrl?: Array<{
             documentStyle?: string;
-            availabilityCode?: string;
             url?: string;
           }>;
         };
@@ -278,137 +331,80 @@ export async function searchEuropePmc(
   };
 
   const results = data.resultList?.result ?? [];
-  return results
-    .filter((item) => Boolean(item.title))
-    .map((item) => {
-      const title = (item.title ?? "").replace(/<[^>]+>/g, "").trim();
-      const doi = cleanDoi(item.doi);
-      const urls = item.fullTextUrlList?.fullTextUrl ?? [];
-      const pdfEntry = urls.find(
-        (u) => u.documentStyle?.toLowerCase() === "pdf" && u.url
-      );
+  const issns = results
+    .flatMap((r) => [
+      r.journalInfo?.journal?.issn,
+      r.journalInfo?.journal?.essn,
+    ])
+    .filter((v): v is string => Boolean(v));
 
-      let pdfUrl = pdfEntry?.url ?? null;
-      if (!pdfUrl && item.isOpenAccess === "Y" && item.pmcid) {
-        pdfUrl = `https://europepmc.org/articles/${item.pmcid}?pdf=render`;
-      }
+  const issnMap = await fetchOpenAlexSourcesByIssns(issns);
+  const q1Papers: JournalPaper[] = [];
 
-      const landingUrl =
-        urls.find((u) => u.url)?.url ||
-        (item.pmcid
-          ? `https://europepmc.org/article/PMC/${item.pmcid.replace(/^PMC/i, "")}`
-          : doi
-            ? `https://doi.org/${doi}`
-            : null);
+  for (const item of results) {
+    if (!item.title) continue;
 
-      const authors = (item.authorString ?? "")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .slice(0, 8);
+    const issn1 = item.journalInfo?.journal?.issn?.toUpperCase();
+    const issn2 = item.journalInfo?.journal?.essn?.toUpperCase();
+    const sourceMeta =
+      (issn1 ? issnMap.get(issn1) : undefined) ||
+      (issn2 ? issnMap.get(issn2) : undefined);
 
-      const year = item.pubYear ? Number(item.pubYear) || null : null;
+    if (!sourceMeta) continue;
+    const metrics = toQ1Metrics(sourceMeta);
+    if (!metrics) continue;
 
-      return {
-        paperKey: makePaperKey("europepmc", doi, title, item.id),
-        title,
-        authors,
-        year,
-        venue: item.journalTitle ?? "Europe PMC",
-        source: "europepmc" as const,
-        abstract: item.abstractText
-          ? item.abstractText.replace(/<[^>]+>/g, "").trim()
-          : null,
-        pdfUrl,
-        landingUrl,
-        doi,
-        citations: item.citedByCount ?? null,
-        openAccess: item.isOpenAccess === "Y" || Boolean(pdfUrl),
-      };
+    const title = item.title.replace(/<[^>]+>/g, "").trim();
+    const doi = cleanDoi(item.doi);
+    const urls = item.fullTextUrlList?.fullTextUrl ?? [];
+    const pdfEntry = urls.find(
+      (u) => u.documentStyle?.toLowerCase() === "pdf" && u.url
+    );
+
+    let pdfUrl = pdfEntry?.url ?? null;
+    if (!pdfUrl && item.isOpenAccess === "Y" && item.pmcid) {
+      pdfUrl = `https://europepmc.org/articles/${item.pmcid}?pdf=render`;
+    }
+
+    const landingUrl =
+      urls.find((u) => u.url)?.url ||
+      (item.pmcid
+        ? `https://europepmc.org/article/PMC/${item.pmcid.replace(/^PMC/i, "")}`
+        : doi
+          ? `https://doi.org/${doi}`
+          : null);
+
+    const authors = (item.authorString ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+
+    const year = item.pubYear ? Number(item.pubYear) || null : null;
+
+    q1Papers.push({
+      paperKey: makePaperKey("europepmc", doi, title, item.id),
+      title,
+      authors,
+      year,
+      venue:
+        sourceMeta.display_name ||
+        item.journalTitle ||
+        item.journalInfo?.journal?.title ||
+        "Europe PMC Q1",
+      source: "europepmc",
+      abstract: item.abstractText
+        ? item.abstractText.replace(/<[^>]+>/g, "").trim()
+        : null,
+      pdfUrl,
+      landingUrl,
+      doi,
+      citations: item.citedByCount ?? null,
+      openAccess: item.isOpenAccess === "Y" || Boolean(pdfUrl),
+      language: item.language?.toUpperCase() || null,
+      journalMetrics: metrics,
     });
-}
-
-export async function searchDoaj(
-  query: string,
-  limit = 12
-): Promise<JournalPaper[]> {
-  const url = `https://doaj.org/api/search/articles/${encodeURIComponent(query)}?pageSize=${limit}`;
-
-  const res = await fetch(url, {
-    headers: REQUEST_HEADERS,
-    signal: AbortSignal.timeout(10000),
-  });
-
-  if (!res.ok) {
-    throw new Error(`DOAJ HTTP ${res.status}`);
   }
 
-  const data = (await res.json()) as {
-    results?: Array<{
-      id?: string;
-      bibjson?: {
-        title?: string;
-        year?: string;
-        abstract?: string;
-        journal?: { title?: string };
-        author?: Array<{ name?: string }>;
-        identifier?: Array<{ type?: string; id?: string }>;
-        link?: Array<{
-          type?: string;
-          content_type?: string;
-          url?: string;
-        }>;
-      };
-    }>;
-  };
-
-  const results = data.results ?? [];
-  return results
-    .filter((item) => Boolean(item.bibjson?.title))
-    .map((item) => {
-      const bib = item.bibjson!;
-      const title = (bib.title ?? "").trim();
-      const doiObj = bib.identifier?.find(
-        (id) => id.type?.toLowerCase() === "doi"
-      );
-      const doi = cleanDoi(doiObj?.id);
-
-      const links = bib.link ?? [];
-      const directPdf = links.find(
-        (l) =>
-          l.url &&
-          (l.content_type?.toLowerCase() === "pdf" ||
-            l.url.toLowerCase().includes(".pdf"))
-      );
-      const fulltext = links.find(
-        (l) => l.url && l.type?.toLowerCase() === "fulltext"
-      );
-      const pdfUrl = directPdf?.url ?? null;
-      const landingUrl =
-        fulltext?.url ||
-        directPdf?.url ||
-        (doi ? `https://doi.org/${doi}` : null);
-
-      const authors = (bib.author ?? [])
-        .map((a) => a.name?.trim())
-        .filter((n): n is string => Boolean(n))
-        .slice(0, 8);
-
-      const year = bib.year ? Number(bib.year) || null : null;
-
-      return {
-        paperKey: makePaperKey("doaj", doi, title, item.id),
-        title,
-        authors,
-        year,
-        venue: bib.journal?.title ?? "DOAJ Open Access",
-        source: "doaj" as const,
-        abstract: bib.abstract?.trim() || null,
-        pdfUrl,
-        landingUrl,
-        doi,
-        citations: null,
-        openAccess: true,
-      };
-    });
+  return q1Papers;
 }

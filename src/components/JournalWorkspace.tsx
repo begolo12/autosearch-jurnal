@@ -5,18 +5,22 @@ import {
   AlertCircle,
   BookOpen,
   Bookmark,
+  ChevronDown,
+  ChevronUp,
   Clock,
-  Database,
   FileDown,
   FileText,
   History,
   Loader2,
   Search,
+  ShieldCheck,
   SlidersHorizontal,
   Trash2,
   X,
 } from "lucide-react";
 import { PaperCard } from "@/components/PaperCard";
+import { PdfReaderModal } from "@/components/PdfReaderModal";
+import { PwaRegistrar } from "@/components/PwaRegistrar";
 import type {
   BookmarkRecord,
   ConversionMode,
@@ -28,20 +32,18 @@ import type {
   SortOption,
 } from "@/lib/types";
 
-type ActiveTab = "search" | "bookmarks" | "conversions";
+type ActiveTab = "search" | "bookmarks" | "conversions" | "history";
 
 const ALL_SOURCES: Array<{ id: SearchSource; label: string }> = [
-  { id: "openalex", label: "OpenAlex" },
-  { id: "arxiv", label: "arXiv" },
-  { id: "europepmc", label: "Europe PMC" },
-  { id: "doaj", label: "DOAJ" },
+  { id: "openalex", label: "OpenAlex Q1" },
+  { id: "europepmc", label: "Europe PMC Q1" },
 ];
 
 const STARTER_QUERIES = [
   "machine learning healthcare",
-  "energi terbarukan Indonesia",
+  "renewable energy policy",
   "large language models",
-  "ekonomi digital UMKM",
+  "pembelajaran mesin kesehatan",
 ];
 
 const MODE_BADGE: Record<string, string> = {
@@ -77,13 +79,12 @@ export function JournalWorkspace() {
   const [query, setQuery] = useState("");
   const [selectedSources, setSelectedSources] = useState<SearchSource[]>([
     "openalex",
-    "arxiv",
     "europepmc",
-    "doaj",
   ]);
   const [pdfOnly, setPdfOnly] = useState(false);
   const [yearFrom, setYearFrom] = useState<string>("");
   const [sort, setSort] = useState<SortOption>("relevance");
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   // Data states
   const [searchResult, setSearchResult] = useState<SearchResponse | null>(null);
@@ -94,6 +95,12 @@ export function JournalWorkspace() {
   const [history, setHistory] = useState<SearchHistoryRecord[]>([]);
   const [conversions, setConversions] = useState<ConversionRecord[]>([]);
   const [loadingSidebar, setLoadingSidebar] = useState(true);
+
+  // Reader modal state
+  const [readerState, setReaderState] = useState<{
+    paper: JournalPaper;
+    autoTranslate: boolean;
+  } | null>(null);
 
   // Action states
   const [downloadingPdfKey, setDownloadingPdfKey] = useState<string | null>(
@@ -174,7 +181,7 @@ export function JournalWorkspace() {
       try {
         const params = new URLSearchParams();
         params.set("q", q);
-        if (selectedSources.length > 0 && selectedSources.length < 4) {
+        if (selectedSources.length > 0 && selectedSources.length < 2) {
           params.set("sources", selectedSources.join(","));
         }
         if (pdfOnly) params.set("pdfOnly", "true");
@@ -190,7 +197,6 @@ export function JournalWorkspace() {
         }
 
         setSearchResult(data);
-        // Refresh search history from Neon
         const hRes = await fetch("/api/history");
         if (hRes.ok) {
           const hJson = (await hRes.json()) as {
@@ -243,12 +249,12 @@ export function JournalWorkspace() {
       setBookmarks((prev) => [data.bookmark, ...prev]);
       setNotice({
         type: "success",
-        message: "Jurnal disimpan ke database Neon Singapore.",
+        message: "Jurnal Q1 disimpan ke daftar Tersimpan Anda.",
       });
     } else {
       setNotice({
         type: "error",
-        message: "Gagal menyimpan jurnal ke daftar Tersimpan.",
+        message: "Gagal menyimpan jurnal.",
       });
     }
   };
@@ -284,7 +290,7 @@ export function JournalWorkspace() {
       const blob = await res.blob();
       const filename = parseFilenameFromHeader(
         res.headers.get("content-disposition"),
-        "jurnal-akademik.pdf"
+        "jurnal-q1.pdf"
       );
       triggerBlobDownload(blob, filename);
       setNotice({
@@ -330,7 +336,6 @@ export function JournalWorkspace() {
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as {
           error?: string;
-          code?: string;
         };
         setNotice({
           type: "error",
@@ -343,7 +348,7 @@ export function JournalWorkspace() {
       const blob = await res.blob();
       const filename = parseFilenameFromHeader(
         res.headers.get("content-disposition"),
-        "jurnal-terkonversi.docx"
+        "jurnal-q1.docx"
       );
       triggerBlobDownload(blob, filename);
 
@@ -351,11 +356,10 @@ export function JournalWorkspace() {
       setNotice({
         type: "success",
         message: isCached
-          ? "Dokumen Word (.docx) diambil dari cache Neon dan siap diunduh."
-          : "Dokumen Word (.docx) selesai dibuat oleh mv/zai-glm-5-3-flash!",
+          ? "Dokumen Word (.docx) diambil dari cache dan siap diunduh."
+          : "Dokumen Word (.docx) selesai dibuat oleh AI!",
       });
 
-      // Refresh conversion history
       const cRes = await fetch("/api/conversions");
       if (cRes.ok) {
         const cJson = (await cRes.json()) as {
@@ -388,27 +392,33 @@ export function JournalWorkspace() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col pb-20 md:pb-0">
       {/* Top Masthead */}
       <header className="sticky top-0 z-20 border-b border-[#E5DFD5] bg-[#FAF8F4]/95 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1B4D3E] text-white">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#1B4D3E] text-white">
               <BookOpen className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="font-serif text-xl font-bold tracking-tight text-[#1C1917]">
-                PustakaCari
-              </h1>
-              <p className="text-xs text-[#57534E]">
-                Pencarian Jurnal Open-Access &amp; Konversi Word AI
+              <div className="flex items-center gap-2">
+                <h1 className="font-serif text-lg font-bold tracking-tight text-[#1C1917] sm:text-xl">
+                  PustakaCari
+                </h1>
+                <span className="rounded bg-[#1B4D3E] px-1.5 py-0.5 font-mono text-[10px] font-bold text-white">
+                  Q1 ONLY
+                </span>
+              </div>
+              <p className="hidden text-xs text-[#57534E] sm:block">
+                Jurnal Ilmiah Q1 Terverifikasi · Baca PDF &amp; Terjemahan Otomatis
               </p>
             </div>
           </div>
 
+          {/* Desktop Navigation Tabs */}
           <nav
             aria-label="Navigasi utama"
-            className="flex items-center gap-1 rounded-lg border border-[#E5DFD5] bg-[#F2EFE9] p-1"
+            className="hidden items-center gap-1 rounded-lg border border-[#E5DFD5] bg-[#F2EFE9] p-1 md:flex"
           >
             <button
               type="button"
@@ -420,7 +430,7 @@ export function JournalWorkspace() {
               }`}
             >
               <Search className="h-3.5 w-3.5" />
-              Pencarian
+              Pencarian Q1
             </button>
             <button
               type="button"
@@ -454,25 +464,22 @@ export function JournalWorkspace() {
             </button>
           </nav>
 
-          <div className="hidden items-center gap-2 text-[11px] text-[#57534E] lg:flex">
-            <span className="inline-flex items-center gap-1 rounded-md border border-[#E5DFD5] bg-white px-2.5 py-1 font-mono">
-              <Database className="h-3 w-3 text-[#1B4D3E]" />
-              Neon SG
-            </span>
-            <span className="rounded-md border border-[#E5DFD5] bg-white px-2.5 py-1 font-mono">
-              mv/zai-glm-5-3-flash
+          <div className="flex items-center gap-2">
+            <PwaRegistrar />
+            <span className="hidden items-center gap-1 rounded-md border border-[#E5DFD5] bg-white px-2.5 py-1 text-[11px] font-medium text-[#1B4D3E] lg:inline-flex">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Filter Q1 Aktif
             </span>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
-        {/* Global Notification Banner */}
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 sm:px-6 sm:py-6">
         {notice && (
           <div
             role="status"
-            className={`mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${
+            className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${
               notice.type === "error"
                 ? "border-[#9A3412]/30 bg-[#9A3412]/8 text-[#7C2D12]"
                 : notice.type === "success"
@@ -509,16 +516,15 @@ export function JournalWorkspace() {
 
         {activeTab === "search" && (
           <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-            {/* Left / Main Search Column */}
+            {/* Main Search Column */}
             <div>
-              {/* Search Form */}
-              <section className="rounded-xl border border-[#E5DFD5] bg-white p-4 sm:p-5">
+              <section className="rounded-xl border border-[#E5DFD5] bg-white p-3.5 sm:p-5">
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
                     void runSearch();
                   }}
-                  className="flex flex-col gap-3 sm:flex-row"
+                  className="flex flex-col gap-2.5 sm:flex-row sm:gap-3"
                 >
                   <div className="relative flex-1">
                     <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#78716C]" />
@@ -526,30 +532,60 @@ export function JournalWorkspace() {
                       type="search"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Cari topik, judul, penulis, atau DOI (mis. machine learning healthcare)..."
-                      className="w-full rounded-lg border border-[#CFC6B8] bg-[#FAF8F4] py-2.5 pl-10 pr-4 text-sm text-[#1C1917] placeholder:text-[#78716C] focus:border-[#1B4D3E] focus:bg-white focus:outline-none"
+                      placeholder="Cari jurnal Q1 (Bahasa Indonesia / Inggris)..."
+                      className="min-h-[44px] w-full rounded-lg border border-[#CFC6B8] bg-[#FAF8F4] py-2.5 pl-10 pr-4 text-base text-[#1C1917] placeholder:text-[#78716C] focus:border-[#1B4D3E] focus:bg-white focus:outline-none sm:text-sm"
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={searching}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#1B4D3E] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#143B2F] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#1B4D3E] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#143B2F] disabled:opacity-60"
                   >
                     {searching ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Search className="h-4 w-4" />
                     )}
-                    {searching ? "Mencari..." : "Cari Jurnal"}
+                    {searching ? "Mencari Q1..." : "Cari Jurnal Q1"}
                   </button>
                 </form>
 
-                {/* Filter Controls */}
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#F2EFE9] pt-3.5">
+                {/* Mobile Filter Toggle */}
+                <div className="mt-3 flex items-center justify-between border-t border-[#F2EFE9] pt-2.5 sm:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowMobileFilters((v) => !v)}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#57534E]"
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    Filter &amp; Urutan Q1
+                    {showMobileFilters ? (
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                  <label className="inline-flex items-center gap-1.5 text-xs text-[#1C1917]">
+                    <input
+                      type="checkbox"
+                      checked={pdfOnly}
+                      onChange={(e) => setPdfOnly(e.target.checked)}
+                      className="h-4 w-4 accent-[#1B4D3E]"
+                    />
+                    PDF saja
+                  </label>
+                </div>
+
+                {/* Filter Controls (always visible on sm+, toggleable on mobile) */}
+                <div
+                  className={`mt-3 flex-wrap items-center justify-between gap-3 border-t border-[#F2EFE9] pt-3.5 sm:mt-4 sm:flex ${
+                    showMobileFilters ? "flex" : "hidden"
+                  }`}
+                >
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="mr-1 inline-flex items-center gap-1 text-xs font-medium text-[#57534E]">
                       <SlidersHorizontal className="h-3.5 w-3.5" />
-                      Sumber:
+                      Indeks Q1:
                     </span>
                     {ALL_SOURCES.map((src) => {
                       const active = selectedSources.includes(src.id);
@@ -558,10 +594,10 @@ export function JournalWorkspace() {
                           key={src.id}
                           type="button"
                           onClick={() => toggleSource(src.id)}
-                          className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+                          className={`min-h-[34px] rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
                             active
                               ? "border-[#1B4D3E] bg-[#1B4D3E]/10 text-[#1B4D3E]"
-                              : "border-[#E5DFD5] bg-[#FAF8F4] text-[#57534E] hover:border-[#CFC6B8]"
+                              : "border-[#E5DFD5] bg-[#FAF8F4] text-[#57534E]"
                           }`}
                         >
                           {src.label}
@@ -571,7 +607,7 @@ export function JournalWorkspace() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 text-xs">
-                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-[#1C1917]">
+                    <label className="hidden cursor-pointer items-center gap-1.5 text-[#1C1917] sm:inline-flex">
                       <input
                         type="checkbox"
                         checked={pdfOnly}
@@ -585,7 +621,7 @@ export function JournalWorkspace() {
                       aria-label="Filter tahun minimal"
                       value={yearFrom}
                       onChange={(e) => setYearFrom(e.target.value)}
-                      className="rounded-md border border-[#CFC6B8] bg-[#FAF8F4] px-2 py-1 text-xs text-[#1C1917]"
+                      className="min-h-[36px] rounded-md border border-[#CFC6B8] bg-[#FAF8F4] px-2.5 py-1 text-xs text-[#1C1917]"
                     >
                       <option value="">Semua Tahun</option>
                       <option value="2024">Sejak 2024</option>
@@ -598,9 +634,10 @@ export function JournalWorkspace() {
                       aria-label="Urutkan hasil"
                       value={sort}
                       onChange={(e) => setSort(e.target.value as SortOption)}
-                      className="rounded-md border border-[#CFC6B8] bg-[#FAF8F4] px-2 py-1 text-xs text-[#1C1917]"
+                      className="min-h-[36px] rounded-md border border-[#CFC6B8] bg-[#FAF8F4] px-2.5 py-1 text-xs text-[#1C1917]"
                     >
                       <option value="relevance">Relevansi + PDF</option>
+                      <option value="impact">Impact Factor Tertinggi</option>
                       <option value="newest">Terbaru</option>
                       <option value="citations">Sitasi Terbanyak</option>
                     </select>
@@ -608,14 +645,12 @@ export function JournalWorkspace() {
                 </div>
               </section>
 
-              {/* Search Error */}
               {searchError && (
                 <div className="mt-4 rounded-xl border border-[#9A3412]/30 bg-[#9A3412]/8 p-4 text-sm text-[#7C2D12]">
                   {searchError}
                 </div>
               )}
 
-              {/* Loading Skeletons */}
               {searching && (
                 <div className="mt-5 space-y-4">
                   {[1, 2, 3].map((n) => (
@@ -624,8 +659,8 @@ export function JournalWorkspace() {
                       className="animate-pulse rounded-xl border border-[#E5DFD5] bg-white p-5"
                     >
                       <div className="mb-3 flex gap-2">
-                        <div className="h-5 w-20 rounded bg-[#F2EFE9]" />
-                        <div className="h-5 w-14 rounded bg-[#F2EFE9]" />
+                        <div className="h-5 w-12 rounded bg-[#F2EFE9]" />
+                        <div className="h-5 w-24 rounded bg-[#F2EFE9]" />
                       </div>
                       <div className="h-6 w-3/4 rounded bg-[#F2EFE9]" />
                       <div className="mt-2 h-4 w-1/2 rounded bg-[#F2EFE9]" />
@@ -635,7 +670,6 @@ export function JournalWorkspace() {
                 </div>
               )}
 
-              {/* Search Results */}
               {!searching && searchResult && (
                 <div className="mt-5">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[#57534E]">
@@ -644,7 +678,7 @@ export function JournalWorkspace() {
                       <strong className="font-mono tabular-nums text-[#1C1917]">
                         {searchResult.total}
                       </strong>{" "}
-                      jurnal untuk &ldquo;{searchResult.query}&rdquo;
+                      jurnal Q1 untuk &ldquo;{searchResult.query}&rdquo;
                     </span>
                     <div className="flex flex-wrap items-center gap-2">
                       {searchResult.sourceStats.map((st) => (
@@ -659,14 +693,14 @@ export function JournalWorkspace() {
                   </div>
 
                   {searchResult.papers.length === 0 ? (
-                    <div className="rounded-xl border border-[#E5DFD5] bg-white p-8 text-center">
+                    <div className="rounded-xl border border-[#E5DFD5] bg-white p-6 text-center sm:p-8">
                       <p className="font-serif text-lg font-semibold text-[#1C1917]">
-                        Tidak ada jurnal yang cocok
+                        Tidak ada jurnal Q1 yang cocok
                       </p>
                       <p className="mt-1 text-sm text-[#57534E]">
-                        Coba gunakan kata kunci berbahasa Inggris, matikan
-                        filter &ldquo;Hanya PDF langsung&rdquo;, atau perluas
-                        rentang tahun.
+                        Karena pencarian dikhususkan untuk jurnal Q1 bereputasi
+                        tinggi, coba gunakan kata kunci berbahasa Inggris atau
+                        matikan filter &ldquo;Hanya PDF langsung&rdquo;.
                       </p>
                     </div>
                   ) : (
@@ -678,6 +712,9 @@ export function JournalWorkspace() {
                           isBookmarked={bookmarkedMap.has(paper.paperKey)}
                           onToggleBookmark={handleToggleBookmark}
                           onDownloadPdf={handleDownloadPdf}
+                          onOpenReader={(p, autoTranslate = false) =>
+                            setReaderState({ paper: p, autoTranslate })
+                          }
                           onConvertWord={handleConvertWord}
                           downloadingPdfKey={downloadingPdfKey}
                           convertingKey={convertingKey}
@@ -688,18 +725,17 @@ export function JournalWorkspace() {
                 </div>
               )}
 
-              {/* Initial Empty State */}
               {!searching && !searchResult && (
-                <div className="mt-5 rounded-xl border border-[#E5DFD5] bg-white p-6 sm:p-8">
+                <div className="mt-5 rounded-xl border border-[#E5DFD5] bg-white p-5 sm:p-8">
                   <h2 className="font-serif text-lg font-semibold text-[#1C1917]">
-                    Mulai Telusuri Literatur Ilmiah
+                    Telusuri Jurnal Ilmiah Q1 Terverifikasi
                   </h2>
                   <p className="mt-1.5 max-w-[65ch] text-sm leading-relaxed text-[#57534E]">
-                    Ketik topik penelitian atau judul jurnal di atas. Sistem
-                    akan menelusuri OpenAlex, arXiv, Europe PMC, dan DOAJ secara
-                    paralel, menampilkan tautan PDF yang tersedia, serta
-                    menyediakan konversi ke dokumen Microsoft Word (.docx)
-                    berbasis AI.
+                    Semua hasil disaring otomatis hanya dari jurnal peer-review
+                    kuartil 1 (Q1) berdasarkan metrik Impact Factor &amp;
+                    h-index. Anda dapat membaca PDF langsung di aplikasi,
+                    menerjemahkan otomatis dari bahasa apa pun ke Bahasa
+                    Indonesia, dan mengunduh versi Word (.docx).
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     {STARTER_QUERIES.map((sample) => (
@@ -707,7 +743,7 @@ export function JournalWorkspace() {
                         key={sample}
                         type="button"
                         onClick={() => void runSearch(sample)}
-                        className="rounded-lg border border-[#CFC6B8] bg-[#FAF8F4] px-3 py-1.5 text-xs font-medium text-[#1C1917] transition-colors hover:border-[#1B4D3E] hover:bg-[#1B4D3E]/8 hover:text-[#1B4D3E]"
+                        className="min-h-[38px] rounded-lg border border-[#CFC6B8] bg-[#FAF8F4] px-3 py-1.5 text-xs font-medium text-[#1C1917] transition-colors hover:border-[#1B4D3E] hover:bg-[#1B4D3E]/8 hover:text-[#1B4D3E]"
                       >
                         {sample}
                       </button>
@@ -717,8 +753,8 @@ export function JournalWorkspace() {
               )}
             </div>
 
-            {/* Right Sidebar: Recent History & Recent Word Conversions */}
-            <aside className="space-y-5">
+            {/* Desktop Right Sidebar */}
+            <aside className="hidden space-y-5 lg:block">
               <section className="rounded-xl border border-[#E5DFD5] bg-[#F2EFE9]/70 p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[#57534E]">
@@ -728,7 +764,7 @@ export function JournalWorkspace() {
                   {history.length > 0 && (
                     <button
                       type="button"
-                      onClick={handleClearHistory}
+                      onClick={() => void handleClearHistory()}
                       className="text-[11px] font-medium text-[#78716C] hover:text-[#9A3412]"
                     >
                       Bersihkan
@@ -743,7 +779,7 @@ export function JournalWorkspace() {
                   </div>
                 ) : history.length === 0 ? (
                   <p className="text-xs text-[#57534E]">
-                    Belum ada riwayat pencarian tersimpan.
+                    Belum ada riwayat pencarian Anda.
                   </p>
                 ) : (
                   <ul className="space-y-1.5">
@@ -786,8 +822,7 @@ export function JournalWorkspace() {
 
                 {conversions.length === 0 ? (
                   <p className="text-xs text-[#57534E]">
-                    Hasil konversi .docx Anda akan muncul di sini untuk diunduh
-                    ulang kapan saja.
+                    Hasil konversi &amp; terjemahan .docx Anda tersimpan di sini.
                   </p>
                 ) : (
                   <ul className="space-y-2">
@@ -822,11 +857,9 @@ export function JournalWorkspace() {
 
         {activeTab === "bookmarks" && (
           <section>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-serif text-xl font-semibold text-[#1C1917]">
-                Jurnal Tersimpan ({bookmarks.length})
-              </h2>
-            </div>
+            <h2 className="mb-4 font-serif text-xl font-semibold text-[#1C1917]">
+              Jurnal Q1 Tersimpan ({bookmarks.length})
+            </h2>
 
             {bookmarks.length === 0 ? (
               <div className="rounded-xl border border-[#E5DFD5] bg-white p-8 text-center">
@@ -835,7 +868,7 @@ export function JournalWorkspace() {
                 </p>
                 <p className="mt-1 text-sm text-[#57534E]">
                   Klik tombol &ldquo;Simpan&rdquo; pada hasil pencarian untuk
-                  menyimpan jurnal ke database Neon Singapore.
+                  menyimpannya ke koleksi pribadi Anda.
                 </p>
               </div>
             ) : (
@@ -860,6 +893,9 @@ export function JournalWorkspace() {
                     isBookmarked={true}
                     onToggleBookmark={handleToggleBookmark}
                     onDownloadPdf={handleDownloadPdf}
+                    onOpenReader={(p, autoTranslate = false) =>
+                      setReaderState({ paper: p, autoTranslate })
+                    }
                     onConvertWord={handleConvertWord}
                     downloadingPdfKey={downloadingPdfKey}
                     convertingKey={convertingKey}
@@ -872,11 +908,9 @@ export function JournalWorkspace() {
 
         {activeTab === "conversions" && (
           <section>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-serif text-xl font-semibold text-[#1C1917]">
-                Riwayat Konversi Word ({conversions.length})
-              </h2>
-            </div>
+            <h2 className="mb-4 font-serif text-xl font-semibold text-[#1C1917]">
+              Riwayat Konversi &amp; Terjemahan Word ({conversions.length})
+            </h2>
 
             {conversions.length === 0 ? (
               <div className="rounded-xl border border-[#E5DFD5] bg-white p-8 text-center">
@@ -884,8 +918,8 @@ export function JournalWorkspace() {
                   Belum ada riwayat konversi Word
                 </p>
                 <p className="mt-1 text-sm text-[#57534E]">
-                  Pilih salah satu jurnal dari hasil pencarian lalu klik
-                  &ldquo;Convert ke Word (.docx)&rdquo;.
+                  Pilih salah satu jurnal Q1 lalu klik &ldquo;Convert Word&rdquo;
+                  atau &ldquo;Terjemahkan ID&rdquo;.
                 </p>
               </div>
             ) : (
@@ -917,7 +951,7 @@ export function JournalWorkspace() {
                     <div className="flex items-center gap-2">
                       <a
                         href={`/api/conversions/${conv.id}/download`}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#1B4D3E] px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#143B2F]"
+                        className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg bg-[#1B4D3E] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#143B2F]"
                       >
                         <FileDown className="h-3.5 w-3.5" />
                         Unduh .docx
@@ -926,7 +960,7 @@ export function JournalWorkspace() {
                         type="button"
                         aria-label="Hapus riwayat konversi"
                         onClick={() => void handleDeleteConversion(conv.id)}
-                        className="rounded-lg border border-[#E5DFD5] p-2 text-[#78716C] transition-colors hover:border-[#9A3412]/40 hover:text-[#9A3412]"
+                        className="min-h-[40px] rounded-lg border border-[#E5DFD5] p-2 text-[#78716C] hover:border-[#9A3412]/40 hover:text-[#9A3412]"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -937,7 +971,112 @@ export function JournalWorkspace() {
             )}
           </section>
         )}
+
+        {activeTab === "history" && (
+          <section>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-serif text-xl font-semibold text-[#1C1917]">
+                Riwayat Pencarian ({history.length})
+              </h2>
+              {history.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void handleClearHistory()}
+                  className="text-xs font-medium text-[#9A3412] hover:underline"
+                >
+                  Bersihkan Semua
+                </button>
+              )}
+            </div>
+            {history.length === 0 ? (
+              <div className="rounded-xl border border-[#E5DFD5] bg-white p-8 text-center">
+                <p className="text-sm text-[#57534E]">
+                  Belum ada riwayat pencarian.
+                </p>
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {history.map((item) => (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      onClick={() => void runSearch(item.query)}
+                      className="flex min-h-[48px] w-full items-center justify-between rounded-xl border border-[#E5DFD5] bg-white px-4 py-3 text-left text-sm"
+                    >
+                      <span className="font-medium text-[#1C1917]">
+                        {item.query}
+                      </span>
+                      <span className="font-mono text-xs text-[#57534E]">
+                        {item.resultCount} Q1
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
       </main>
+
+      {/* Mobile Sticky Bottom Navigation */}
+      <nav
+        aria-label="Navigasi seluler"
+        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-[#E5DFD5] bg-[#FAF8F4]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm md:hidden"
+      >
+        <button
+          type="button"
+          onClick={() => setActiveTab("search")}
+          className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[11px] font-semibold ${
+            activeTab === "search" ? "text-[#1B4D3E]" : "text-[#57534E]"
+          }`}
+        >
+          <Search className="h-4 w-4" />
+          Cari Q1
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("bookmarks")}
+          className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[11px] font-semibold ${
+            activeTab === "bookmarks" ? "text-[#1B4D3E]" : "text-[#57534E]"
+          }`}
+        >
+          <Bookmark className="h-4 w-4" />
+          Simpan ({bookmarks.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("conversions")}
+          className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[11px] font-semibold ${
+            activeTab === "conversions" ? "text-[#1B4D3E]" : "text-[#57534E]"
+          }`}
+        >
+          <FileText className="h-4 w-4" />
+          Word ({conversions.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("history")}
+          className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[11px] font-semibold ${
+            activeTab === "history" ? "text-[#1B4D3E]" : "text-[#57534E]"
+          }`}
+        >
+          <History className="h-4 w-4" />
+          Riwayat
+        </button>
+      </nav>
+
+      {/* In-App PDF Reader & Universal Auto-Translate Modal */}
+      {readerState && (
+        <PdfReaderModal
+          paper={readerState.paper}
+          initialTranslate={readerState.autoTranslate}
+          onClose={() => setReaderState(null)}
+          onDownloadPdf={handleDownloadPdf}
+          onDownloadTranslatedDocx={(p) =>
+            handleConvertWord(p, "translate_id")
+          }
+        />
+      )}
     </div>
   );
 }

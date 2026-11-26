@@ -10,6 +10,8 @@ import {
   fetchPdfBuffer,
   sanitizeFilename,
 } from "@/lib/pdf";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { attachSessionCookie, getSessionContext } from "@/lib/session";
 import type { ConversionMode } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -28,6 +30,8 @@ const convertSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const { sessionId, isNew } = getSessionContext(request);
+
   let body: z.infer<typeof convertSchema>;
   try {
     const raw = await request.json();
@@ -42,7 +46,7 @@ export async function POST(request: NextRequest) {
   const mode: ConversionMode = body.mode;
   const db = getDb();
 
-  // Check cache in Neon unless force=true
+  // Check global Neon cache first
   if (!body.force) {
     try {
       const existing = await db
@@ -71,7 +75,7 @@ export async function POST(request: NextRequest) {
         });
 
         const filename = sanitizeFilename(`${body.title}-${mode}`, "docx");
-        return new NextResponse(new Uint8Array(docxBuffer), {
+        const res = new NextResponse(new Uint8Array(docxBuffer), {
           status: 200,
           headers: {
             "Content-Type":
@@ -81,13 +85,27 @@ export async function POST(request: NextRequest) {
             "X-Cached": "true",
           },
         });
+        return attachSessionCookie(res, sessionId, isNew);
       }
     } catch (err) {
       console.warn("Conversion cache lookup failed:", err);
     }
   }
 
-  // Extract PDF text if pdfUrl is available
+  // Rate limit only on cache miss
+  const rl = await checkRateLimit(request, "convert_word", 10, 600);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      {
+        error: `Batas konversi AI tercapai (maks 10 per 10 menit). Coba lagi dalam ${rl.retryAfterSeconds} detik.`,
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rl.retryAfterSeconds) },
+      }
+    );
+  }
+
   let extractedText: string | null = null;
   if (body.pdfUrl) {
     try {
@@ -125,6 +143,7 @@ export async function POST(request: NextRequest) {
       const [inserted] = await db
         .insert(conversions)
         .values({
+          sessionId,
           paperKey: body.paperKey,
           title: body.title,
           authors: body.authors,
@@ -152,7 +171,7 @@ export async function POST(request: NextRequest) {
     });
 
     const filename = sanitizeFilename(`${body.title}-${mode}`, "docx");
-    return new NextResponse(new Uint8Array(docxBuffer), {
+    const res = new NextResponse(new Uint8Array(docxBuffer), {
       status: 200,
       headers: {
         "Content-Type":
@@ -162,6 +181,7 @@ export async function POST(request: NextRequest) {
         "X-Cached": "false",
       },
     });
+    return attachSessionCookie(res, sessionId, isNew);
   } catch (err) {
     if (err instanceof InferHubError) {
       const status = err.code === "MISSING_API_KEY" ? 503 : err.status || 502;

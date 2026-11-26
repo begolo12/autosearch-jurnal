@@ -1,8 +1,6 @@
 import {
-  searchArxiv,
-  searchDoaj,
-  searchEuropePmc,
-  searchOpenAlex,
+  searchEuropePmcQ1,
+  searchOpenAlexQ1,
 } from "@/lib/search/sources";
 import type {
   JournalPaper,
@@ -12,23 +10,19 @@ import type {
   SourceStat,
 } from "@/lib/types";
 
-const ALL_SOURCES: SearchSource[] = ["openalex", "arxiv", "europepmc", "doaj"];
-
-const SOURCE_FETCHERS: Record<
-  SearchSource,
-  (query: string, limit?: number) => Promise<JournalPaper[]>
-> = {
-  openalex: searchOpenAlex,
-  arxiv: searchArxiv,
-  europepmc: searchEuropePmc,
-  doaj: searchDoaj,
-};
+const ALL_SOURCES: SearchSource[] = ["openalex", "europepmc"];
 
 function normalizeTitle(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 function mergePapers(existing: JournalPaper, incoming: JournalPaper): JournalPaper {
+  const bestMetrics =
+    (existing.journalMetrics?.impactFactor ?? 0) >=
+    (incoming.journalMetrics?.impactFactor ?? 0)
+      ? existing.journalMetrics
+      : incoming.journalMetrics;
+
   return {
     ...existing,
     pdfUrl: existing.pdfUrl || incoming.pdfUrl,
@@ -36,6 +30,8 @@ function mergePapers(existing: JournalPaper, incoming: JournalPaper): JournalPap
     doi: existing.doi || incoming.doi,
     venue: existing.venue || incoming.venue,
     year: existing.year ?? incoming.year,
+    language: existing.language || incoming.language,
+    journalMetrics: bestMetrics,
     authors:
       existing.authors.length >= incoming.authors.length
         ? existing.authors
@@ -44,9 +40,10 @@ function mergePapers(existing: JournalPaper, incoming: JournalPaper): JournalPap
       (existing.abstract?.length ?? 0) >= (incoming.abstract?.length ?? 0)
         ? existing.abstract
         : incoming.abstract,
-    citations: Math.max(existing.citations ?? -1, incoming.citations ?? -1) >= 0
-      ? Math.max(existing.citations ?? 0, incoming.citations ?? 0)
-      : null,
+    citations:
+      Math.max(existing.citations ?? -1, incoming.citations ?? -1) >= 0
+        ? Math.max(existing.citations ?? 0, incoming.citations ?? 0)
+        : null,
     openAccess: existing.openAccess || incoming.openAccess,
   };
 }
@@ -64,7 +61,10 @@ export async function aggregateJournalSearch(params: {
 
   const settled = await Promise.allSettled(
     activeSources.map(async (source) => {
-      const papers = await SOURCE_FETCHERS[source](query, 14);
+      const papers =
+        source === "openalex"
+          ? await searchOpenAlexQ1(query, 45, Boolean(params.pdfOnly))
+          : await searchEuropePmcQ1(query, 20);
       return { source, papers };
     })
   );
@@ -99,6 +99,11 @@ export async function aggregateJournalSearch(params: {
   const titleIndex = new Map<string, string>();
 
   for (const paper of rawPapers) {
+    // Safety guard: strictly Q1 verified only
+    if (!paper.journalMetrics || paper.journalMetrics.quartile !== "Q1") {
+      continue;
+    }
+
     const doiKey = paper.doi ? `doi:${paper.doi.toLowerCase()}` : null;
     const titleKey = `t:${normalizeTitle(paper.title)}`;
 
@@ -128,12 +133,17 @@ export async function aggregateJournalSearch(params: {
   }
 
   const sort = params.sort ?? "relevance";
-  if (sort === "newest") {
+  if (sort === "impact") {
+    papers.sort(
+      (a, b) =>
+        (b.journalMetrics?.impactFactor ?? 0) -
+        (a.journalMetrics?.impactFactor ?? 0)
+    );
+  } else if (sort === "newest") {
     papers.sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
   } else if (sort === "citations") {
     papers.sort((a, b) => (b.citations ?? -1) - (a.citations ?? -1));
   } else {
-    // Relevance: prioritize papers with direct PDF available while keeping source order
     papers.sort((a, b) => Number(Boolean(b.pdfUrl)) - Number(Boolean(a.pdfUrl)));
   }
 

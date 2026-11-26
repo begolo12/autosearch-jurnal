@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { bookmarks } from "@/db/schema";
+import { attachSessionCookie, getSessionContext } from "@/lib/session";
 
 const bookmarkSchema = z.object({
   paperKey: z.string().min(1),
@@ -18,15 +19,21 @@ const bookmarkSchema = z.object({
   citations: z.number().nullable().optional(),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const { sessionId, isNew } = getSessionContext(request);
   try {
     const db = getDb();
     const rows = await db
       .select()
       .from(bookmarks)
+      .where(eq(bookmarks.sessionId, sessionId))
       .orderBy(desc(bookmarks.createdAt))
       .limit(100);
-    return NextResponse.json({ bookmarks: rows });
+    return attachSessionCookie(
+      NextResponse.json({ bookmarks: rows }),
+      sessionId,
+      isNew
+    );
   } catch (err) {
     console.error("GET /api/bookmarks error:", err);
     return NextResponse.json(
@@ -37,6 +44,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const { sessionId, isNew } = getSessionContext(request);
+
   let body: z.infer<typeof bookmarkSchema>;
   try {
     body = bookmarkSchema.parse(await request.json());
@@ -52,16 +61,26 @@ export async function POST(request: NextRequest) {
     const existing = await db
       .select()
       .from(bookmarks)
-      .where(eq(bookmarks.paperKey, body.paperKey))
+      .where(
+        and(
+          eq(bookmarks.sessionId, sessionId),
+          eq(bookmarks.paperKey, body.paperKey)
+        )
+      )
       .limit(1);
 
     if (existing.length > 0) {
-      return NextResponse.json({ bookmark: existing[0], existed: true });
+      return attachSessionCookie(
+        NextResponse.json({ bookmark: existing[0], existed: true }),
+        sessionId,
+        isNew
+      );
     }
 
     const [created] = await db
       .insert(bookmarks)
       .values({
+        sessionId,
         paperKey: body.paperKey,
         title: body.title,
         authors: body.authors,
@@ -76,7 +95,11 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
-    return NextResponse.json({ bookmark: created, existed: false }, { status: 201 });
+    return attachSessionCookie(
+      NextResponse.json({ bookmark: created, existed: false }, { status: 201 }),
+      sessionId,
+      isNew
+    );
   } catch (err) {
     console.error("POST /api/bookmarks error:", err);
     return NextResponse.json(

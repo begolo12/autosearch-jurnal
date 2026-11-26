@@ -4,10 +4,24 @@ import {
   PdfFetchError,
   sanitizeFilename,
 } from "@/lib/pdf";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function GET(request: NextRequest) {
+  const rl = await checkRateLimit(request, "pdf_download", 40, 60);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      {
+        error: `Batas unduhan PDF tercapai. Coba lagi dalam ${rl.retryAfterSeconds} detik.`,
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rl.retryAfterSeconds) },
+      }
+    );
+  }
+
   const url = request.nextUrl.searchParams.get("url");
-  const title = request.nextUrl.searchParams.get("title") || "jurnal-akademik";
+  const title = request.nextUrl.searchParams.get("title") || "jurnal-q1";
 
   if (!url) {
     return NextResponse.json(

@@ -36,6 +36,17 @@ yarn-error.log*
 # vercel
 .vercel
 
+# native wrappers
+desktop/node_modules
+desktop/dist
+desktop/icon.png
+mobile/node_modules
+mobile/android
+mobile/ios
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel
+.env*

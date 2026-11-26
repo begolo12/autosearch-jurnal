@@ -1,8 +1,15 @@
-export type SearchSource = "openalex" | "arxiv" | "europepmc" | "doaj";
+export type SearchSource = "openalex" | "europepmc";
 
 export type ConversionMode = "clean" | "translate_id" | "summary_id";
 
-export type SortOption = "relevance" | "newest" | "citations";
+export type SortOption = "relevance" | "impact" | "newest" | "citations";
+
+export interface JournalMetrics {
+  quartile: "Q1";
+  impactFactor: number;
+  hIndex: number;
+  issn: string | null;
+}
 
 export interface JournalPaper {
   paperKey: string;
@@ -17,6 +24,8 @@ export interface JournalPaper {
   doi: string | null;
   citations: number | null;
   openAccess: boolean;
+  language?: string | null;
+  journalMetrics?: JournalMetrics;
 }
 
 export interface SourceStat {

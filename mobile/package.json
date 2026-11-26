@@ -1,0 +1,12 @@
+{
+  "name": "pustakacari-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PustakaCari Capacitor Mobile Shell (Android APK & iOS)",
+  "dependencies": {
+    "@capacitor/android": "^7.2.0",
+    "@capacitor/cli": "^7.2.0",
+    "@capacitor/core": "^7.2.0",
+    "@capacitor/ios": "^7.2.0"
+  }
+}
