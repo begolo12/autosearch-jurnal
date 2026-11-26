@@ -1,7 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { Cloud, Loader2, Lock, Mail, User, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  Check,
+  Cloud,
+  Loader2,
+  Lock,
+  Mail,
+  RefreshCw,
+  ShieldCheck,
+  User,
+  X,
+} from "lucide-react";
 import type { AuthUser } from "@/lib/types";
 
 interface AuthModalProps {
@@ -14,18 +24,81 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [website, setWebsite] = useState("");
+
+  const [challengeQuestion, setChallengeQuestion] = useState("");
+  const [challengeToken, setChallengeToken] = useState("");
+  const [challengeAnswer, setChallengeAnswer] = useState("");
+  const [loadingChallenge, setLoadingChallenge] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const fetchChallenge = useCallback(async () => {
+    setLoadingChallenge(true);
+    try {
+      const res = await fetch("/api/auth/challenge", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { question?: string; token?: string };
+      if (data.question && data.token) {
+        setChallengeQuestion(data.question);
+        setChallengeToken(data.token);
+        setChallengeAnswer("");
+      }
+    } catch {
+      // Ignored
+    } finally {
+      setLoadingChallenge(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mode === "register") {
+      void fetchChallenge();
+    }
+  }, [mode, fetchChallenge]);
+
+  const hasMinLen = password.length >= 8 && password.length <= 72;
+  const hasLetterAndDigit =
+    /[A-Za-z]/.test(password) && /[0-9]/.test(password);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+
+    if (mode === "register") {
+      if (!hasMinLen || !hasLetterAndDigit) {
+        setError(
+          "Kata sandi wajib 8–72 karakter dengan kombinasi huruf dan angka."
+        );
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError("Konfirmasi kata sandi tidak cocok.");
+        return;
+      }
+      if (!challengeToken || !challengeAnswer.trim()) {
+        setError("Lengkapi jawaban verifikasi keamanan terlebih dahulu.");
+        return;
+      }
+    }
+
+    setLoading(true);
     try {
       const endpoint =
         mode === "login" ? "/api/auth/login" : "/api/auth/register";
       const payload =
-        mode === "login" ? { email, password } : { name, email, password };
+        mode === "login"
+          ? { email, password }
+          : {
+              name,
+              email,
+              password,
+              website,
+              challengeToken,
+              challengeAnswer: challengeAnswer.trim(),
+            };
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -34,6 +107,9 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
       const data = (await res.json()) as { user?: AuthUser; error?: string };
       if (!res.ok || !data.user) {
         setError(data.error || "Autentikasi gagal. Periksa data Anda.");
+        if (mode === "register") {
+          void fetchChallenge();
+        }
         return;
       }
       onSuccess(data.user);
@@ -51,7 +127,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
       aria-modal="true"
       aria-label="Akun SmartSari"
     >
-      <div className="animate-modal-in w-full max-w-md rounded-2xl border border-[#2C2E35] bg-[#151619] p-6 text-[#F4F4F5] shadow-2xl">
+      <div className="animate-modal-in max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[#2C2E35] bg-[#151619] p-6 text-[#F4F4F5] shadow-2xl">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#DB2777]/15 text-[#F472B6]">
@@ -108,6 +184,20 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
         </div>
 
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
+          {/* Off-screen honeypot trap for automated spam bots */}
+          <div className="sr-only" aria-hidden="true">
+            <label htmlFor="smartsari-website">Website</label>
+            <input
+              id="smartsari-website"
+              name="website"
+              type="text"
+              tabIndex={-1}
+              autoComplete="off"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+            />
+          </div>
+
           {mode === "register" && (
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-[#D4D4D8]">
@@ -119,6 +209,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                   type="text"
                   required
                   minLength={2}
+                  maxLength={80}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Nama peneliti / mahasiswa"
@@ -137,6 +228,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
               <input
                 type="email"
                 required
+                maxLength={160}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="nama@kampus.ac.id"
@@ -154,14 +246,100 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
               <input
                 type="password"
                 required
-                minLength={6}
+                minLength={mode === "register" ? 8 : 1}
+                maxLength={72}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Minimal 6 karakter"
+                placeholder={
+                  mode === "register"
+                    ? "Min. 8 karakter (huruf & angka)"
+                    : "Masukkan kata sandi"
+                }
                 className="w-full bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
               />
             </div>
           </label>
+
+          {mode === "register" && (
+            <>
+              <div className="flex flex-wrap gap-3 text-[11px]">
+                <span
+                  className={`inline-flex items-center gap-1 ${
+                    hasMinLen ? "text-[#4ADE80]" : "text-[#71717A]"
+                  }`}
+                >
+                  <Check className="h-3 w-3" />
+                  8–72 karakter
+                </span>
+                <span
+                  className={`inline-flex items-center gap-1 ${
+                    hasLetterAndDigit ? "text-[#4ADE80]" : "text-[#71717A]"
+                  }`}
+                >
+                  <Check className="h-3 w-3" />
+                  Kombinasi huruf &amp; angka
+                </span>
+              </div>
+
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-[#D4D4D8]">
+                  Konfirmasi Kata Sandi
+                </span>
+                <div className="flex items-center gap-2 rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2 focus-within:border-[#F472B6]">
+                  <Lock className="h-4 w-4 text-[#71717A]" />
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    maxLength={72}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Ulangi kata sandi"
+                    className="w-full bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
+                  />
+                </div>
+              </label>
+
+              {/* Signed Single-Use Anti-Bot Challenge */}
+              <div className="rounded-xl border border-[#2C2E35] bg-[#0E0F12] p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#F9A8D4]">
+                    <ShieldCheck className="h-3.5 w-3.5 text-[#F472B6]" />
+                    Verifikasi Anti-Bot
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void fetchChallenge()}
+                    disabled={loadingChallenge}
+                    aria-label="Muat ulang soal verifikasi"
+                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white disabled:opacity-50"
+                  >
+                    <RefreshCw
+                      className={`h-3 w-3 ${
+                        loadingChallenge ? "animate-spin" : ""
+                      }`}
+                    />
+                    Ganti soal
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <span className="shrink-0 rounded-lg border border-[#232429] bg-[#151619] px-3 py-1.5 font-mono text-xs font-semibold text-white">
+                    {challengeQuestion || "Memuat..."}
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    required
+                    value={challengeAnswer}
+                    onChange={(e) => setChallengeAnswer(e.target.value)}
+                    placeholder="Jawaban angka"
+                    className="min-w-0 flex-1 rounded-lg border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-sm text-white placeholder-[#71717A] focus:border-[#F472B6] focus:outline-none"
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
           {error && (
             <p className="rounded-lg border border-[#EF4444]/30 bg-[#EF4444]/10 px-3 py-2 text-xs text-[#FCA5A5]">
@@ -170,8 +348,9 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           )}
 
           <p className="text-[11px] leading-relaxed text-[#71717A]">
-            Jurnal tersimpan, proyek riset, dan riwayat di perangkat ini akan
-            otomatis digabungkan ke akun Anda.
+            {mode === "register"
+              ? "Dilindungi anti-bot, rate-limit berlapis, blokir email sementara & enkripsi scrypt."
+              : "Jurnal tersimpan, proyek riset, dan riwayat di perangkat ini akan otomatis digabungkan ke akun Anda."}
           </p>
 
           <button

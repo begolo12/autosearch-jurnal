@@ -8,14 +8,44 @@ import {
   migrateGuestDataToUser,
   verifyPassword,
 } from "@/lib/auth";
+import {
+  checkAuthRateLimit,
+  DUMMY_PASSWORD_HASH,
+  getAuthClientIpHash,
+  hashEmailKey,
+  isAllowedAuthOrigin,
+} from "@/lib/auth-security";
 import { getGuestSessionId } from "@/lib/session";
 
 const loginSchema = z.object({
-  email: z.string().trim().email("Format email tidak valid.").toLowerCase(),
-  password: z.string().min(1, "Kata sandi wajib diisi."),
+  email: z.string().trim().email("Format email tidak valid.").max(160).toLowerCase(),
+  password: z.string().min(1, "Kata sandi wajib diisi.").max(72),
 });
 
 export async function POST(request: NextRequest) {
+  if (!isAllowedAuthOrigin(request)) {
+    return NextResponse.json(
+      { error: "Permintaan berasal dari sumber yang tidak diizinkan." },
+      { status: 403 }
+    );
+  }
+
+  const ipHash = getAuthClientIpHash(request);
+  const ipRl = await checkAuthRateLimit(`auth_login_ip:${ipHash}`, 10, 900);
+  if (!ipRl.allowed) {
+    return NextResponse.json(
+      {
+        error: `Terlalu banyak percobaan login. Silakan tunggu ${Math.ceil(
+          ipRl.retryAfterSeconds / 60
+        )} menit.`,
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(ipRl.retryAfterSeconds) },
+      }
+    );
+  }
+
   let body: z.infer<typeof loginSchema>;
   try {
     body = loginSchema.parse(await request.json());
@@ -27,6 +57,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 
+  const emailRl = await checkAuthRateLimit(
+    `auth_login_email:${hashEmailKey(body.email)}`,
+    6,
+    900
+  );
+  if (!emailRl.allowed) {
+    return NextResponse.json(
+      {
+        error: `Akun sementara dikunci karena terlalu banyak percobaan. Tunggu ${Math.ceil(
+          emailRl.retryAfterSeconds / 60
+        )} menit.`,
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(emailRl.retryAfterSeconds) },
+      }
+    );
+  }
+
   try {
     const db = getDb();
     const rows = await db
@@ -36,7 +85,13 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     const user = rows[0];
-    if (!user || !verifyPassword(body.password, user.passwordHash)) {
+    // Always run scrypt verify to prevent timing-based email enumeration
+    const valid = verifyPassword(
+      body.password,
+      user ? user.passwordHash : DUMMY_PASSWORD_HASH
+    );
+
+    if (!user || !valid) {
       return NextResponse.json(
         { error: "Email atau kata sandi salah." },
         { status: 401 }
