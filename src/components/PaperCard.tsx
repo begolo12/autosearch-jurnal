@@ -132,10 +132,15 @@ export function PaperCard({
     }
   };
 
+  const tier = paper.journalMetrics?.primaryTier;
   const tierLabel = paper.journalMetrics?.tierLabel || "Q1";
-  const isTopTier =
-    paper.journalMetrics?.primaryTier === "Q1" ||
-    paper.journalMetrics?.primaryTier === "SINTA1";
+
+  const tierBadgeClass =
+    tier === "Q1" || tier === "SINTA1"
+      ? "bg-[#DB2777] text-white"
+      : tier === "Q2" || tier === "SINTA2"
+        ? "bg-[#FCE7F3] text-[#9D174D]"
+        : "border border-[#E2CDD8] bg-[#FFF8FA] text-[#52525B]";
 
   const metaItems: string[] = [];
   if (paper.authors.length > 0) {
@@ -153,38 +158,34 @@ export function PaperCard({
   if (paper.language) metaItems.push(paper.language);
 
   return (
-    <article className="py-5 sm:grid sm:grid-cols-[84px_1fr] sm:gap-5">
-      {/* Left Bibliographic Rank Margin */}
+    <article className="py-5 transition-colors duration-150 sm:grid sm:grid-cols-[88px_1fr] sm:gap-5">
+      {/* Left Rank Indicator */}
       <div className="mb-2 flex items-baseline gap-2.5 sm:mb-0 sm:block sm:pt-0.5">
-        <div
-          className={`inline-block rounded px-2 py-0.5 font-mono text-xs font-semibold tracking-tight ${
-            isTopTier
-              ? "bg-[#154033] text-white"
-              : "border border-[#C9C4B8] bg-[#F8F7F4] text-[#161513]"
-          }`}
+        <span
+          className={`inline-block rounded-md px-2 py-0.5 font-mono text-xs font-semibold tracking-tight ${tierBadgeClass}`}
         >
           {tierLabel}
-        </div>
+        </span>
         {paper.journalMetrics && (
-          <div className="flex items-center gap-2 font-mono text-[11px] tabular-nums text-[#78756E] sm:mt-1.5 sm:block sm:space-y-0.5">
+          <div className="flex items-center gap-2 font-mono text-[11px] tabular-nums text-[#71717A] sm:mt-1.5 sm:block sm:space-y-0.5">
             <div>IF {paper.journalMetrics.impactFactor}</div>
             <div>H-{paper.journalMetrics.hIndex}</div>
           </div>
         )}
       </div>
 
-      {/* Right Content Column */}
+      {/* Main Content */}
       <div className="min-w-0">
-        <h3 className="font-serif text-[1.125rem] font-semibold leading-snug tracking-[-0.015em] text-[#161513] sm:text-[1.18rem]">
+        <h3 className="text-[16px] font-semibold leading-snug tracking-[-0.015em] text-[#18181B] sm:text-[17px]">
           {translatedAbstract ? translatedAbstract.title : paper.title}
         </h3>
 
-        <p className="mt-1.5 text-[13px] leading-relaxed text-[#57554F]">
+        <p className="mt-1 text-[13px] leading-relaxed text-[#52525B]">
           {metaItems.join(" · ")}
         </p>
 
         {abstractText ? (
-          <div className="mt-2.5 max-w-[68ch] text-sm leading-relaxed text-[#2C2A27]">
+          <div className="mt-2.5 max-w-[68ch] text-sm leading-relaxed text-[#3F3F46]">
             <p>
               {translatedAbstract
                 ? translatedAbstract.abstract
@@ -195,7 +196,7 @@ export function PaperCard({
                 <button
                   type="button"
                   onClick={() => setExpandedAbstract((v) => !v)}
-                  className="inline-flex items-center gap-0.5 font-medium text-[#154033] hover:underline"
+                  className="inline-flex items-center gap-0.5 font-medium text-[#DB2777] hover:text-[#BE185D]"
                 >
                   {expandedAbstract ? (
                     <>
@@ -217,10 +218,10 @@ export function PaperCard({
                     ? setTranslatedAbstract(null)
                     : void handleTranslateAbstract()
                 }
-                className="inline-flex items-center gap-1 font-medium text-[#57554F] underline decoration-[#C9C4B8] underline-offset-2 transition-colors hover:text-[#154033] hover:decoration-[#154033] disabled:opacity-60"
+                className="inline-flex items-center gap-1 font-medium text-[#52525B] transition-colors hover:text-[#DB2777] disabled:opacity-60"
               >
                 {translatingAbstract ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <Loader2 className="h-3 w-3 animate-spin text-[#DB2777]" />
                 ) : (
                   <Languages className="h-3.5 w-3.5" />
                 )}
@@ -232,24 +233,24 @@ export function PaperCard({
               </button>
             </div>
             {abstractTranslateErr && (
-              <p className="mt-1 text-xs text-[#8C3B1A]">
+              <p className="mt-1 text-xs text-[#B91C1C]">
                 {abstractTranslateErr}
               </p>
             )}
           </div>
         ) : (
-          <p className="mt-2 text-xs italic text-[#78756E]">
+          <p className="mt-2 text-xs italic text-[#71717A]">
             Abstrak tidak tersedia di indeks sumber.
           </p>
         )}
 
-        {/* Editorial Action Bar */}
+        {/* Action Row */}
         <div className="mt-3.5 flex flex-wrap items-center gap-2">
           {paper.pdfUrl ? (
             <button
               type="button"
               onClick={() => onOpenReader(paper, false)}
-              className="inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-md bg-[#154033] px-3.5 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-[#0F2E24]"
+              className="inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-lg bg-[#DB2777] px-3.5 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-[#BE185D]"
             >
               <BookOpenText className="h-3.5 w-3.5" />
               Baca PDF
@@ -258,7 +259,7 @@ export function PaperCard({
             <button
               type="button"
               onClick={() => onOpenReader(paper, true)}
-              className="inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-md bg-[#154033] px-3.5 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-[#0F2E24]"
+              className="inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-lg bg-[#DB2777] px-3.5 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-[#BE185D]"
             >
               <Languages className="h-3.5 w-3.5" />
               Terjemahkan ID
@@ -269,7 +270,7 @@ export function PaperCard({
             <button
               type="button"
               onClick={() => onOpenReader(paper, true)}
-              className="inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-md border border-[#C9C4B8] bg-white px-3 py-1.5 text-xs font-medium text-[#161513] transition-colors duration-150 hover:border-[#154033] hover:text-[#154033]"
+              className="inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-lg border border-[#E2CDD8] bg-[#FFF8FA] px-3 py-1.5 text-xs font-medium text-[#9D174D] transition-colors duration-150 hover:border-[#DB2777] hover:bg-[#FDF2F8]"
             >
               <Languages className="h-3.5 w-3.5" />
               Terjemahkan ID
@@ -281,10 +282,10 @@ export function PaperCard({
               type="button"
               disabled={isPdfLoading}
               onClick={() => void onDownloadPdf(paper)}
-              className="inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-md border border-[#E2DFD7] bg-white px-3 py-1.5 text-xs font-medium text-[#57554F] transition-colors duration-150 hover:border-[#C9C4B8] hover:text-[#161513] disabled:opacity-60"
+              className="inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-lg border border-[#F1E4EB] bg-white px-3 py-1.5 text-xs font-medium text-[#52525B] transition-colors duration-150 hover:border-[#E2CDD8] hover:text-[#18181B] disabled:opacity-60"
             >
               {isPdfLoading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#DB2777]" />
               ) : (
                 <FileDown className="h-3.5 w-3.5" />
               )}
@@ -296,14 +297,14 @@ export function PaperCard({
             type="button"
             disabled={isConverting}
             onClick={() => setShowConvertPanel((v) => !v)}
-            className={`inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors duration-150 disabled:opacity-60 ${
+            className={`inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors duration-150 disabled:opacity-60 ${
               showConvertPanel
-                ? "border-[#154033] bg-[#F8F7F4] text-[#154033]"
-                : "border-[#E2DFD7] bg-white text-[#57554F] hover:border-[#C9C4B8] hover:text-[#161513]"
+                ? "border-[#DB2777] bg-[#FDF2F8] text-[#9D174D]"
+                : "border-[#F1E4EB] bg-white text-[#52525B] hover:border-[#E2CDD8] hover:text-[#18181B]"
             }`}
           >
             {isConverting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#DB2777]" />
             ) : (
               <FileText className="h-3.5 w-3.5" />
             )}
@@ -314,10 +315,10 @@ export function PaperCard({
             type="button"
             disabled={bookmarkPending}
             onClick={() => void handleBookmarkClick()}
-            className={`inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 ${
+            className={`inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 ${
               isBookmarked
-                ? "border-[#154033]/35 bg-[#154033]/8 text-[#154033]"
-                : "border-[#E2DFD7] bg-white text-[#57554F] hover:border-[#C9C4B8] hover:text-[#161513]"
+                ? "border-[#DB2777]/35 bg-[#FCE7F3] text-[#9D174D]"
+                : "border-[#F1E4EB] bg-white text-[#52525B] hover:border-[#E2CDD8] hover:text-[#18181B]"
             }`}
           >
             {isBookmarked ? (
@@ -333,7 +334,7 @@ export function PaperCard({
               href={paper.landingUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-[40px] sm:min-h-[34px] sm:ml-auto items-center gap-1 px-2 py-1.5 text-xs font-medium text-[#78756E] transition-colors hover:text-[#161513]"
+              className="inline-flex min-h-[40px] sm:min-h-[34px] sm:ml-auto items-center gap-1 px-2 py-1.5 text-xs font-medium text-[#71717A] transition-colors hover:text-[#18181B]"
             >
               Sumber <ExternalLink className="h-3 w-3" />
             </a>
@@ -342,12 +343,12 @@ export function PaperCard({
 
         {/* Inline Word Export Panel */}
         {showConvertPanel && (
-          <div className="mt-3 rounded-md border border-[#E2DFD7] bg-[#F8F7F4] p-3.5">
+          <div className="mt-3 rounded-lg border border-[#F1E4EB] bg-[#FFF8FA] p-3.5">
             <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <span className="font-semibold text-[#161513]">
+              <span className="font-semibold text-[#18181B]">
                 Format Dokumen Word (.docx)
               </span>
-              <span className="font-mono text-[11px] text-[#78756E]">
+              <span className="font-mono text-[11px] text-[#71717A]">
                 mv/zai-glm-5-3-flash
               </span>
             </div>
@@ -360,16 +361,16 @@ export function PaperCard({
                     key={opt.value}
                     type="button"
                     onClick={() => setSelectedMode(opt.value)}
-                    className={`rounded-md border p-2.5 text-left transition-colors duration-150 ${
+                    className={`rounded-lg border p-2.5 text-left transition-colors duration-150 ${
                       active
-                        ? "border-[#154033] bg-white"
-                        : "border-[#E2DFD7] bg-white/70 hover:border-[#C9C4B8]"
+                        ? "border-[#DB2777] bg-white"
+                        : "border-[#F1E4EB] bg-white/80 hover:border-[#E2CDD8]"
                     }`}
                   >
-                    <div className="text-xs font-semibold text-[#161513]">
+                    <div className="text-xs font-semibold text-[#18181B]">
                       {opt.label}
                     </div>
-                    <div className="mt-0.5 text-[11px] leading-snug text-[#57554F]">
+                    <div className="mt-0.5 text-[11px] leading-snug text-[#52525B]">
                       {opt.desc}
                     </div>
                   </button>
@@ -378,7 +379,7 @@ export function PaperCard({
             </div>
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[11px] text-[#57554F]">
+              <p className="text-[11px] text-[#52525B]">
                 {paper.pdfUrl
                   ? "Teks PDF diekstrak otomatis lalu disusun menjadi berkas .docx."
                   : "PDF langsung tidak tersedia; menggunakan metadata & abstrak."}
@@ -387,7 +388,7 @@ export function PaperCard({
                 type="button"
                 disabled={isConverting}
                 onClick={() => void onConvertWord(paper, selectedMode)}
-                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-md bg-[#154033] px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#0F2E24] disabled:opacity-60"
+                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg bg-[#DB2777] px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#BE185D] disabled:opacity-60"
               >
                 {isConverting ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />

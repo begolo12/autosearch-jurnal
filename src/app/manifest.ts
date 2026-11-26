@@ -2,15 +2,15 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "PustakaCari — Jurnal Q1 & Terjemahan AI",
+    name: "PustakaCari — Riset Jurnal Q1–Q4 & Terjemahan AI",
     short_name: "PustakaCari",
     description:
-      "Pencarian jurnal ilmiah Q1 terverifikasi, baca PDF langsung, terjemahan otomatis ke Bahasa Indonesia, dan ekspor ke Word (.docx).",
+      "Ruang riset modern untuk mencari jurnal ilmiah Q1–Q4 & SINTA 1–6, baca PDF langsung, terjemahan otomatis ke Bahasa Indonesia, dan ekspor Word (.docx).",
     start_url: "/",
     display: "standalone",
     orientation: "portrait-primary",
-    background_color: "#FAF8F4",
-    theme_color: "#1B4D3E",
+    background_color: "#FFF8FA",
+    theme_color: "#DB2777",
     lang: "id",
     categories: ["education", "books", "productivity"],
     icons: [

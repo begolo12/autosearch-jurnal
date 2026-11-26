@@ -426,138 +426,245 @@ export function JournalWorkspace() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F8F7F4] pb-20 md:pb-0">
-      {/* Typographic Editorial Masthead */}
-      <header className="sticky top-0 z-20 border-b border-[#E2DFD7] bg-white/95 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <div className="min-w-0">
-            <h1 className="font-serif text-xl font-bold tracking-[-0.02em] text-[#161513] sm:text-2xl">
-              PustakaCari
-            </h1>
-            <p className="hidden text-xs text-[#57554F] sm:block">
-              Indeks Jurnal Ilmiah Q1–Q4 &amp; SINTA 1–6 · Prioritas Q1
-            </p>
-          </div>
-
-          {/* Desktop Underline Navigation */}
-          <nav
-            aria-label="Navigasi utama"
-            className="hidden items-center gap-6 md:flex"
-          >
-            <button
-              type="button"
-              onClick={() => setActiveTab("search")}
-              className={`border-b-2 py-2 text-xs font-semibold transition-colors ${
-                activeTab === "search"
-                  ? "border-[#154033] text-[#154033]"
-                  : "border-transparent text-[#57554F] hover:text-[#161513]"
-              }`}
-            >
-              Indeks Jurnal
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("bookmarks")}
-              className={`border-b-2 py-2 text-xs font-semibold transition-colors ${
-                activeTab === "bookmarks"
-                  ? "border-[#154033] text-[#154033]"
-                  : "border-transparent text-[#57554F] hover:text-[#161513]"
-              }`}
-            >
-              Tersimpan{" "}
-              <span className="font-mono tabular-nums text-[11px] text-[#78756E]">
-                ({bookmarks.length})
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("conversions")}
-              className={`border-b-2 py-2 text-xs font-semibold transition-colors ${
-                activeTab === "conversions"
-                  ? "border-[#154033] text-[#154033]"
-                  : "border-transparent text-[#57554F] hover:text-[#161513]"
-              }`}
-            >
-              Arsip Word{" "}
-              <span className="font-mono tabular-nums text-[11px] text-[#78756E]">
-                ({conversions.length})
-              </span>
-            </button>
-          </nav>
-
+    <div className="min-h-screen bg-white pb-20 md:grid md:grid-cols-[260px_1fr] md:pb-0">
+      {/* Desktop Left App Sidebar */}
+      <aside className="hidden border-r border-[#F1E4EB] bg-[#FFF8FA] md:sticky md:top-0 md:flex md:h-screen md:flex-col">
+        <div className="border-b border-[#F1E4EB] px-5 py-4">
           <div className="flex items-center gap-2">
-            <PwaRegistrar />
+            <span
+              aria-hidden="true"
+              className="h-2.5 w-2.5 rounded-full bg-[#DB2777]"
+            />
+            <span className="text-base font-bold tracking-[-0.02em] text-[#18181B]">
+              PustakaCari
+            </span>
           </div>
+          <p className="mt-0.5 text-[11px] text-[#71717A]">
+            Riset Jurnal Q1–Q4 &amp; SINTA 1–6
+          </p>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 sm:px-6 sm:py-7">
-        {notice && (
-          <div
-            role="status"
-            className={`mb-5 flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-2.5 text-sm ${
-              notice.type === "error"
-                ? "border-[#8C3B1A]/35 bg-[#8C3B1A]/8 text-[#8C3B1A]"
-                : notice.type === "success"
-                  ? "border-[#154033]/30 bg-[#154033]/8 text-[#0F2E24]"
-                  : "border-[#C9C4B8] bg-white text-[#161513]"
+        <nav aria-label="Menu utama" className="space-y-1 p-3">
+          <button
+            type="button"
+            onClick={() => setActiveTab("search")}
+            className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+              activeTab === "search"
+                ? "bg-[#FCE7F3] text-[#9D174D]"
+                : "text-[#52525B] hover:bg-[#FDF2F8] hover:text-[#18181B]"
             }`}
           >
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{notice.message}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {notice.actionUrl && (
-                <a
-                  href={notice.actionUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs font-semibold underline"
-                >
-                  {notice.actionLabel || "Buka"}
-                </a>
-              )}
-              <button
-                type="button"
-                aria-label="Tutup pemberitahuan"
-                onClick={() => setNotice(null)}
-                className="rounded p-1 hover:bg-black/5"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        )}
+            <span className="flex items-center gap-2.5">
+              <Search className="h-4 w-4" />
+              Pencarian
+            </span>
+          </button>
 
-        {activeTab === "search" && (
-          <div className="grid gap-8 lg:grid-cols-[1fr_270px]">
-            {/* Main Search & Reading Sheet */}
-            <div className="min-w-0">
-              {/* Search Bar & Filters */}
-              <section className="rounded-md border border-[#E2DFD7] bg-white p-3.5 sm:p-4">
+          <button
+            type="button"
+            onClick={() => setActiveTab("bookmarks")}
+            className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+              activeTab === "bookmarks"
+                ? "bg-[#FCE7F3] text-[#9D174D]"
+                : "text-[#52525B] hover:bg-[#FDF2F8] hover:text-[#18181B]"
+            }`}
+          >
+            <span className="flex items-center gap-2.5">
+              <Bookmark className="h-4 w-4" />
+              Tersimpan
+            </span>
+            <span className="font-mono text-[11px] tabular-nums">
+              {bookmarks.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("conversions")}
+            className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+              activeTab === "conversions"
+                ? "bg-[#FCE7F3] text-[#9D174D]"
+                : "text-[#52525B] hover:bg-[#FDF2F8] hover:text-[#18181B]"
+            }`}
+          >
+            <span className="flex items-center gap-2.5">
+              <FileText className="h-4 w-4" />
+              Arsip Word
+            </span>
+            <span className="font-mono text-[11px] tabular-nums">
+              {conversions.length}
+            </span>
+          </button>
+        </nav>
+
+        {/* Sidebar History & Recent Word */}
+        <div className="flex-1 space-y-5 overflow-y-auto border-t border-[#F1E4EB] p-4">
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[#71717A]">
+                Riwayat Pencarian
+              </h2>
+              {history.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void handleClearHistory()}
+                  className="text-[11px] text-[#71717A] hover:text-[#B91C1C]"
+                >
+                  Hapus
+                </button>
+              )}
+            </div>
+
+            {loadingSidebar ? (
+              <div className="space-y-1.5">
+                <div className="h-6 rounded bg-[#F1E4EB]/70" />
+                <div className="h-6 rounded bg-[#F1E4EB]/70" />
+              </div>
+            ) : history.length === 0 ? (
+              <p className="text-xs text-[#71717A]">Belum ada riwayat.</p>
+            ) : (
+              <ul className="space-y-0.5">
+                {history.slice(0, 7).map((item) => (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      onClick={() => void runSearch(item.query)}
+                      className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs text-[#3F3F46] transition-colors hover:bg-[#FDF2F8] hover:text-[#9D174D]"
+                    >
+                      <span className="truncate">{item.query}</span>
+                      <span className="shrink-0 font-mono text-[10px] tabular-nums text-[#71717A]">
+                        {item.resultCount}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[#71717A]">
+                Arsip Word Terbaru
+              </h2>
+            </div>
+
+            {conversions.length === 0 ? (
+              <p className="text-xs text-[#71717A]">
+                Hasil ekspor .docx muncul di sini.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {conversions.slice(0, 4).map((conv) => (
+                  <li
+                    key={conv.id}
+                    className="rounded-lg border border-[#F1E4EB] bg-white p-2.5"
+                  >
+                    <div className="line-clamp-2 text-xs font-medium leading-snug text-[#18181B]">
+                      {conv.title}
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between text-[11px] text-[#71717A]">
+                      <span>{MODE_BADGE[conv.mode] || conv.mode}</span>
+                      <a
+                        href={`/api/conversions/${conv.id}/download`}
+                        className="inline-flex items-center gap-1 font-medium text-[#DB2777] hover:underline"
+                      >
+                        <FileDown className="h-3 w-3" />
+                        .docx
+                      </a>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+
+        <div className="border-t border-[#F1E4EB] p-3">
+          <PwaRegistrar />
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex min-w-0 flex-col">
+        {/* Mobile Top Bar */}
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[#F1E4EB] bg-white/95 px-4 py-3 backdrop-blur-sm md:hidden">
+          <div className="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="h-2.5 w-2.5 rounded-full bg-[#DB2777]"
+            />
+            <span className="text-base font-bold tracking-[-0.02em] text-[#18181B]">
+              PustakaCari
+            </span>
+          </div>
+          <PwaRegistrar />
+        </header>
+
+        <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5 sm:px-8 sm:py-7">
+          {notice && (
+            <div
+              role="status"
+              className={`mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-2.5 text-sm ${
+                notice.type === "error"
+                  ? "border-[#B91C1C]/30 bg-[#FEF2F2] text-[#B91C1C]"
+                  : notice.type === "success"
+                    ? "border-[#DB2777]/25 bg-[#FDF2F8] text-[#9D174D]"
+                    : "border-[#F1E4EB] bg-[#FFF8FA] text-[#18181B]"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{notice.message}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {notice.actionUrl && (
+                  <a
+                    href={notice.actionUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold underline"
+                  >
+                    {notice.actionLabel || "Buka"}
+                  </a>
+                )}
+                <button
+                  type="button"
+                  aria-label="Tutup pemberitahuan"
+                  onClick={() => setNotice(null)}
+                  className="rounded p-1 hover:bg-black/5"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "search" && (
+            <div>
+              {/* Search & Filter Panel */}
+              <section className="rounded-xl border border-[#F1E4EB] bg-[#FFF8FA] p-3.5 sm:p-4">
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
                     void runSearch();
                   }}
-                  className="flex flex-col gap-2.5 sm:flex-row sm:gap-2.5"
+                  className="flex flex-col gap-2.5 sm:flex-row"
                 >
                   <div className="relative flex-1">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#78756E]" />
+                    <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71717A]" />
                     <input
                       type="search"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Cari topik, judul, penulis, atau DOI..."
-                      className="min-h-[44px] w-full rounded-md border border-[#C9C4B8] bg-[#F8F7F4] py-2 pl-9 pr-3 text-base text-[#161513] placeholder:text-[#78756E] focus:border-[#154033] focus:bg-white focus:outline-none sm:min-h-[40px] sm:text-sm"
+                      placeholder="Cari jurnal Q1–Q4 & SINTA 1–6 (Bahasa Indonesia / Inggris)..."
+                      className="min-h-[44px] w-full rounded-lg border border-[#E2CDD8] bg-white py-2 pl-10 pr-3 text-base text-[#18181B] placeholder:text-[#71717A] focus:border-[#DB2777] focus:outline-none sm:min-h-[42px] sm:text-sm"
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={searching}
-                    className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md bg-[#154033] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#0F2E24] disabled:opacity-60 sm:min-h-[40px]"
+                    className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#DB2777] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#BE185D] disabled:opacity-60 sm:min-h-[42px]"
                   >
                     {searching ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -569,39 +676,39 @@ export function JournalWorkspace() {
                 </form>
 
                 {/* Mobile Filter Toggle */}
-                <div className="mt-3 flex items-center justify-between border-t border-[#E2DFD7] pt-2.5 sm:hidden">
+                <div className="mt-3 flex items-center justify-between border-t border-[#F1E4EB] pt-2.5 sm:hidden">
                   <button
                     type="button"
                     onClick={() => setShowMobileFilters((v) => !v)}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[#57554F]"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[#52525B]"
                   >
                     <SlidersHorizontal className="h-3.5 w-3.5" />
-                    Saring &amp; Urutan
+                    Filter &amp; Urutan
                     {showMobileFilters ? (
                       <ChevronUp className="h-3.5 w-3.5" />
                     ) : (
                       <ChevronDown className="h-3.5 w-3.5" />
                     )}
                   </button>
-                  <label className="inline-flex items-center gap-1.5 text-xs text-[#161513]">
+                  <label className="inline-flex items-center gap-1.5 text-xs text-[#18181B]">
                     <input
                       type="checkbox"
                       checked={pdfOnly}
                       onChange={(e) => setPdfOnly(e.target.checked)}
-                      className="h-4 w-4 accent-[#154033]"
+                      className="h-4 w-4 accent-[#DB2777]"
                     />
                     PDF saja
                   </label>
                 </div>
 
-                {/* Understated Filter Row */}
+                {/* Filter Row */}
                 <div
-                  className={`mt-3 flex-wrap items-center justify-between gap-3 border-t border-[#E2DFD7] pt-3 sm:flex ${
+                  className={`mt-3 flex-wrap items-center justify-between gap-3 border-t border-[#F1E4EB] pt-3 sm:flex ${
                     showMobileFilters ? "flex" : "hidden"
                   }`}
                 >
                   <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="text-[#78756E]">Indeks:</span>
+                    <span className="text-[#71717A]">Indeks:</span>
                     {ALL_SOURCES.map((src) => {
                       const active = selectedSources.includes(src.id);
                       return (
@@ -609,10 +716,10 @@ export function JournalWorkspace() {
                           key={src.id}
                           type="button"
                           onClick={() => toggleSource(src.id)}
-                          className={`rounded border px-2 py-1 text-xs font-medium transition-colors ${
+                          className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
                             active
-                              ? "border-[#154033] bg-[#154033]/8 text-[#154033]"
-                              : "border-[#E2DFD7] bg-white text-[#78756E] hover:text-[#161513]"
+                              ? "border-[#DB2777] bg-[#FCE7F3] text-[#9D174D]"
+                              : "border-[#F1E4EB] bg-white text-[#71717A] hover:text-[#18181B]"
                           }`}
                         >
                           {src.label}
@@ -622,12 +729,12 @@ export function JournalWorkspace() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 text-xs">
-                    <label className="hidden cursor-pointer items-center gap-1.5 text-[#161513] sm:inline-flex">
+                    <label className="hidden cursor-pointer items-center gap-1.5 text-[#18181B] sm:inline-flex">
                       <input
                         type="checkbox"
                         checked={pdfOnly}
                         onChange={(e) => setPdfOnly(e.target.checked)}
-                        className="h-3.5 w-3.5 accent-[#154033]"
+                        className="h-3.5 w-3.5 accent-[#DB2777]"
                       />
                       PDF langsung
                     </label>
@@ -636,7 +743,7 @@ export function JournalWorkspace() {
                       aria-label="Filter tahun minimal"
                       value={yearFrom}
                       onChange={(e) => setYearFrom(e.target.value)}
-                      className="min-h-[34px] rounded border border-[#C9C4B8] bg-[#F8F7F4] px-2 py-1 text-xs text-[#161513]"
+                      className="min-h-[34px] rounded-md border border-[#E2CDD8] bg-white px-2.5 py-1 text-xs text-[#18181B]"
                     >
                       <option value="">Semua Tahun</option>
                       <option value="2024">Sejak 2024</option>
@@ -649,7 +756,7 @@ export function JournalWorkspace() {
                       aria-label="Urutkan hasil"
                       value={sort}
                       onChange={(e) => setSort(e.target.value as SortOption)}
-                      className="min-h-[34px] rounded border border-[#C9C4B8] bg-[#F8F7F4] px-2 py-1 text-xs text-[#161513]"
+                      className="min-h-[34px] rounded-md border border-[#E2CDD8] bg-white px-2.5 py-1 text-xs text-[#18181B]"
                     >
                       <option value="relevance">Relevansi + PDF</option>
                       <option value="impact">Impact Factor</option>
@@ -661,36 +768,36 @@ export function JournalWorkspace() {
               </section>
 
               {searchError && (
-                <div className="mt-4 rounded-md border border-[#8C3B1A]/35 bg-[#8C3B1A]/8 p-3.5 text-sm text-[#8C3B1A]">
+                <div className="mt-4 rounded-lg border border-[#B91C1C]/30 bg-[#FEF2F2] p-3.5 text-sm text-[#B91C1C]">
                   {searchError}
                 </div>
               )}
 
               {searching && (
-                <div className="mt-6 divide-y divide-[#E2DFD7] rounded-md border border-[#E2DFD7] bg-white px-5">
+                <div className="mt-6 divide-y divide-[#F1E4EB] rounded-xl border border-[#F1E4EB] bg-white px-5">
                   {[1, 2, 3].map((n) => (
                     <div key={n} className="animate-pulse py-5">
-                      <div className="h-4 w-20 rounded bg-[#F2EFE9]" />
-                      <div className="mt-2.5 h-5 w-3/4 rounded bg-[#F2EFE9]" />
-                      <div className="mt-2 h-3.5 w-1/2 rounded bg-[#F2EFE9]" />
-                      <div className="mt-3 h-12 w-full rounded bg-[#F2EFE9]" />
+                      <div className="h-4 w-16 rounded bg-[#FDF2F8]" />
+                      <div className="mt-2.5 h-5 w-3/4 rounded bg-[#FDF2F8]" />
+                      <div className="mt-2 h-3.5 w-1/2 rounded bg-[#FDF2F8]" />
+                      <div className="mt-3 h-12 w-full rounded bg-[#FDF2F8]" />
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* Grouped Archival Results */}
+              {/* Grouped Results by Rank */}
               {!searching && searchResult && (
                 <div className="mt-6">
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-xs text-[#57554F]">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-xs text-[#52525B]">
                     <span>
-                      Ditemukan{" "}
-                      <strong className="font-mono tabular-nums text-[#161513]">
+                      Menampilkan{" "}
+                      <strong className="font-mono tabular-nums text-[#18181B]">
                         {searchResult.total}
                       </strong>{" "}
                       artikel untuk &ldquo;{searchResult.query}&rdquo;
                     </span>
-                    <span className="font-mono text-[11px] text-[#78756E]">
+                    <span className="font-mono text-[11px] text-[#71717A]">
                       {searchResult.sourceStats
                         .map((st) => `${st.source}: ${st.ok ? st.count : "err"}`)
                         .join(" · ")}
@@ -698,11 +805,11 @@ export function JournalWorkspace() {
                   </div>
 
                   {searchResult.papers.length === 0 ? (
-                    <div className="rounded-md border border-[#E2DFD7] bg-white p-8 text-center">
-                      <p className="font-serif text-lg font-semibold text-[#161513]">
+                    <div className="rounded-xl border border-[#F1E4EB] bg-white p-8 text-center">
+                      <p className="text-base font-semibold text-[#18181B]">
                         Tidak ada artikel yang cocok
                       </p>
-                      <p className="mt-1 text-sm text-[#57554F]">
+                      <p className="mt-1 text-sm text-[#52525B]">
                         Coba gunakan kata kunci lebih umum atau matikan filter
                         PDF langsung.
                       </p>
@@ -717,30 +824,30 @@ export function JournalWorkspace() {
                           <div
                             className={`flex items-baseline justify-between gap-3 pb-2 ${
                               group.meta.priority
-                                ? "border-b-2 border-[#161513]"
-                                : "border-b border-[#C9C4B8]"
+                                ? "border-b-2 border-[#DB2777]"
+                                : "border-b border-[#E2CDD8]"
                             }`}
                           >
                             <div className="flex items-baseline gap-2.5">
                               <span
                                 className={`font-mono text-xs font-bold ${
                                   group.meta.priority
-                                    ? "text-[#154033]"
-                                    : "text-[#161513]"
+                                    ? "text-[#DB2777]"
+                                    : "text-[#18181B]"
                                 }`}
                               >
                                 {group.meta.badge}
                               </span>
-                              <h2 className="font-serif text-base font-semibold text-[#161513]">
+                              <h2 className="text-sm font-semibold text-[#18181B]">
                                 {group.meta.title}
                               </h2>
                             </div>
-                            <span className="font-mono text-xs tabular-nums text-[#78756E]">
+                            <span className="font-mono text-xs tabular-nums text-[#71717A]">
                               {group.papers.length} artikel
                             </span>
                           </div>
 
-                          <div className="divide-y divide-[#E2DFD7] rounded-b-md border-x border-b border-[#E2DFD7] bg-white px-4 sm:px-5">
+                          <div className="divide-y divide-[#F1E4EB]">
                             {group.papers.map((paper) => (
                               <PaperCard
                                 key={paper.paperKey}
@@ -764,33 +871,32 @@ export function JournalWorkspace() {
                 </div>
               )}
 
-              {/* Quiet Editorial Empty State */}
+              {/* Empty State */}
               {!searching && !searchResult && (
-                <div className="mt-6 rounded-md border border-[#E2DFD7] bg-white p-6 sm:p-8">
-                  <h2 className="font-serif text-xl font-semibold tracking-[-0.015em] text-[#161513]">
-                    Telusuri Literatur Ilmiah Terindeks
+                <div className="mt-6 rounded-xl border border-[#F1E4EB] bg-white p-6 sm:p-8">
+                  <h2 className="text-lg font-semibold tracking-[-0.015em] text-[#18181B]">
+                    Mulai Telusuri Literatur Ilmiah
                   </h2>
-                  <p className="mt-2 max-w-[64ch] text-sm leading-relaxed text-[#57554F]">
-                    Hasil pencarian otomatis dikelompokkan berdasarkan peringkat
-                    jurnal dengan prioritas{" "}
-                    <strong className="font-semibold text-[#161513]">
+                  <p className="mt-1.5 max-w-[64ch] text-sm leading-relaxed text-[#52525B]">
+                    Hasil pencarian otomatis menampilkan seluruh peringkat dengan{" "}
+                    <strong className="font-semibold text-[#DB2777]">
                       Kuartil 1 (Q1)
                     </strong>{" "}
-                    di urutan teratas, diikuti Q2–Q4 dan SINTA 1–6. Baca PDF
-                    langsung atau terjemahkan ke Bahasa Indonesia dari bahasa
-                    apa pun.
+                    sebagai prioritas utama, diikuti Q2–Q4 dan SINTA 1–6. Baca
+                    PDF langsung di aplikasi atau terjemahkan otomatis ke Bahasa
+                    Indonesia.
                   </p>
-                  <div className="mt-5 border-t border-[#E2DFD7] pt-4">
-                    <span className="block text-xs font-medium text-[#78756E]">
-                      Contoh topik pencarian:
+                  <div className="mt-5 border-t border-[#F1E4EB] pt-4">
+                    <span className="block text-xs font-medium text-[#71717A]">
+                      Coba topik pencarian:
                     </span>
-                    <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
+                    <div className="mt-2.5 flex flex-wrap gap-2">
                       {STARTER_QUERIES.map((sample) => (
                         <button
                           key={sample}
                           type="button"
                           onClick={() => void runSearch(sample)}
-                          className="text-sm font-medium text-[#154033] underline decoration-[#C9C4B8] underline-offset-4 transition-colors hover:decoration-[#154033]"
+                          className="rounded-lg border border-[#E2CDD8] bg-[#FFF8FA] px-3 py-1.5 text-xs font-medium text-[#9D174D] transition-colors hover:border-[#DB2777] hover:bg-[#FCE7F3]"
                         >
                           {sample}
                         </button>
@@ -800,297 +906,200 @@ export function JournalWorkspace() {
                 </div>
               )}
             </div>
+          )}
 
-            {/* Quiet Desktop Rail */}
-            <aside className="hidden space-y-7 lg:block lg:border-l lg:border-[#E2DFD7] lg:pl-6">
-              <section>
-                <div className="mb-3 flex items-center justify-between border-b border-[#E2DFD7] pb-2">
-                  <h2 className="text-xs font-semibold uppercase tracking-wider text-[#57554F]">
-                    Riwayat Pencarian
-                  </h2>
-                  {history.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => void handleClearHistory()}
-                      className="text-[11px] text-[#78756E] hover:text-[#8C3B1A]"
-                    >
-                      Hapus
-                    </button>
-                  )}
-                </div>
+          {activeTab === "bookmarks" && (
+            <section>
+              <div className="mb-4 border-b border-[#F1E4EB] pb-3">
+                <h2 className="text-lg font-semibold text-[#18181B]">
+                  Jurnal Tersimpan ({bookmarks.length})
+                </h2>
+              </div>
 
-                {loadingSidebar ? (
-                  <div className="space-y-2">
-                    <div className="h-6 rounded bg-[#E2DFD7]/60" />
-                    <div className="h-6 rounded bg-[#E2DFD7]/60" />
-                  </div>
-                ) : history.length === 0 ? (
-                  <p className="text-xs text-[#78756E]">
-                    Belum ada riwayat pencarian.
+              {bookmarks.length === 0 ? (
+                <div className="rounded-xl border border-[#F1E4EB] bg-[#FFF8FA] p-8 text-center">
+                  <p className="text-base font-semibold text-[#18181B]">
+                    Belum ada jurnal tersimpan
                   </p>
-                ) : (
-                  <ul className="divide-y divide-[#E2DFD7]">
-                    {history.slice(0, 8).map((item) => (
-                      <li key={item.id}>
-                        <button
-                          type="button"
-                          onClick={() => void runSearch(item.query)}
-                          className="flex w-full items-center justify-between gap-2 py-2 text-left text-xs transition-colors hover:text-[#154033]"
-                        >
-                          <span className="truncate font-medium text-[#161513]">
-                            {item.query}
-                          </span>
-                          <span className="shrink-0 font-mono tabular-nums text-[11px] text-[#78756E]">
-                            {item.resultCount}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-
-              <section>
-                <div className="mb-3 flex items-center justify-between border-b border-[#E2DFD7] pb-2">
-                  <h2 className="text-xs font-semibold uppercase tracking-wider text-[#57554F]">
-                    Arsip Word Terbaru
-                  </h2>
-                  {conversions.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab("conversions")}
-                      className="text-[11px] font-medium text-[#154033] hover:underline"
-                    >
-                      Semua
-                    </button>
-                  )}
-                </div>
-
-                {conversions.length === 0 ? (
-                  <p className="text-xs text-[#78756E]">
-                    Hasil ekspor .docx tersimpan di sini.
+                  <p className="mt-1 text-sm text-[#52525B]">
+                    Klik &ldquo;Simpan&rdquo; pada artikel hasil pencarian untuk
+                    menyimpannya ke koleksi Anda.
                   </p>
-                ) : (
-                  <ul className="divide-y divide-[#E2DFD7]">
-                    {conversions.slice(0, 5).map((conv) => (
-                      <li key={conv.id} className="py-2.5">
-                        <div className="line-clamp-2 font-serif text-xs font-medium leading-snug text-[#161513]">
-                          {conv.title}
-                        </div>
-                        <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[#78756E]">
-                          <span>{MODE_BADGE[conv.mode] || conv.mode}</span>
-                          <a
-                            href={`/api/conversions/${conv.id}/download`}
-                            className="inline-flex items-center gap-1 font-medium text-[#154033] hover:underline"
-                          >
-                            <FileDown className="h-3 w-3" />
-                            .docx
-                          </a>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            </aside>
-          </div>
-        )}
+                </div>
+              ) : (
+                <div className="divide-y divide-[#F1E4EB]">
+                  {bookmarks.map((b) => (
+                    <PaperCard
+                      key={b.id}
+                      paper={{
+                        paperKey: b.paperKey,
+                        title: b.title,
+                        authors: b.authors,
+                        year: b.year,
+                        venue: b.venue,
+                        source: b.source as SearchSource,
+                        abstract: b.abstract,
+                        pdfUrl: b.pdfUrl,
+                        landingUrl: b.landingUrl,
+                        doi: b.doi,
+                        citations: b.citations,
+                        openAccess: Boolean(b.pdfUrl),
+                      }}
+                      isBookmarked={true}
+                      onToggleBookmark={handleToggleBookmark}
+                      onDownloadPdf={handleDownloadPdf}
+                      onOpenReader={(p, autoTranslate = false) =>
+                        setReaderState({ paper: p, autoTranslate })
+                      }
+                      onConvertWord={handleConvertWord}
+                      downloadingPdfKey={downloadingPdfKey}
+                      convertingKey={convertingKey}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
-        {activeTab === "bookmarks" && (
-          <section>
-            <div className="mb-4 border-b border-[#161513] pb-2">
-              <h2 className="font-serif text-xl font-semibold text-[#161513]">
-                Jurnal Tersimpan ({bookmarks.length})
-              </h2>
-            </div>
-
-            {bookmarks.length === 0 ? (
-              <div className="rounded-md border border-[#E2DFD7] bg-white p-8 text-center">
-                <p className="font-serif text-lg font-semibold text-[#161513]">
-                  Belum ada jurnal tersimpan
-                </p>
-                <p className="mt-1 text-sm text-[#57554F]">
-                  Klik &ldquo;Simpan&rdquo; pada artikel hasil pencarian untuk
-                  menyimpannya ke koleksi Anda.
-                </p>
+          {activeTab === "conversions" && (
+            <section>
+              <div className="mb-4 border-b border-[#F1E4EB] pb-3">
+                <h2 className="text-lg font-semibold text-[#18181B]">
+                  Arsip Konversi Word ({conversions.length})
+                </h2>
               </div>
-            ) : (
-              <div className="divide-y divide-[#E2DFD7] rounded-md border border-[#E2DFD7] bg-white px-4 sm:px-5">
-                {bookmarks.map((b) => (
-                  <PaperCard
-                    key={b.id}
-                    paper={{
-                      paperKey: b.paperKey,
-                      title: b.title,
-                      authors: b.authors,
-                      year: b.year,
-                      venue: b.venue,
-                      source: b.source as SearchSource,
-                      abstract: b.abstract,
-                      pdfUrl: b.pdfUrl,
-                      landingUrl: b.landingUrl,
-                      doi: b.doi,
-                      citations: b.citations,
-                      openAccess: Boolean(b.pdfUrl),
-                    }}
-                    isBookmarked={true}
-                    onToggleBookmark={handleToggleBookmark}
-                    onDownloadPdf={handleDownloadPdf}
-                    onOpenReader={(p, autoTranslate = false) =>
-                      setReaderState({ paper: p, autoTranslate })
-                    }
-                    onConvertWord={handleConvertWord}
-                    downloadingPdfKey={downloadingPdfKey}
-                    convertingKey={convertingKey}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-        )}
 
-        {activeTab === "conversions" && (
-          <section>
-            <div className="mb-4 border-b border-[#161513] pb-2">
-              <h2 className="font-serif text-xl font-semibold text-[#161513]">
-                Arsip Konversi Word ({conversions.length})
-              </h2>
-            </div>
-
-            {conversions.length === 0 ? (
-              <div className="rounded-md border border-[#E2DFD7] bg-white p-8 text-center">
-                <p className="font-serif text-lg font-semibold text-[#161513]">
-                  Belum ada arsip konversi Word
-                </p>
-                <p className="mt-1 text-sm text-[#57554F]">
-                  Pilih salah satu artikel lalu klik &ldquo;Ekspor Word&rdquo;
-                  atau &ldquo;Terjemahkan ID&rdquo;.
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-[#E2DFD7] rounded-md border border-[#E2DFD7] bg-white px-4 sm:px-5">
-                {conversions.map((conv) => (
-                  <div
-                    key={conv.id}
-                    className="flex flex-wrap items-center justify-between gap-4 py-4"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-[#57554F]">
-                        <span className="font-medium text-[#154033]">
-                          {MODE_BADGE[conv.mode] || conv.mode}
-                        </span>
-                        <span aria-hidden="true">·</span>
-                        <span className="font-mono text-[11px]">
-                          {conv.model}
-                        </span>
-                        {conv.year && (
-                          <>
-                            <span aria-hidden="true">·</span>
+              {conversions.length === 0 ? (
+                <div className="rounded-xl border border-[#F1E4EB] bg-[#FFF8FA] p-8 text-center">
+                  <p className="text-base font-semibold text-[#18181B]">
+                    Belum ada arsip konversi Word
+                  </p>
+                  <p className="mt-1 text-sm text-[#52525B]">
+                    Pilih salah satu artikel lalu klik &ldquo;Ekspor Word&rdquo;
+                    atau &ldquo;Terjemahkan ID&rdquo;.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-[#F1E4EB]">
+                  {conversions.map((conv) => (
+                    <div
+                      key={conv.id}
+                      className="flex flex-wrap items-center justify-between gap-4 py-4"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-[#52525B]">
+                          <span className="rounded bg-[#FCE7F3] px-2 py-0.5 font-medium text-[#9D174D]">
+                            {MODE_BADGE[conv.mode] || conv.mode}
+                          </span>
+                          <span className="font-mono text-[11px]">
+                            {conv.model}
+                          </span>
+                          {conv.year && (
                             <span className="font-mono tabular-nums">
                               {conv.year}
                             </span>
-                          </>
-                        )}
+                          )}
+                        </div>
+                        <h3 className="text-sm font-semibold text-[#18181B] sm:text-base">
+                          {conv.title}
+                        </h3>
                       </div>
-                      <h3 className="font-serif text-base font-semibold text-[#161513]">
-                        {conv.title}
-                      </h3>
-                    </div>
 
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={`/api/conversions/${conv.id}/download`}
-                        className="inline-flex min-h-[38px] items-center gap-1.5 rounded-md bg-[#154033] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0F2E24]"
-                      >
-                        <FileDown className="h-3.5 w-3.5" />
-                        Unduh .docx
-                      </a>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`/api/conversions/${conv.id}/download`}
+                          className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg bg-[#DB2777] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D]"
+                        >
+                          <FileDown className="h-3.5 w-3.5" />
+                          Unduh .docx
+                        </a>
+                        <button
+                          type="button"
+                          aria-label="Hapus arsip konversi"
+                          onClick={() => void handleDeleteConversion(conv.id)}
+                          className="min-h-[38px] rounded-lg border border-[#F1E4EB] p-2 text-[#71717A] hover:border-[#B91C1C]/40 hover:text-[#B91C1C]"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {activeTab === "history" && (
+            <section>
+              <div className="mb-4 flex items-center justify-between border-b border-[#F1E4EB] pb-3">
+                <h2 className="text-lg font-semibold text-[#18181B]">
+                  Riwayat Pencarian ({history.length})
+                </h2>
+                {history.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void handleClearHistory()}
+                    className="text-xs font-medium text-[#B91C1C] hover:underline"
+                  >
+                    Hapus Semua
+                  </button>
+                )}
+              </div>
+              {history.length === 0 ? (
+                <div className="rounded-xl border border-[#F1E4EB] bg-[#FFF8FA] p-8 text-center">
+                  <p className="text-sm text-[#52525B]">
+                    Belum ada riwayat pencarian.
+                  </p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-[#F1E4EB]">
+                  {history.map((item) => (
+                    <li key={item.id}>
                       <button
                         type="button"
-                        aria-label="Hapus arsip konversi"
-                        onClick={() => void handleDeleteConversion(conv.id)}
-                        className="min-h-[38px] rounded-md border border-[#E2DFD7] p-2 text-[#78756E] hover:border-[#8C3B1A]/40 hover:text-[#8C3B1A]"
+                        onClick={() => void runSearch(item.query)}
+                        className="flex min-h-[48px] w-full items-center justify-between py-3 text-left text-sm"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <span className="font-medium text-[#18181B]">
+                          {item.query}
+                        </span>
+                        <span className="font-mono text-xs text-[#71717A]">
+                          {item.resultCount} hasil
+                        </span>
                       </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        )}
-
-        {activeTab === "history" && (
-          <section>
-            <div className="mb-4 flex items-center justify-between border-b border-[#161513] pb-2">
-              <h2 className="font-serif text-xl font-semibold text-[#161513]">
-                Riwayat Pencarian ({history.length})
-              </h2>
-              {history.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => void handleClearHistory()}
-                  className="text-xs font-medium text-[#8C3B1A] hover:underline"
-                >
-                  Hapus Semua
-                </button>
+                    </li>
+                  ))}
+                </ul>
               )}
-            </div>
-            {history.length === 0 ? (
-              <div className="rounded-md border border-[#E2DFD7] bg-white p-8 text-center">
-                <p className="text-sm text-[#57554F]">
-                  Belum ada riwayat pencarian.
-                </p>
-              </div>
-            ) : (
-              <ul className="divide-y divide-[#E2DFD7] rounded-md border border-[#E2DFD7] bg-white px-4">
-                {history.map((item) => (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      onClick={() => void runSearch(item.query)}
-                      className="flex min-h-[48px] w-full items-center justify-between py-3 text-left text-sm"
-                    >
-                      <span className="font-medium text-[#161513]">
-                        {item.query}
-                      </span>
-                      <span className="font-mono text-xs text-[#78756E]">
-                        {item.resultCount} hasil
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
-      </main>
+            </section>
+          )}
+        </main>
+      </div>
 
       {/* Mobile Sticky Bottom Navigation */}
       <nav
         aria-label="Navigasi seluler"
-        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-[#E2DFD7] bg-white pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-[#F1E4EB] bg-white pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         <button
           type="button"
           onClick={() => setActiveTab("search")}
           className={`flex min-h-[54px] flex-col items-center justify-center gap-0.5 border-t-2 text-[11px] font-semibold ${
             activeTab === "search"
-              ? "border-[#154033] text-[#154033]"
-              : "border-transparent text-[#57554F]"
+              ? "border-[#DB2777] text-[#DB2777]"
+              : "border-transparent text-[#52525B]"
           }`}
         >
           <Search className="h-4 w-4" />
-          Indeks
+          Cari
         </button>
         <button
           type="button"
           onClick={() => setActiveTab("bookmarks")}
           className={`flex min-h-[54px] flex-col items-center justify-center gap-0.5 border-t-2 text-[11px] font-semibold ${
             activeTab === "bookmarks"
-              ? "border-[#154033] text-[#154033]"
-              : "border-transparent text-[#57554F]"
+              ? "border-[#DB2777] text-[#DB2777]"
+              : "border-transparent text-[#52525B]"
           }`}
         >
           <Bookmark className="h-4 w-4" />
@@ -1101,8 +1110,8 @@ export function JournalWorkspace() {
           onClick={() => setActiveTab("conversions")}
           className={`flex min-h-[54px] flex-col items-center justify-center gap-0.5 border-t-2 text-[11px] font-semibold ${
             activeTab === "conversions"
-              ? "border-[#154033] text-[#154033]"
-              : "border-transparent text-[#57554F]"
+              ? "border-[#DB2777] text-[#DB2777]"
+              : "border-transparent text-[#52525B]"
           }`}
         >
           <FileText className="h-4 w-4" />
@@ -1113,8 +1122,8 @@ export function JournalWorkspace() {
           onClick={() => setActiveTab("history")}
           className={`flex min-h-[54px] flex-col items-center justify-center gap-0.5 border-t-2 text-[11px] font-semibold ${
             activeTab === "history"
-              ? "border-[#154033] text-[#154033]"
-              : "border-transparent text-[#57554F]"
+              ? "border-[#DB2777] text-[#DB2777]"
+              : "border-transparent text-[#52525B]"
           }`}
         >
           <History className="h-4 w-4" />

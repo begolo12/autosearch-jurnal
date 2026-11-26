@@ -43,9 +43,9 @@ export function PwaRegistrar() {
     <button
       type="button"
       onClick={() => void handleInstall()}
-      className="inline-flex min-h-[34px] items-center gap-1.5 rounded-md border border-[#C9C4B8] bg-white px-2.5 py-1 text-xs font-medium text-[#161513] transition-colors duration-150 hover:border-[#154033] hover:text-[#154033]"
+      className="inline-flex min-h-[34px] items-center gap-1.5 rounded-lg border border-[#E2CDD8] bg-white px-3 py-1.5 text-xs font-medium text-[#18181B] transition-colors duration-150 hover:border-[#DB2777] hover:text-[#DB2777]"
     >
-      <Download className="h-3.5 w-3.5" />
+      <Download className="h-3.5 w-3.5 text-[#DB2777]" />
       <span>Pasang Aplikasi</span>
     </button>
   );
