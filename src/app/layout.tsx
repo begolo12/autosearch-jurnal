@@ -15,14 +15,14 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PustakaCari — Riset Jurnal Q1–Q4 & Terjemahan AI",
+  title: "SmartSari — Pencarian Jurnal Terfilter & Akurat",
   description:
-    "Ruang riset modern untuk mencari jurnal ilmiah Q1–Q4 & SINTA 1–6, membaca PDF langsung, menerjemahkan otomatis ke Bahasa Indonesia, dan ekspor ke Word (.docx).",
+    "SmartSari: pencarian jurnal ilmiah Q1–Q4 & SINTA 1–6, baca PDF langsung, terjemahan otomatis ke Bahasa Indonesia, dan ekspor ke Word (.docx).",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "PustakaCari",
+    title: "SmartSari",
   },
   icons: {
     icon: "/icons/icon-192.png",

@@ -1,6 +1,6 @@
 {
-  "appId": "app.pustakacari.jurnal",
-  "appName": "PustakaCari",
+  "appId": "app.smartsari.jurnal",
+  "appName": "SmartSari",
   "webDir": "www",
   "server": {
     "url": "https://autosearch-jurnal.vercel.app",

@@ -176,7 +176,7 @@ export function PaperCard({
   if (paper.language) metaItems.push(paper.language);
 
   return (
-    <article className="py-5 transition-colors duration-150 sm:grid sm:grid-cols-[88px_1fr] sm:gap-5">
+    <article className="-mx-3 rounded-xl px-3 py-5 transition-colors duration-150 hover:bg-[#FFF8FA]/70 sm:grid sm:grid-cols-[88px_1fr] sm:gap-5">
       {/* Left Rank Indicator */}
       <div className="mb-2 flex items-baseline gap-2.5 sm:mb-0 sm:block sm:pt-0.5">
         <span
@@ -268,7 +268,7 @@ export function PaperCard({
             <button
               type="button"
               onClick={() => onOpenReader(paper, false)}
-              className="inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-lg bg-[#DB2777] px-3.5 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-[#BE185D]"
+              className="btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-lg bg-[#DB2777] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D]"
             >
               <BookOpenText className="h-3.5 w-3.5" />
               Baca PDF
@@ -377,7 +377,7 @@ export function PaperCard({
 
         {/* Inline 1-Click Citation Panel */}
         {showCitePanel && (
-          <div className="mt-3 rounded-lg border border-[#F1E4EB] bg-[#FFF8FA] p-3.5">
+          <div className="animate-panel-open mt-3 rounded-lg border border-[#F1E4EB] bg-[#FFF8FA] p-3.5">
             <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1">
                 {(
@@ -432,7 +432,7 @@ export function PaperCard({
 
         {/* Inline Word Export Panel */}
         {showConvertPanel && (
-          <div className="mt-3 rounded-lg border border-[#F1E4EB] bg-[#FFF8FA] p-3.5">
+          <div className="animate-panel-open mt-3 rounded-lg border border-[#F1E4EB] bg-[#FFF8FA] p-3.5">
             <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="font-semibold text-[#18181B]">
                 Format Dokumen Word (.docx)

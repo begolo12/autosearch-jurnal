@@ -2,10 +2,10 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "PustakaCari — Riset Jurnal Q1–Q4 & Terjemahan AI",
-    short_name: "PustakaCari",
+    name: "SmartSari — Pencarian Jurnal Terfilter & Akurat",
+    short_name: "SmartSari",
     description:
-      "Ruang riset modern untuk mencari jurnal ilmiah Q1–Q4 & SINTA 1–6, baca PDF langsung, terjemahan otomatis ke Bahasa Indonesia, dan ekspor Word (.docx).",
+      "Pencarian jurnal ilmiah terfilter (Q1–Q4 & SINTA 1–6), baca PDF langsung, terjemahan otomatis ke Bahasa Indonesia, dan ekspor Word (.docx).",
     start_url: "/",
     display: "standalone",
     orientation: "portrait-primary",

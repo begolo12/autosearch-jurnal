@@ -1,7 +1,9 @@
-const CACHE_NAME = "pustakacari-shell-v2";
+const CACHE_NAME = "smartsari-shell-v3";
 const SHELL_ASSETS = [
   "/",
   "/manifest.webmanifest",
+  "/logo-smartsari.jpg",
+  "/logo-mark.png",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/icons/apple-touch-icon.png",

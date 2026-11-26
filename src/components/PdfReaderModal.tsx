@@ -309,7 +309,7 @@ export function PdfReaderModal({
       role="dialog"
       aria-modal="true"
       aria-label={`Pembaca Jurnal: ${paper.title}`}
-      className="fixed inset-0 z-50 flex flex-col bg-[#FFF8FA]"
+      className="animate-modal-in fixed inset-0 z-50 flex flex-col bg-[#FFF8FA]"
     >
       {/* Top Reader Toolbar */}
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#F1E4EB] bg-white px-3 py-2.5 sm:px-5">

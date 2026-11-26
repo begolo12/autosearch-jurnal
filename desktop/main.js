@@ -9,7 +9,7 @@ function createWindow() {
     height: 840,
     minWidth: 380,
     minHeight: 640,
-    title: "PustakaCari — Jurnal Q1 & Terjemahan AI",
+    title: "SmartSari — Pencarian Jurnal Terfilter & Akurat",
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,

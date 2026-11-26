@@ -99,7 +99,7 @@ export async function buildDocxBuffer(params: {
       spacing: { after: 100 },
       children: [
         new TextRun({
-          text: `PUSTAKACARI · ${MODE_LABEL[params.mode].toUpperCase()}`,
+          text: `SMARTSARI · ${MODE_LABEL[params.mode].toUpperCase()}`,
           bold: true,
           size: 18,
           color: "1B4D3E",
@@ -292,9 +292,9 @@ export async function buildDocxBuffer(params: {
   flushParagraph();
 
   const doc = new Document({
-    creator: "PustakaCari",
+    creator: "SmartSari",
     title: params.title,
-    description: `Dikonversi oleh PustakaCari (${params.model})`,
+    description: `Dikonversi oleh SmartSari (${params.model})`,
     sections: [
       {
         properties: {
@@ -314,7 +314,7 @@ export async function buildDocxBuffer(params: {
                 alignment: AlignmentType.RIGHT,
                 children: [
                   new TextRun({
-                    text: `PustakaCari · ${params.model}  |  Halaman `,
+                    text: `SmartSari · ${params.model}  |  Halaman `,
                     size: 16,
                     color: "78716C",
                     font: "Calibri",

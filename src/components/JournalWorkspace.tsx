@@ -508,19 +508,23 @@ export function JournalWorkspace() {
     <div className="min-h-screen bg-white pb-20 md:grid md:grid-cols-[260px_1fr] md:pb-0">
       {/* Desktop Left App Sidebar */}
       <aside className="hidden border-r border-[#F1E4EB] bg-[#FFF8FA] md:sticky md:top-0 md:flex md:h-screen md:flex-col">
-        <div className="border-b border-[#F1E4EB] px-5 py-4">
-          <div className="flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="h-2.5 w-2.5 rounded-full bg-[#DB2777]"
+        <div className="border-b border-[#F1E4EB] p-3.5">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("search");
+              setSearchResult(null);
+              setQuery("");
+            }}
+            className="btn-tactile flex w-full items-center justify-center rounded-xl border border-[#F1E4EB] bg-white p-2.5 transition-colors hover:border-[#E2CDD8]"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo-smartsari.jpg"
+              alt="SmartSari — Pencarian Jurnal Terfilter & Akurat"
+              className="h-14 w-auto object-contain"
             />
-            <span className="text-base font-bold tracking-[-0.02em] text-[#18181B]">
-              PustakaCari
-            </span>
-          </div>
-          <p className="mt-0.5 text-[11px] text-[#71717A]">
-            Riset Jurnal Q1–Q4 &amp; SINTA 1–6
-          </p>
+          </button>
         </div>
 
         <nav aria-label="Menu utama" className="space-y-1 p-3">
@@ -699,16 +703,26 @@ export function JournalWorkspace() {
       {/* Main Content Area */}
       <div className="flex min-w-0 flex-col">
         {/* Mobile Top Bar */}
-        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[#F1E4EB] bg-white/95 px-4 py-3 backdrop-blur-sm md:hidden">
-          <div className="flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="h-2.5 w-2.5 rounded-full bg-[#DB2777]"
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[#F1E4EB] bg-white/95 px-4 py-2.5 backdrop-blur-sm md:hidden">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("search");
+              setSearchResult(null);
+              setQuery("");
+            }}
+            className="flex items-center gap-2"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo-mark.png"
+              alt="SmartSari"
+              className="h-7 w-7 rounded-md border border-[#F1E4EB] bg-white p-0.5 object-contain"
             />
             <span className="text-base font-bold tracking-[-0.02em] text-[#18181B]">
-              PustakaCari
+              SmartSari
             </span>
-          </div>
+          </button>
           <PwaRegistrar />
         </header>
 
@@ -752,9 +766,43 @@ export function JournalWorkspace() {
           )}
 
           {activeTab === "search" && (
-            <div>
+            <div
+              className={
+                !searching && !searchResult
+                  ? "mx-auto flex min-h-[68vh] max-w-2xl flex-col justify-center"
+                  : ""
+              }
+            >
+              {/* Search-First Hero Header (Landing Only) */}
+              {!searching && !searchResult && (
+                <div className="animate-fade-up mb-6 text-center">
+                  <div className="mx-auto inline-flex rounded-2xl border border-[#F1E4EB] bg-white px-5 py-3 shadow-[0_2px_12px_-4px_rgba(219,39,119,0.1)]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/logo-smartsari.jpg"
+                      alt="SmartSari — Pencarian Jurnal Terfilter & Akurat"
+                      className="h-20 w-auto object-contain sm:h-24"
+                    />
+                  </div>
+                  <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-[#52525B]">
+                    Cari jurnal terfilter{" "}
+                    <strong className="font-semibold text-[#DB2777]">
+                      Q1–Q4 &amp; SINTA 1–6
+                    </strong>{" "}
+                    dengan prioritas Q1, baca PDF langsung, terjemahkan ke
+                    Bahasa Indonesia, dan ekspor Word.
+                  </p>
+                </div>
+              )}
+
               {/* Search & Filter Panel */}
-              <section className="rounded-xl border border-[#F1E4EB] bg-[#FFF8FA] p-3.5 sm:p-4">
+              <section
+                className={`rounded-xl border border-[#F1E4EB] bg-[#FFF8FA] p-3.5 transition-all duration-200 sm:p-4 ${
+                  !searching && !searchResult
+                    ? "shadow-[0_6px_24px_-8px_rgba(219,39,119,0.12)]"
+                    : ""
+                }`}
+              >
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -762,7 +810,7 @@ export function JournalWorkspace() {
                   }}
                   className="flex flex-col gap-2.5 sm:flex-row"
                 >
-                  <div className="relative flex-1">
+                  <div className="relative flex-1 rounded-lg transition-shadow focus-within:ring-4 focus-within:ring-[#DB2777]/12">
                     <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71717A]" />
                     <input
                       ref={searchInputRef}
@@ -770,7 +818,11 @@ export function JournalWorkspace() {
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                       placeholder="Cari jurnal Q1–Q4 & SINTA 1–6 (Bahasa Indonesia / Inggris)..."
-                      className="min-h-[44px] w-full rounded-lg border border-[#E2CDD8] bg-white py-2 pl-10 pr-16 text-base text-[#18181B] placeholder:text-[#71717A] focus:border-[#DB2777] focus:outline-none sm:min-h-[42px] sm:text-sm"
+                      className={`w-full rounded-lg border border-[#E2CDD8] bg-white pl-10 pr-16 text-base text-[#18181B] placeholder:text-[#71717A] focus:border-[#DB2777] focus:outline-none sm:text-sm ${
+                        !searching && !searchResult
+                          ? "min-h-[48px] py-2.5"
+                          : "min-h-[44px] py-2 sm:min-h-[42px]"
+                      }`}
                     />
                     {!query && (
                       <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border border-[#E2CDD8] bg-[#FFF8FA] px-1.5 py-0.5 font-mono text-[10px] text-[#71717A] sm:inline-block">
@@ -781,7 +833,11 @@ export function JournalWorkspace() {
                   <button
                     type="submit"
                     disabled={searching}
-                    className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#DB2777] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#BE185D] disabled:opacity-60 sm:min-h-[42px]"
+                    className={`btn-tactile inline-flex items-center justify-center gap-2 rounded-lg bg-[#DB2777] px-5 py-2 text-sm font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60 ${
+                      !searching && !searchResult
+                        ? "min-h-[48px]"
+                        : "min-h-[44px] sm:min-h-[42px]"
+                    }`}
                   >
                     {searching ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -958,12 +1014,15 @@ export function JournalWorkspace() {
                       )}
 
                       <div className="space-y-8">
-                        {groupedResults.map((group) => (
+                        {groupedResults.map((group, idx) => (
                           <section
                             key={group.tier}
                             id={`rank-${group.tier}`}
                             aria-label={group.meta.title}
-                            className="scroll-mt-24"
+                            style={{
+                              animationDelay: `${Math.min(idx * 55, 220)}ms`,
+                            }}
+                            className="animate-fade-up scroll-mt-24"
                           >
                           <div
                             className={`flex items-baseline justify-between gap-3 pb-2 ${
@@ -1016,37 +1075,26 @@ export function JournalWorkspace() {
                 </div>
               )}
 
-              {/* Empty State */}
+              {/* Compact Starter Topics (Landing Only) */}
               {!searching && !searchResult && (
-                <div className="mt-6 rounded-xl border border-[#F1E4EB] bg-white p-6 sm:p-8">
-                  <h2 className="text-lg font-semibold tracking-[-0.015em] text-[#18181B]">
-                    Mulai Telusuri Literatur Ilmiah
-                  </h2>
-                  <p className="mt-1.5 max-w-[64ch] text-sm leading-relaxed text-[#52525B]">
-                    Hasil pencarian otomatis menampilkan seluruh peringkat dengan{" "}
-                    <strong className="font-semibold text-[#DB2777]">
-                      Kuartil 1 (Q1)
-                    </strong>{" "}
-                    sebagai prioritas utama, diikuti Q2–Q4 dan SINTA 1–6. Baca
-                    PDF langsung di aplikasi atau terjemahkan otomatis ke Bahasa
-                    Indonesia.
-                  </p>
-                  <div className="mt-5 border-t border-[#F1E4EB] pt-4">
-                    <span className="block text-xs font-medium text-[#71717A]">
-                      Coba topik pencarian:
-                    </span>
-                    <div className="mt-2.5 flex flex-wrap gap-2">
-                      {STARTER_QUERIES.map((sample) => (
-                        <button
-                          key={sample}
-                          type="button"
-                          onClick={() => void runSearch(sample)}
-                          className="rounded-lg border border-[#E2CDD8] bg-[#FFF8FA] px-3 py-1.5 text-xs font-medium text-[#9D174D] transition-colors hover:border-[#DB2777] hover:bg-[#FCE7F3]"
-                        >
-                          {sample}
-                        </button>
-                      ))}
-                    </div>
+                <div
+                  style={{ animationDelay: "80ms" }}
+                  className="animate-fade-up mt-5 text-center"
+                >
+                  <span className="text-xs font-medium text-[#71717A]">
+                    Coba topik populer:
+                  </span>
+                  <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2">
+                    {STARTER_QUERIES.map((sample) => (
+                      <button
+                        key={sample}
+                        type="button"
+                        onClick={() => void runSearch(sample)}
+                        className="btn-tactile rounded-lg border border-[#E2CDD8] bg-[#FFF8FA] px-3 py-1.5 text-xs font-medium text-[#9D174D] hover:border-[#DB2777] hover:bg-[#FCE7F3]"
+                      >
+                        {sample}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}

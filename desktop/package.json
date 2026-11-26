@@ -1,12 +1,12 @@
 {
-  "name": "pustakacari-desktop",
+  "name": "smartsari-desktop",
   "version": "1.0.0",
-  "description": "PustakaCari — Pencarian Jurnal Q1 & Terjemahan AI Desktop App",
+  "description": "SmartSari — Pencarian Jurnal Terfilter & Akurat",
   "main": "main.js",
   "homepage": "https://autosearch-jurnal.vercel.app",
   "author": {
-    "name": "PustakaCari",
-    "email": "pustakacari@autosearch.app"
+    "name": "SmartSari",
+    "email": "smartsari@autosearch.app"
   },
   "license": "MIT",
   "scripts": {
@@ -20,8 +20,8 @@
     "electron-builder": "^26.0.12"
   },
   "build": {
-    "appId": "app.pustakacari.desktop",
-    "productName": "PustakaCari",
+    "appId": "app.smartsari.desktop",
+    "productName": "SmartSari",
     "directories": {
       "output": "dist"
     },
