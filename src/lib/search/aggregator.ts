@@ -74,7 +74,9 @@ export async function aggregateJournalSearch(params: {
   const activeSources =
     params.sources && params.sources.length > 0 ? params.sources : ALL_SOURCES;
   const activeTiers: JournalTier[] =
-    params.tiers && params.tiers.length > 0 ? params.tiers : ["Q1"];
+    params.tiers && params.tiers.length > 0
+      ? params.tiers
+      : [...TIER_PRIORITY_ORDER];
 
   const settled = await Promise.allSettled(
     activeSources.map(async (source) => {

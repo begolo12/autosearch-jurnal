@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     .filter((t): t is JournalTier => VALID_TIERS.has(t as JournalTier));
 
   const activeTiers: JournalTier[] =
-    rawTiers.length > 0 ? rawTiers : ["Q1"];
+    rawTiers.length > 0 ? rawTiers : [...TIER_PRIORITY_ORDER];
 
   const pdfOnly = searchParams.get("pdfOnly") === "true";
   const yearParam = searchParams.get("yearFrom");

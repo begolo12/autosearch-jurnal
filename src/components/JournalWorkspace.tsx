@@ -28,11 +28,9 @@ import {
   type ConversionRecord,
   type JournalPaper,
   type JournalTier,
-  type QuartileTier,
   type SearchHistoryRecord,
   type SearchResponse,
   type SearchSource,
-  type SintaTier,
   type SortOption,
 } from "@/lib/types";
 
@@ -41,16 +39,6 @@ type ActiveTab = "search" | "bookmarks" | "conversions" | "history";
 const ALL_SOURCES: Array<{ id: SearchSource; label: string }> = [
   { id: "openalex", label: "OpenAlex" },
   { id: "europepmc", label: "Europe PMC" },
-];
-
-const QUARTILE_TIERS: QuartileTier[] = ["Q1", "Q2", "Q3", "Q4"];
-const SINTA_TIERS: Array<{ id: SintaTier; label: string }> = [
-  { id: "SINTA1", label: "SINTA 1" },
-  { id: "SINTA2", label: "SINTA 2" },
-  { id: "SINTA3", label: "SINTA 3" },
-  { id: "SINTA4", label: "SINTA 4" },
-  { id: "SINTA5", label: "SINTA 5" },
-  { id: "SINTA6", label: "SINTA 6" },
 ];
 
 const RANK_SECTION_META: Record<
@@ -151,7 +139,6 @@ export function JournalWorkspace() {
     "openalex",
     "europepmc",
   ]);
-  const [selectedTiers, setSelectedTiers] = useState<JournalTier[]>(["Q1"]);
   const [pdfOnly, setPdfOnly] = useState(false);
   const [yearFrom, setYearFrom] = useState<string>("");
   const [sort, setSort] = useState<SortOption>("relevance");
@@ -252,7 +239,6 @@ export function JournalWorkspace() {
       try {
         const params = new URLSearchParams();
         params.set("q", q);
-        params.set("tiers", selectedTiers.join(","));
         if (selectedSources.length > 0 && selectedSources.length < 2) {
           params.set("sources", selectedSources.join(","));
         }
@@ -282,17 +268,8 @@ export function JournalWorkspace() {
         setSearching(false);
       }
     },
-    [query, selectedSources, selectedTiers, pdfOnly, yearFrom, sort]
+    [query, selectedSources, pdfOnly, yearFrom, sort]
   );
-
-  const toggleTier = (tier: JournalTier) => {
-    setSelectedTiers((prev) => {
-      if (prev.includes(tier)) {
-        return prev.length > 1 ? prev.filter((t) => t !== tier) : prev;
-      }
-      return [...prev, tier];
-    });
-  };
 
   const groupedResults = useMemo(() => {
     if (!searchResult?.papers) return [];
@@ -506,9 +483,7 @@ export function JournalWorkspace() {
                   PustakaCari
                 </h1>
                 <span className="rounded bg-[#1B4D3E] px-1.5 py-0.5 font-mono text-[10px] font-bold text-white">
-                  {selectedTiers.length === 1
-                    ? selectedTiers[0].replace("SINTA", "SINTA ")
-                    : `${selectedTiers.length} RANK`}
+                  PRIORITAS Q1
                 </span>
               </div>
               <p className="hidden text-xs text-[#57534E] sm:block">
@@ -651,96 +626,6 @@ export function JournalWorkspace() {
                     {searching ? "Mencari..." : "Cari Jurnal"}
                   </button>
                 </form>
-
-                {/* Tier / Rank Filter Strip */}
-                <div className="mt-3.5 border-t border-[#F2EFE9] pt-3">
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-[#1C1917]">
-                      Peringkat Jurnal (Prioritas Q1):
-                    </span>
-                    <div className="flex flex-wrap gap-1.5 text-[11px]">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedTiers(["Q1"])}
-                        className="rounded border border-[#CFC6B8] bg-[#FAF8F4] px-2 py-0.5 font-medium text-[#1C1917] hover:border-[#1B4D3E]"
-                      >
-                        Prioritas Q1
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedTiers(["Q1", "Q2", "Q3", "Q4"])
-                        }
-                        className="rounded border border-[#CFC6B8] bg-[#FAF8F4] px-2 py-0.5 font-medium text-[#1C1917] hover:border-[#1B4D3E]"
-                      >
-                        Q1–Q4
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedTiers([
-                            "SINTA1",
-                            "SINTA2",
-                            "SINTA3",
-                            "SINTA4",
-                            "SINTA5",
-                            "SINTA6",
-                          ])
-                        }
-                        className="rounded border border-[#CFC6B8] bg-[#FAF8F4] px-2 py-0.5 font-medium text-[#1C1917] hover:border-[#1B4D3E]"
-                      >
-                        SINTA 1–6
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedTiers([...TIER_PRIORITY_ORDER])}
-                        className="rounded border border-[#CFC6B8] bg-[#FAF8F4] px-2 py-0.5 font-medium text-[#1C1917] hover:border-[#1B4D3E]"
-                      >
-                        Semua Rank
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {QUARTILE_TIERS.map((q) => {
-                      const active = selectedTiers.includes(q);
-                      return (
-                        <button
-                          key={q}
-                          type="button"
-                          onClick={() => toggleTier(q)}
-                          className={`min-h-[34px] rounded-md border px-2.5 py-1 font-mono text-xs font-semibold transition-colors ${
-                            active
-                              ? "border-[#1B4D3E] bg-[#1B4D3E] text-white"
-                              : "border-[#E5DFD5] bg-[#FAF8F4] text-[#57534E] hover:border-[#CFC6B8]"
-                          }`}
-                        >
-                          {q}
-                        </button>
-                      );
-                    })}
-                    <span aria-hidden="true" className="mx-1 text-[#CFC6B8]">
-                      |
-                    </span>
-                    {SINTA_TIERS.map((s) => {
-                      const active = selectedTiers.includes(s.id);
-                      return (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() => toggleTier(s.id)}
-                          className={`min-h-[34px] rounded-md border px-2.5 py-1 font-mono text-xs font-semibold transition-colors ${
-                            active
-                              ? "border-[#9A3412] bg-[#9A3412] text-white"
-                              : "border-[#E5DFD5] bg-[#FAF8F4] text-[#57534E] hover:border-[#CFC6B8]"
-                          }`}
-                        >
-                          {s.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
 
                 {/* Mobile Filter Toggle */}
                 <div className="mt-3 flex items-center justify-between border-t border-[#F2EFE9] pt-2.5 sm:hidden">
