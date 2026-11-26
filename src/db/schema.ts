@@ -37,6 +37,22 @@ export const users = pgTable("users", {
     .notNull(),
 });
 
+export const emailOtpChallenges = pgTable("email_otp_challenges", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: text("email").notNull().unique(),
+  name: text("name").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  otpHash: text("otp_hash").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  lastSentAt: timestamp("last_sent_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 export const researchProjects = pgTable("research_projects", {
   id: uuid("id").defaultRandom().primaryKey(),
   sessionId: text("session_id").notNull().default("global"),
