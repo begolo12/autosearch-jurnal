@@ -13,6 +13,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { getCachedNetwork, setCachedNetwork } from "@/lib/local-cache";
 import type { CitationNetworkResponse, JournalPaper } from "@/lib/types";
 
 interface CitationNetworkModalProps {
@@ -47,10 +48,29 @@ export function CitationNetworkModal({
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
     setError(null);
     setHoveredKey(null);
 
+    const cacheKey = (activeSeed.doi || activeSeed.title).toLowerCase().trim();
+    const cached = getCachedNetwork(cacheKey);
+    if (cached) {
+      setNetwork(cached);
+      setLoading(false);
+      if (cached.citing.length === 0 && cached.references.length > 0) {
+        setActiveTab("references");
+      } else if (
+        cached.citing.length === 0 &&
+        cached.references.length === 0 &&
+        cached.related.length > 0
+      ) {
+        setActiveTab("related");
+      }
+      return () => {
+        active = false;
+      };
+    }
+
+    setLoading(true);
     const params = new URLSearchParams({ title: activeSeed.title });
     if (activeSeed.doi) params.set("doi", activeSeed.doi);
 
@@ -65,6 +85,13 @@ export function CitationNetworkModal({
           return;
         }
         setNetwork(data);
+        if (
+          data.citing.length > 0 ||
+          data.references.length > 0 ||
+          data.related.length > 0
+        ) {
+          setCachedNetwork(cacheKey, data);
+        }
         if (
           data.citing.length === 0 &&
           data.references.length > 0

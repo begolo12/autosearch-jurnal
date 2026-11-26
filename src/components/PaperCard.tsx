@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Bookmark,
   BookmarkCheck,
@@ -23,6 +23,12 @@ import {
   StickyNote,
 } from "lucide-react";
 import { formatCitation, type CitationFormat } from "@/lib/citation";
+import {
+  getCachedAbstractTranslation,
+  getCachedTakeaways,
+  setCachedAbstractTranslation,
+  setCachedTakeaways,
+} from "@/lib/local-cache";
 import type {
   ConversionMode,
   JournalPaper,
@@ -123,10 +129,27 @@ export function PaperCard({
   const [showTakeaways, setShowTakeaways] = useState(false);
   const [takeawaysErr, setTakeawaysErr] = useState<string | null>(null);
 
+  useEffect(() => {
+    const cachedAbs = getCachedAbstractTranslation(paper.paperKey);
+    if (cachedAbs) {
+      setTranslatedAbstract(cachedAbs);
+    }
+    const cachedTak = getCachedTakeaways(paper.paperKey);
+    if (cachedTak) {
+      setTakeaways(cachedTak);
+    }
+  }, [paper.paperKey]);
+
   const handleExtractTakeaways = async () => {
     if (!paper.abstract) return;
     if (takeaways) {
       setShowTakeaways((v) => !v);
+      return;
+    }
+    const cached = getCachedTakeaways(paper.paperKey);
+    if (cached) {
+      setTakeaways(cached);
+      setShowTakeaways(true);
       return;
     }
     setLoadingTakeaways(true);
@@ -151,6 +174,7 @@ export function PaperCard({
         return;
       }
       setTakeaways(data.takeaways);
+      setCachedTakeaways(paper.paperKey, data.takeaways);
       setShowTakeaways(true);
     } catch {
       setTakeawaysErr("Gagal menghubungi server AI.");
@@ -191,6 +215,11 @@ export function PaperCard({
 
   const handleTranslateAbstract = async () => {
     if (!paper.abstract) return;
+    const cached = getCachedAbstractTranslation(paper.paperKey);
+    if (cached) {
+      setTranslatedAbstract(cached);
+      return;
+    }
     setTranslatingAbstract(true);
     setAbstractTranslateErr(null);
     try {
@@ -214,10 +243,12 @@ export function PaperCard({
         setAbstractTranslateErr(data.error || "Gagal menerjemahkan abstrak.");
         return;
       }
-      setTranslatedAbstract({
+      const nextTranslation = {
         title: data.translatedTitle || paper.title,
         abstract: data.translatedAbstract,
-      });
+      };
+      setTranslatedAbstract(nextTranslation);
+      setCachedAbstractTranslation(paper.paperKey, nextTranslation);
     } catch {
       setAbstractTranslateErr("Gagal menghubungi server terjemahan.");
     } finally {

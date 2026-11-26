@@ -16,6 +16,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  RefreshCw,
   Search,
   Send,
   Sparkles,
@@ -36,6 +37,16 @@ import {
   formatCitation,
   formatRelativeTimeId,
 } from "@/lib/citation";
+import {
+  getCachedBrief,
+  getCachedMatrix,
+  getCachedSearch,
+  getWorkspaceSnapshot,
+  setCachedBrief,
+  setCachedMatrix,
+  setCachedSearch,
+  setWorkspaceSnapshot,
+} from "@/lib/local-cache";
 import {
   TIER_PRIORITY_ORDER,
   type AuthUser,
@@ -162,6 +173,7 @@ export function JournalWorkspace() {
   const [searchResult, setSearchResult] = useState<SearchResponse | null>(null);
   const [searching, setSearching] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [searchSyncBadge, setSearchSyncBadge] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -225,31 +237,52 @@ export function JournalWorkspace() {
         fetch("/api/conversions"),
       ]);
 
+      let nextUser: AuthUser | null = null;
+      let nextProjects: ResearchProjectRecord[] = [];
+      let nextBookmarks: BookmarkRecord[] = [];
+      let nextHistory: SearchHistoryRecord[] = [];
+      let nextConversions: ConversionRecord[] = [];
+
       if (meRes.ok) {
         const meJson = (await meRes.json()) as { user?: AuthUser | null };
-        setAuthUser(meJson.user ?? null);
+        nextUser = meJson.user ?? null;
+        setAuthUser(nextUser);
       }
       if (pRes.ok) {
         const pJson = (await pRes.json()) as {
           projects?: ResearchProjectRecord[];
         };
-        setProjects(pJson.projects ?? []);
+        nextProjects = pJson.projects ?? [];
+        setProjects(nextProjects);
       }
       if (bRes.ok) {
         const bJson = (await bRes.json()) as { bookmarks?: BookmarkRecord[] };
-        setBookmarks(bJson.bookmarks ?? []);
+        nextBookmarks = bJson.bookmarks ?? [];
+        setBookmarks(nextBookmarks);
       }
       if (hRes.ok) {
         const hJson = (await hRes.json()) as {
           history?: SearchHistoryRecord[];
         };
-        setHistory(hJson.history ?? []);
+        nextHistory = hJson.history ?? [];
+        setHistory(nextHistory);
       }
       if (cRes.ok) {
         const cJson = (await cRes.json()) as {
           conversions?: ConversionRecord[];
         };
-        setConversions(cJson.conversions ?? []);
+        nextConversions = cJson.conversions ?? [];
+        setConversions(nextConversions);
+      }
+
+      if (meRes.ok && bRes.ok && hRes.ok && cRes.ok) {
+        setWorkspaceSnapshot({
+          authUser: nextUser,
+          projects: nextProjects,
+          bookmarks: nextBookmarks,
+          history: nextHistory,
+          conversions: nextConversions,
+        });
       }
     } catch {
       // Non-fatal
@@ -259,6 +292,15 @@ export function JournalWorkspace() {
   }, []);
 
   useEffect(() => {
+    const snap = getWorkspaceSnapshot();
+    if (snap) {
+      setAuthUser(snap.authUser);
+      setProjects(snap.projects);
+      setBookmarks(snap.bookmarks);
+      setHistory(snap.history);
+      setConversions(snap.conversions);
+      setLoadingSidebar(false);
+    }
     void reloadWorkspaceData();
   }, [reloadWorkspaceData]);
 
@@ -348,7 +390,8 @@ export function JournalWorkspace() {
       overridePdfOnly?: boolean,
       overrideTierPreset?: TierPresetId,
       pageNum = 1,
-      append = false
+      append = false,
+      forceOnline = false
     ) => {
       const q = (overrideQuery ?? query).trim();
       if (q.length < 2) {
@@ -364,15 +407,45 @@ export function JournalWorkspace() {
       const preset =
         TIER_PRESETS.find((p) => p.id === effectivePresetId) ?? TIER_PRESETS[0];
 
+      const searchCacheKey = JSON.stringify({
+        q: q.toLowerCase().replace(/\s+/g, " "),
+        sources: [...selectedSources].sort(),
+        preset: effectivePresetId,
+        pdfOnly: effectivePdfOnly,
+        yearFrom,
+        sort,
+      });
+      const briefCacheKey = `${q.toLowerCase().replace(/\s+/g, " ")}::${effectivePresetId}`;
+
       setActiveTab("search");
       setShowFilterMenu(false);
-      if (append) {
+      setSearchError(null);
+      setNotice(null);
+
+      let servedFromCache = false;
+      let cachedEntry: { data: SearchResponse; savedAt: number } | null = null;
+
+      if (pageNum === 1 && !append) {
+        cachedEntry = getCachedSearch(searchCacheKey);
+        if (cachedEntry) {
+          servedFromCache = true;
+          setSearchResult(cachedEntry.data);
+          setSearchBrief(getCachedBrief(briefCacheKey));
+          const ageMinutes = (Date.now() - cachedEntry.savedAt) / 60000;
+          if (!forceOnline && ageMinutes < 10) {
+            setSearchSyncBadge("Cache Lokal · Instan");
+            return;
+          }
+          setSearchSyncBadge("Cache Lokal · Memeriksa jurnal baru...");
+        } else {
+          setSearching(true);
+          setSearchSyncBadge(null);
+        }
+      } else if (append) {
         setLoadingMore(true);
       } else {
         setSearching(true);
       }
-      setSearchError(null);
-      setNotice(null);
 
       try {
         const params = new URLSearchParams();
@@ -395,7 +468,11 @@ export function JournalWorkspace() {
         const data = (await res.json()) as SearchResponse & { error?: string };
 
         if (!res.ok) {
-          setSearchError(data.error || "Pencarian gagal dijalankan.");
+          if (!servedFromCache) {
+            setSearchError(data.error || "Pencarian gagal dijalankan.");
+          } else {
+            setSearchSyncBadge("Cache Lokal · Offline");
+          }
           return;
         }
 
@@ -405,15 +482,41 @@ export function JournalWorkspace() {
             const seen = new Set(prev.papers.map((p) => p.paperKey));
             const extra = data.papers.filter((p) => !seen.has(p.paperKey));
             const merged = [...prev.papers, ...extra];
-            return {
+            const updated: SearchResponse = {
               ...data,
               total: merged.length,
               papers: merged,
             };
+            setCachedSearch(searchCacheKey, updated);
+            return updated;
           });
+        } else if (servedFromCache && cachedEntry) {
+          // Incremental delta merge: keep cached papers intact and prepend/append only new ones
+          const existingKeys = new Set(
+            cachedEntry.data.papers.map((p) => p.paperKey)
+          );
+          const newPapers = data.papers.filter(
+            (p) => !existingKeys.has(p.paperKey)
+          );
+          if (newPapers.length > 0) {
+            const merged = [...newPapers, ...cachedEntry.data.papers];
+            const updated: SearchResponse = {
+              ...data,
+              total: merged.length,
+              papers: merged,
+            };
+            setSearchResult(updated);
+            setCachedSearch(searchCacheKey, updated);
+            setSearchSyncBadge(`Cache Lokal · +${newPapers.length} jurnal baru`);
+          } else {
+            setCachedSearch(searchCacheKey, cachedEntry.data);
+            setSearchSyncBadge("Cache Lokal · Data mutakhir");
+          }
         } else {
           setSearchResult(data);
-          setSearchBrief(null);
+          setSearchBrief(getCachedBrief(briefCacheKey));
+          setCachedSearch(searchCacheKey, data);
+          setSearchSyncBadge(null);
           const hRes = await fetch("/api/history");
           if (hRes.ok) {
             const hJson = (await hRes.json()) as {
@@ -423,7 +526,11 @@ export function JournalWorkspace() {
           }
         }
       } catch {
-        setSearchError("Tidak dapat terhubung ke server pencarian.");
+        if (!servedFromCache) {
+          setSearchError("Tidak dapat terhubung ke server pencarian.");
+        } else {
+          setSearchSyncBadge("Cache Lokal · Offline");
+        }
       } finally {
         setSearching(false);
         setLoadingMore(false);
@@ -436,6 +543,13 @@ export function JournalWorkspace() {
     if (!searchResult || searchResult.papers.length === 0 || loadingBrief) {
       return;
     }
+    const briefCacheKey = `${searchResult.query.toLowerCase().replace(/\s+/g, " ")}::${tierPreset}`;
+    const cached = getCachedBrief(briefCacheKey);
+    if (cached) {
+      setSearchBrief(cached);
+      return;
+    }
+
     setLoadingBrief(true);
     setNotice(null);
     try {
@@ -467,6 +581,7 @@ export function JournalWorkspace() {
         return;
       }
       setSearchBrief(data.brief);
+      setCachedBrief(briefCacheKey, data.brief);
     } catch {
       setNotice({
         type: "error",
@@ -510,6 +625,17 @@ export function JournalWorkspace() {
       return;
     }
 
+    const matrixKey = list
+      .slice(0, 5)
+      .map((p) => p.paperKey)
+      .sort()
+      .join("|");
+    const cached = getCachedMatrix(matrixKey);
+    if (cached) {
+      setMatrixResult(cached);
+      return;
+    }
+
     setBuildingMatrix(true);
     setNotice(null);
     try {
@@ -539,6 +665,7 @@ export function JournalWorkspace() {
         return;
       }
       setMatrixResult(data.matrix);
+      setCachedMatrix(matrixKey, data.matrix);
     } catch {
       setNotice({
         type: "error",
@@ -1568,13 +1695,37 @@ export function JournalWorkspace() {
               {!searching && searchResult && (
                 <div>
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[#A1A1AA]">
-                    <span>
-                      Menampilkan{" "}
-                      <strong className="font-mono tabular-nums text-white">
-                        {searchResult.total}
-                      </strong>{" "}
-                      artikel untuk &ldquo;{searchResult.query}&rdquo;
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span>
+                        Menampilkan{" "}
+                        <strong className="font-mono tabular-nums text-white">
+                          {searchResult.total}
+                        </strong>{" "}
+                        artikel untuk &ldquo;{searchResult.query}&rdquo;
+                      </span>
+                      {searchSyncBadge && (
+                        <span className="rounded-full border border-[#DB2777]/35 bg-[#DB2777]/12 px-2 py-0.5 text-[10px] font-medium text-[#F9A8D4]">
+                          {searchSyncBadge}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void runSearch(
+                            searchResult.query,
+                            undefined,
+                            undefined,
+                            1,
+                            false,
+                            true
+                          )
+                        }
+                        className="inline-flex items-center gap-1 rounded-full border border-[#2C2E35] bg-[#151619] px-2 py-0.5 text-[10px] font-medium text-[#A1A1AA] hover:border-[#F472B6]/45 hover:text-white"
+                      >
+                        <RefreshCw className="h-2.5 w-2.5" />
+                        Cek Baru
+                      </button>
+                    </div>
                     <span className="font-mono text-[11px] text-[#71717A]">
                       {searchResult.sourceStats
                         .map((st) => `${st.source}: ${st.ok ? st.count : "err"}`)

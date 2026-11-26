@@ -17,6 +17,12 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import {
+  getCachedFullTranslation,
+  getCachedPaperChat,
+  setCachedFullTranslation,
+  setCachedPaperChat,
+} from "@/lib/local-cache";
 import type { JournalPaper, PaperChatMessage } from "@/lib/types";
 
 interface PdfReaderModalProps {
@@ -192,11 +198,17 @@ export function PdfReaderModal({
           setChatError(data.error || "Gagal mendapatkan jawaban AI.");
           return;
         }
-        setChatUsedFullText(Boolean(data.usedFullText));
-        setChatMessages((prev) => [
-          ...prev,
+        const fullTextFlag = Boolean(data.usedFullText);
+        setChatUsedFullText(fullTextFlag);
+        const updatedMessages: PaperChatMessage[] = [
+          ...nextMessages,
           { role: "assistant", content: data.reply! },
-        ]);
+        ];
+        setChatMessages(updatedMessages);
+        setCachedPaperChat(paper.paperKey, {
+          messages: updatedMessages,
+          usedFullText: fullTextFlag,
+        });
       } catch {
         setChatError("Gangguan koneksi saat menghubungi asisten AI.");
       } finally {
@@ -240,9 +252,14 @@ export function PdfReaderModal({
         return;
       }
 
+      const usedModel = data.model || "mv/zai-glm-5-3-flash";
       setTranslatedMarkdown(data.markdown);
-      setTranslateModel(data.model || "mv/zai-glm-5-3-flash");
+      setTranslateModel(usedModel);
       setTranslateCached(Boolean(data.cached));
+      setCachedFullTranslation(paper.paperKey, {
+        markdown: data.markdown,
+        model: usedModel,
+      });
     } catch {
       setTranslateError("Gangguan koneksi saat memanggil layanan terjemahan.");
     } finally {
@@ -260,7 +277,19 @@ export function PdfReaderModal({
     };
     window.addEventListener("keydown", handleKey);
 
-    if (initialTranslate) {
+    const cachedChat = getCachedPaperChat(paper.paperKey);
+    if (cachedChat) {
+      setChatMessages(cachedChat.messages);
+      setChatUsedFullText(cachedChat.usedFullText);
+    }
+
+    const cachedTrans = getCachedFullTranslation(paper.paperKey);
+    if (cachedTrans) {
+      setTranslatedMarkdown(cachedTrans.markdown);
+      setTranslateModel(cachedTrans.model);
+      setTranslateCached(true);
+      setTranslating(false);
+    } else if (initialTranslate) {
       fetch("/api/translate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -291,9 +320,14 @@ export function PdfReaderModal({
             );
             return;
           }
+          const usedModel = data.model || "mv/zai-glm-5-3-flash";
           setTranslatedMarkdown(data.markdown);
-          setTranslateModel(data.model || "mv/zai-glm-5-3-flash");
+          setTranslateModel(usedModel);
           setTranslateCached(Boolean(data.cached));
+          setCachedFullTranslation(paper.paperKey, {
+            markdown: data.markdown,
+            model: usedModel,
+          });
         })
         .catch(() => {
           if (active) {
