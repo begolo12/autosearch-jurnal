@@ -65,13 +65,13 @@ export async function fetchPdfBuffer(rawUrl: string): Promise<Buffer> {
       Accept: "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8",
     },
     redirect: "follow",
-    signal: AbortSignal.timeout(25000),
+    signal: AbortSignal.timeout(20000),
   });
 
   if (!response.ok) {
     throw new PdfFetchError(
       "FETCH_FAILED",
-      `Server sumber mengembalikan status ${response.status}. Silakan buka halaman sumber secara langsung.`,
+      `Server sumber mengembalikan status ${response.status}. Silakan buka PDF atau halaman sumber secara langsung.`,
       rawUrl
     );
   }
@@ -107,6 +107,110 @@ export async function fetchPdfBuffer(rawUrl: string): Promise<Buffer> {
   }
 
   return buffer;
+}
+
+async function fetchUnpaywallMirrors(doi: string): Promise<string[]> {
+  try {
+    const clean = doi
+      .trim()
+      .replace(/^https?:\/\/(dx\.)?doi\.org\//i, "")
+      .replace(/^doi:\s*/i, "");
+    if (!clean) return [];
+
+    const res = await fetch(
+      `https://api.unpaywall.org/v2/${encodeURIComponent(clean)}?email=pustakacari@autosearch.app`,
+      { signal: AbortSignal.timeout(6000) }
+    );
+    if (!res.ok) return [];
+
+    const data = (await res.json()) as {
+      best_oa_location?: { url_for_pdf?: string };
+      oa_locations?: Array<{ url_for_pdf?: string }>;
+    };
+
+    const urls = new Set<string>();
+    if (data.best_oa_location?.url_for_pdf) {
+      urls.add(data.best_oa_location.url_for_pdf);
+    }
+    for (const loc of data.oa_locations ?? []) {
+      if (loc.url_for_pdf) urls.add(loc.url_for_pdf);
+      if (urls.size >= 3) break;
+    }
+    return Array.from(urls);
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchPdfWithFallbacks(
+  primaryUrl: string,
+  doi?: string | null
+): Promise<Buffer> {
+  try {
+    return await fetchPdfBuffer(primaryUrl);
+  } catch (primaryErr) {
+    if (primaryErr instanceof PdfFetchError && primaryErr.code === "INVALID_URL") {
+      throw primaryErr;
+    }
+
+    if (doi) {
+      const mirrors = await fetchUnpaywallMirrors(doi);
+      for (const mirror of mirrors) {
+        if (mirror === primaryUrl) continue;
+        try {
+          return await fetchPdfBuffer(mirror);
+        } catch {
+          // Try next Unpaywall mirror
+        }
+      }
+    }
+
+    throw primaryErr;
+  }
+}
+
+export async function fetchEuropePmcFullText(
+  pdfUrl?: string | null
+): Promise<string | null> {
+  if (!pdfUrl) return null;
+  const match = pdfUrl.match(/PMC\d+/i);
+  if (!match) return null;
+
+  const pmcId = match[0].toUpperCase();
+  try {
+    const res = await fetch(
+      `https://www.ebi.ac.uk/europepmc/webservices/rest/${pmcId}/fullTextXML`,
+      {
+        headers: {
+          "User-Agent": "PustakaCari/2.0 (mailto:pustakacari@autosearch.app)",
+        },
+        signal: AbortSignal.timeout(12000),
+      }
+    );
+    if (!res.ok) return null;
+
+    const xml = await res.text();
+    const cleaned = xml
+      .replace(/<(ref-list|back)[\s\S]*?<\/\1>/gi, "")
+      .replace(/<\/(p|title|sec|abstract)>/gi, "\n\n")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+
+    if (cleaned.length < 200) return null;
+    if (cleaned.length <= MAX_EXTRACTED_CHARS) return cleaned;
+    return (
+      cleaned.slice(0, MAX_EXTRACTED_CHARS) +
+      "\n\n[Catatan: Teks lengkap dipotong karena melebihi batas panjang pemrosesan.]"
+    );
+  } catch {
+    return null;
+  }
 }
 
 export async function extractPdfText(buffer: Buffer): Promise<string> {

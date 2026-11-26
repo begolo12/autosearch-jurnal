@@ -269,6 +269,7 @@ export function JournalWorkspace() {
         url: paper.pdfUrl,
         title: paper.title,
       });
+      if (paper.doi) params.set("doi", paper.doi);
       const res = await fetch(`/api/pdf/download?${params.toString()}`);
 
       if (!res.ok) {

@@ -130,6 +130,10 @@ export function PdfReaderModal({
   const [downloadingDocx, setDownloadingDocx] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
+  const [pdfLoading, setPdfLoading] = useState(Boolean(paper.pdfUrl));
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
+
   const runTranslate = useCallback(async () => {
     setTranslating(true);
     setTranslateError(null);
@@ -239,8 +243,49 @@ export function PdfReaderModal({
   }, [initialTranslate, onClose, paper]);
 
   const pdfProxyUrl = paper.pdfUrl
-    ? `/api/pdf/view?url=${encodeURIComponent(paper.pdfUrl)}&title=${encodeURIComponent(paper.title)}`
+    ? `/api/pdf/view?url=${encodeURIComponent(paper.pdfUrl)}&title=${encodeURIComponent(paper.title)}${paper.doi ? `&doi=${encodeURIComponent(paper.doi)}` : ""}`
     : null;
+
+  useEffect(() => {
+    if (!pdfProxyUrl) return;
+    let active = true;
+    let createdUrl: string | null = null;
+
+    fetch(pdfProxyUrl)
+      .then(async (res) => {
+        if (!active) return;
+        const ct = (res.headers.get("content-type") || "").toLowerCase();
+        if (!res.ok || !ct.includes("application/pdf")) {
+          const errJson = (await res.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          setPdfLoadError(
+            errJson.error ||
+              "Penerbit membatasi pratinjau PDF melalui server. Anda tetap bisa membuka PDF langsung di tab baru atau membaca terjemahan AI."
+          );
+          return;
+        }
+        const blob = await res.blob();
+        if (!active) return;
+        createdUrl = URL.createObjectURL(blob);
+        setPdfBlobUrl(createdUrl);
+      })
+      .catch(() => {
+        if (active) {
+          setPdfLoadError(
+            "Gagal memuat pratinjau PDF. Silakan buka PDF asli di tab baru."
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setPdfLoading(false);
+      });
+
+    return () => {
+      active = false;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
+    };
+  }, [pdfProxyUrl]);
 
   const handleDocxClick = async () => {
     setDownloadingDocx(true);
@@ -415,11 +460,67 @@ export function PdfReaderModal({
                   Buka Sumber Asli <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
-              <iframe
-                title={`PDF ${paper.title}`}
-                src={pdfProxyUrl}
-                className="h-full w-full flex-1 bg-white"
-              />
+              {pdfLoading ? (
+                <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-white p-6 text-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-[#1B4D3E]" />
+                  <p className="text-xs font-medium text-[#57534E]">
+                    Memuat dokumen PDF dari penerbit...
+                  </p>
+                </div>
+              ) : pdfBlobUrl ? (
+                <iframe
+                  title={`PDF ${paper.title}`}
+                  src={pdfBlobUrl}
+                  className="h-full w-full flex-1 bg-white"
+                />
+              ) : (
+                <div className="flex flex-1 flex-col items-center justify-center bg-[#FAF8F4] p-6 text-center">
+                  <div className="max-w-md rounded-xl border border-[#E5DFD5] bg-white p-6">
+                    <AlertCircle className="mx-auto h-7 w-7 text-[#9A3412]" />
+                    <h3 className="mt-3 font-serif text-base font-semibold text-[#1C1917]">
+                      Pratinjau PDF Dibatasi Penerbit
+                    </h3>
+                    <p className="mt-1.5 text-xs leading-relaxed text-[#57534E]">
+                      {pdfLoadError}
+                    </p>
+                    <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                      <a
+                        href={paper.pdfUrl!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg bg-[#1B4D3E] px-4 py-2 text-xs font-semibold text-white hover:bg-[#143B2F]"
+                      >
+                        Buka PDF di Tab Baru{" "}
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                      {paper.landingUrl && (
+                        <a
+                          href={paper.landingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-[#CFC6B8] bg-[#FAF8F4] px-3.5 py-2 text-xs font-semibold text-[#1C1917] hover:bg-[#F2EFE9]"
+                        >
+                          Halaman Penerbit
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMobileTab("translate");
+                          setDesktopView("translate");
+                          if (!translatedMarkdown && !translating) {
+                            void runTranslate();
+                          }
+                        }}
+                        className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-[#9A3412]/30 bg-[#9A3412]/10 px-3.5 py-2 text-xs font-semibold text-[#9A3412] hover:bg-[#9A3412]/15"
+                      >
+                        <Languages className="h-3.5 w-3.5" />
+                        Baca Terjemahan ID
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">

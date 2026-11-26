@@ -7,7 +7,8 @@ import { buildDocxBuffer } from "@/lib/docx-builder";
 import { generateWordMarkdown, InferHubError } from "@/lib/inferhub";
 import {
   extractPdfText,
-  fetchPdfBuffer,
+  fetchEuropePmcFullText,
+  fetchPdfWithFallbacks,
   sanitizeFilename,
 } from "@/lib/pdf";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -109,10 +110,11 @@ export async function POST(request: NextRequest) {
   let extractedText: string | null = null;
   if (body.pdfUrl) {
     try {
-      const pdfBuffer = await fetchPdfBuffer(body.pdfUrl);
+      const pdfBuffer = await fetchPdfWithFallbacks(body.pdfUrl, body.doi);
       extractedText = await extractPdfText(pdfBuffer);
     } catch (err) {
-      console.warn("PDF text extraction fallback to abstract:", err);
+      console.warn("PDF text extraction fallback to Europe PMC XML / abstract:", err);
+      extractedText = await fetchEuropePmcFullText(body.pdfUrl);
     }
   }
 

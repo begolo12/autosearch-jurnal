@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  fetchPdfBuffer,
+  fetchPdfWithFallbacks,
   PdfFetchError,
   sanitizeFilename,
 } from "@/lib/pdf";
@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
 
   const url = request.nextUrl.searchParams.get("url");
   const title = request.nextUrl.searchParams.get("title") || "jurnal-q1";
+  const doi = request.nextUrl.searchParams.get("doi");
 
   if (!url) {
     return NextResponse.json(
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const buffer = await fetchPdfBuffer(url);
+    const buffer = await fetchPdfWithFallbacks(url, doi);
     const filename = sanitizeFilename(title, "pdf");
 
     return new NextResponse(new Uint8Array(buffer), {

@@ -8,7 +8,11 @@ import {
   InferHubError,
   translateAbstractToIndonesian,
 } from "@/lib/inferhub";
-import { extractPdfText, fetchPdfBuffer } from "@/lib/pdf";
+import {
+  extractPdfText,
+  fetchEuropePmcFullText,
+  fetchPdfWithFallbacks,
+} from "@/lib/pdf";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { attachSessionCookie, getSessionContext } from "@/lib/session";
 
@@ -135,10 +139,11 @@ export async function POST(request: NextRequest) {
   let extractedText: string | null = null;
   if (body.pdfUrl) {
     try {
-      const pdfBuffer = await fetchPdfBuffer(body.pdfUrl);
+      const pdfBuffer = await fetchPdfWithFallbacks(body.pdfUrl, body.doi);
       extractedText = await extractPdfText(pdfBuffer);
     } catch (err) {
       console.warn("Translate PDF extraction fallback:", err);
+      extractedText = await fetchEuropePmcFullText(body.pdfUrl);
     }
   }
 
