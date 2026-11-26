@@ -18,6 +18,25 @@ function normalizeTitle(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function computeTitleRelevance(title: string, query: string): number {
+  const normTitle = title.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+  const normQuery = query
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .trim();
+  if (!normQuery) return 0;
+
+  let score = normTitle.includes(normQuery) ? 1.0 : 0;
+  const tokens = Array.from(
+    new Set(normQuery.split(/\s+/).filter((t) => t.length >= 2))
+  );
+  if (tokens.length === 0) return score;
+
+  const matched = tokens.filter((t) => normTitle.includes(t)).length;
+  score += matched / tokens.length;
+  return score;
+}
+
 function tierRank(tier?: JournalTier): number {
   if (!tier) return 999;
   const idx = TIER_PRIORITY_ORDER.indexOf(tier);
@@ -154,25 +173,47 @@ export async function aggregateJournalSearch(params: {
 
   const sort = params.sort ?? "relevance";
   // Primary sort: ALWAYS prioritize Q1 first, followed by Q2, Q3, Q4, SINTA1..SINTA6
+  // Secondary sort is 100% deterministic with paperKey tie-breaker
   papers.sort((a, b) => {
     const rankDiff =
       tierRank(a.journalMetrics?.primaryTier) -
       tierRank(b.journalMetrics?.primaryTier);
     if (rankDiff !== 0) return rankDiff;
 
+    const relA = computeTitleRelevance(a.title, query);
+    const relB = computeTitleRelevance(b.title, query);
+    const ifA = a.journalMetrics?.impactFactor ?? 0;
+    const ifB = b.journalMetrics?.impactFactor ?? 0;
+    const citA = a.citations ?? -1;
+    const citB = b.citations ?? -1;
+    const yrA = a.year ?? 0;
+    const yrB = b.year ?? 0;
+
     if (sort === "impact") {
-      return (
-        (b.journalMetrics?.impactFactor ?? 0) -
-        (a.journalMetrics?.impactFactor ?? 0)
-      );
+      if (ifB !== ifA) return ifB - ifA;
+      if (relB !== relA) return relB - relA;
+      if (citB !== citA) return citB - citA;
+      return a.paperKey.localeCompare(b.paperKey);
     }
     if (sort === "newest") {
-      return (b.year ?? 0) - (a.year ?? 0);
+      if (yrB !== yrA) return yrB - yrA;
+      if (relB !== relA) return relB - relA;
+      if (ifB !== ifA) return ifB - ifA;
+      return a.paperKey.localeCompare(b.paperKey);
     }
     if (sort === "citations") {
-      return (b.citations ?? -1) - (a.citations ?? -1);
+      if (citB !== citA) return citB - citA;
+      if (ifB !== ifA) return ifB - ifA;
+      return a.paperKey.localeCompare(b.paperKey);
     }
-    return Number(Boolean(b.pdfUrl)) - Number(Boolean(a.pdfUrl));
+
+    const scoreA = (a.pdfUrl ? 2 : 0) + relA * 3;
+    const scoreB = (b.pdfUrl ? 2 : 0) + relB * 3;
+    if (Math.abs(scoreB - scoreA) > 0.001) return scoreB - scoreA;
+    if (ifB !== ifA) return ifB - ifA;
+    if (citB !== citA) return citB - citA;
+    if (yrB !== yrA) return yrB - yrA;
+    return a.paperKey.localeCompare(b.paperKey);
   });
 
   return {

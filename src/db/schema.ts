@@ -75,3 +75,12 @@ export const rateLimits = pgTable("rate_limits", {
   count: integer("count").notNull().default(1),
   resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
 });
+
+export const searchCache = pgTable("search_cache", {
+  cacheKey: text("cache_key").primaryKey(),
+  payload: jsonb("payload").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});

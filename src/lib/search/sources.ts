@@ -237,7 +237,7 @@ async function fetchOpenAlexSourcesByIssns(
 
   const res = await fetch(url.toString(), {
     headers: REQUEST_HEADERS,
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(12000),
   });
   if (!res.ok) return map;
 
@@ -259,6 +259,7 @@ async function fetchOpenAlexWorks(
   const url = new URL("https://api.openalex.org/works");
   url.searchParams.set("search", query);
   url.searchParams.set("filter", filter);
+  url.searchParams.set("sort", "relevance_score:desc");
   url.searchParams.set("per-page", String(limit));
   url.searchParams.set("mailto", "pustakacari@autosearch.app");
 
@@ -411,7 +412,7 @@ export async function searchEuropePmcByTiers(
 
   const res = await fetch(url.toString(), {
     headers: REQUEST_HEADERS,
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(12000),
   });
 
   if (!res.ok) {
