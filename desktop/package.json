@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "description": "PustakaCari — Pencarian Jurnal Q1 & Terjemahan AI Desktop App",
   "main": "main.js",
-  "author": "PustakaCari",
+  "homepage": "https://autosearch-jurnal.vercel.app",
+  "author": {
+    "name": "PustakaCari",
+    "email": "pustakacari@autosearch.app"
+  },
   "license": "MIT",
   "scripts": {
     "start": "electron .",
@@ -47,6 +51,7 @@
         "deb"
       ],
       "category": "Education",
+      "maintainer": "PustakaCari <pustakacari@autosearch.app>",
       "icon": "icon.png"
     }
   }
