@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { AuthModal } from "@/components/AuthModal";
+import { CitationNetworkModal } from "@/components/CitationNetworkModal";
 import { LiteratureMatrixModal } from "@/components/LiteratureMatrixModal";
 import { PaperCard } from "@/components/PaperCard";
 import { PdfReaderModal } from "@/components/PdfReaderModal";
@@ -183,6 +184,7 @@ export function JournalWorkspace() {
     null
   );
   const [loadingBrief, setLoadingBrief] = useState(false);
+  const [networkPaper, setNetworkPaper] = useState<JournalPaper | null>(null);
   const [exportingBibDocx, setExportingBibDocx] = useState(false);
 
   const [bookmarks, setBookmarks] = useState<BookmarkRecord[]>([]);
@@ -274,6 +276,7 @@ export function JournalWorkspace() {
         setShowFilterMenu(false);
         setShowAuthModal(false);
         setMatrixResult(null);
+        setNetworkPaper(null);
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setActiveTab("search");
@@ -1813,6 +1816,7 @@ export function JournalWorkspace() {
                                   onToggleSelectMatrix={
                                     handleToggleSelectMatrix
                                   }
+                                  onOpenNetwork={(p) => setNetworkPaper(p)}
                                 />
                               ))}
                             </div>
@@ -2001,6 +2005,7 @@ export function JournalWorkspace() {
                           selectedPapersMap[b.paperKey]
                         )}
                         onToggleSelectMatrix={handleToggleSelectMatrix}
+                        onOpenNetwork={(p) => setNetworkPaper(p)}
                         bookmarkId={b.id}
                         projectId={b.projectId}
                         note={b.note}
@@ -2289,6 +2294,22 @@ export function JournalWorkspace() {
           onDownloadTranslatedDocx={(p) =>
             handleConvertWord(p, "translate_id")
           }
+        />
+      )}
+
+      {/* Citation Network & Snowballing Modal */}
+      {networkPaper && (
+        <CitationNetworkModal
+          initialPaper={networkPaper}
+          bookmarkedKeys={new Set(bookmarkedMap.keys())}
+          onClose={() => setNetworkPaper(null)}
+          onToggleBookmark={handleToggleBookmark}
+          onOpenReader={(p, autoTranslate = false) =>
+            setReaderState({ paper: p, autoTranslate })
+          }
+          onBuildMatrix={async (papers) => {
+            await handleBuildMatrix(papers);
+          }}
         />
       )}
 

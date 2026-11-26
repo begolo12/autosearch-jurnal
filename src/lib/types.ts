@@ -148,6 +148,15 @@ export interface PaperTakeaways {
   model: string;
 }
 
+export interface CitationNetworkResponse {
+  seedTitle: string;
+  seedOpenAlexId: string | null;
+  citedByCount: number | null;
+  citing: JournalPaper[];
+  references: JournalPaper[];
+  related: JournalPaper[];
+}
+
 export interface ConversionRecord {
   id: string;
   paperKey: string;

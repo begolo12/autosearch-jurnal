@@ -14,6 +14,7 @@ import {
   FileDown,
   FileText,
   FolderOpen,
+  GitBranch,
   Languages,
   Loader2,
   Quote,
@@ -68,6 +69,7 @@ interface PaperCardProps {
   convertingKey: string | null;
   selectedForMatrix?: boolean;
   onToggleSelectMatrix?: (paper: JournalPaper) => void;
+  onOpenNetwork?: (paper: JournalPaper) => void;
   bookmarkId?: string;
   projectId?: string | null;
   note?: string | null;
@@ -89,6 +91,7 @@ export function PaperCard({
   convertingKey,
   selectedForMatrix = false,
   onToggleSelectMatrix,
+  onOpenNetwork,
   bookmarkId,
   projectId,
   note,
@@ -497,6 +500,17 @@ export function PaperCard({
                 <Square className="h-3.5 w-3.5" />
               )}
               <span>{selectedForMatrix ? "Dipilih" : "Bandingkan"}</span>
+            </button>
+          )}
+
+          {onOpenNetwork && (
+            <button
+              type="button"
+              onClick={() => onOpenNetwork(paper)}
+              className="btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3 py-1.5 text-xs font-medium text-[#A1A1AA] hover:border-[#F472B6]/45 hover:text-[#F9A8D4]"
+            >
+              <GitBranch className="h-3.5 w-3.5 text-[#F472B6]" />
+              <span>Jejaring</span>
             </button>
           )}
 

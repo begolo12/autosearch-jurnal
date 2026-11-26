@@ -23,7 +23,7 @@ const PREPRINT_BLOCKLIST = [
   "chemrxiv",
 ];
 
-interface OpenAlexSourceMeta {
+export interface OpenAlexSourceMeta {
   id?: string;
   display_name?: string;
   issn_l?: string;
@@ -36,13 +36,15 @@ interface OpenAlexSourceMeta {
   };
 }
 
-interface OpenAlexWork {
+export interface OpenAlexWork {
   id?: string;
   title?: string;
   publication_year?: number;
   cited_by_count?: number;
   doi?: string;
   language?: string;
+  referenced_works?: string[];
+  related_works?: string[];
   abstract_inverted_index?: Record<string, number[]>;
   open_access?: {
     is_oa?: boolean;
@@ -63,7 +65,7 @@ interface OpenAlexWork {
   }>;
 }
 
-function cleanDoi(raw: string | null | undefined): string | null {
+export function cleanDoi(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const trimmed = raw
     .trim()
@@ -72,7 +74,7 @@ function cleanDoi(raw: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function makePaperKey(
+export function makePaperKey(
   source: string,
   doi: string | null,
   title: string,
@@ -88,7 +90,7 @@ function makePaperKey(
   return `${source}:${fallbackId || Date.now()}`;
 }
 
-function reconstructOpenAlexAbstract(
+export function reconstructOpenAlexAbstract(
   invertedIndex: Record<string, number[]> | null | undefined
 ): string | null {
   if (!invertedIndex || typeof invertedIndex !== "object") return null;
@@ -176,7 +178,7 @@ export function classifyJournalMetrics(
   };
 }
 
-async function fetchOpenAlexSourcesByIds(
+export async function fetchOpenAlexSourcesByIds(
   ids: string[]
 ): Promise<Map<string, OpenAlexSourceMeta>> {
   const map = new Map<string, OpenAlexSourceMeta>();
