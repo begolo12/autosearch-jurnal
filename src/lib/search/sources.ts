@@ -7,7 +7,7 @@ import type {
 } from "@/lib/types";
 
 const REQUEST_HEADERS = {
-  "User-Agent": "PustakaCari/2.0 (mailto:pustakacari@autosearch.app)",
+  "User-Agent": "SmartSari/2.0 (mailto:hello@smartsari.my.id)",
   Accept: "application/json",
 };
 
@@ -199,7 +199,7 @@ export async function fetchOpenAlexSourcesByIds(
         "select",
         "id,display_name,issn_l,issn,type,country_code,summary_stats"
       );
-      url.searchParams.set("mailto", "pustakacari@autosearch.app");
+      url.searchParams.set("mailto", "hello@smartsari.my.id");
 
       const res = await fetch(url.toString(), {
         headers: REQUEST_HEADERS,

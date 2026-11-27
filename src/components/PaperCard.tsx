@@ -35,6 +35,7 @@ import type {
   PaperTakeaways,
   ResearchProjectRecord,
 } from "@/lib/types";
+import { getSafeHttpUrl } from "@/lib/url";
 
 const SOURCE_LABELS: Record<string, string> = {
   openalex: "OpenAlex",
@@ -129,15 +130,33 @@ export function PaperCard({
   const [showTakeaways, setShowTakeaways] = useState(false);
   const [takeawaysErr, setTakeawaysErr] = useState<string | null>(null);
 
+  const [copiedDoi, setCopiedDoi] = useState(false);
+  const [copiedTitle, setCopiedTitle] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedTranslation, setCopiedTranslation] = useState(false);
+  const [copiedTakeaways, setCopiedTakeaways] = useState(false);
+
   useEffect(() => {
-    const cachedAbs = getCachedAbstractTranslation(paper.paperKey);
-    if (cachedAbs) {
-      setTranslatedAbstract(cachedAbs);
-    }
-    const cachedTak = getCachedTakeaways(paper.paperKey);
-    if (cachedTak) {
-      setTakeaways(cachedTak);
-    }
+    queueMicrotask(() => {
+      try {
+        const savedFmt = window.localStorage.getItem(
+          "smartsari:v1:pref_cite_format"
+        );
+        if (savedFmt === "apa" || savedFmt === "ieee" || savedFmt === "bibtex") {
+          setCiteFormat(savedFmt);
+        }
+      } catch {
+        // Ignore storage errors
+      }
+      const cachedAbs = getCachedAbstractTranslation(paper.paperKey);
+      if (cachedAbs) {
+        setTranslatedAbstract(cachedAbs);
+      }
+      const cachedTak = getCachedTakeaways(paper.paperKey);
+      if (cachedTak) {
+        setTakeaways(cachedTak);
+      }
+    });
   }, [paper.paperKey]);
 
   const handleExtractTakeaways = async () => {
@@ -266,9 +285,9 @@ export function PaperCard({
 
   const tierBadgeClass =
     tier === "Q1" || tier === "SINTA1"
-      ? "bg-[#DB2777] text-white"
+      ? "bg-[#DB2777] text-white shadow-[0_0_12px_rgba(219,39,119,0.28)]"
       : tier === "Q2" || tier === "SINTA2"
-        ? "bg-[#DB2777]/15 text-[#F472B6] border border-[#DB2777]/30"
+        ? "bg-[#DB2777]/15 text-[#F472B6] border border-[#DB2777]/35"
         : "border border-[#2C2E35] bg-[#1E1F23] text-[#D4D4D8]";
 
   const metaItems: string[] = [];
@@ -287,7 +306,7 @@ export function PaperCard({
   if (paper.language) metaItems.push(paper.language);
 
   return (
-    <article className="-mx-3 rounded-xl px-3 py-5 transition-colors duration-150 hover:bg-[#16171B] sm:grid sm:grid-cols-[88px_1fr] sm:gap-5">
+    <article className="-mx-3 rounded-2xl border border-transparent px-3.5 py-5 transition-all duration-150 hover:border-[#232429] hover:bg-[#151619]/85 sm:grid sm:grid-cols-[88px_1fr] sm:gap-5">
       {/* Left Rank Indicator */}
       <div className="mb-2 flex items-baseline gap-2.5 sm:mb-0 sm:block sm:pt-0.5">
         {tierLabel ? (
@@ -302,18 +321,48 @@ export function PaperCard({
           </span>
         )}
         {hasImpactMetrics && paper.journalMetrics && (
-          <div className="flex items-center gap-2 font-mono text-[11px] tabular-nums text-[#71717A] sm:mt-1.5 sm:block sm:space-y-0.5">
-            <div>IF {paper.journalMetrics.impactFactor}</div>
-            <div>H-{paper.journalMetrics.hIndex}</div>
+          <div className="flex items-center gap-1.5 font-mono text-[10px] tabular-nums text-[#A1A1AA] sm:mt-2 sm:flex-col sm:items-start sm:gap-1">
+            <span className="rounded border border-[#232429] bg-[#0E0F12] px-1.5 py-0.5">
+              IF {paper.journalMetrics.impactFactor}
+            </span>
+            <span className="rounded border border-[#232429] bg-[#0E0F12] px-1.5 py-0.5">
+              H-{paper.journalMetrics.hIndex}
+            </span>
           </div>
         )}
       </div>
 
       {/* Main Content */}
       <div className="min-w-0">
-        <h3 className="text-[16px] font-semibold leading-snug tracking-[-0.015em] text-[#F4F4F5] sm:text-[17px]">
-          {translatedAbstract ? translatedAbstract.title : paper.title}
-        </h3>
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="text-[16px] font-semibold leading-snug tracking-[-0.015em] text-[#F4F4F5] sm:text-[17px]">
+            {translatedAbstract ? translatedAbstract.title : paper.title}
+          </h3>
+          <button
+            type="button"
+            title="Salin judul"
+            aria-label="Salin judul artikel"
+            onClick={() => {
+              const titleText = translatedAbstract
+                ? translatedAbstract.title
+                : paper.title;
+              void navigator.clipboard
+                .writeText(titleText)
+                .then(() => {
+                  setCopiedTitle(true);
+                  setTimeout(() => setCopiedTitle(false), 1600);
+                })
+                .catch(() => {});
+            }}
+            className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-md border border-transparent px-1.5 py-0.5 text-[11px] text-[#71717A] transition-colors hover:border-[#2C2E35] hover:bg-[#1E1F23] hover:text-white"
+          >
+            {copiedTitle ? (
+              <Check className="h-3.5 w-3.5 text-[#4ADE80]" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </div>
 
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[13px] leading-relaxed text-[#A1A1AA]">
           {paper.pdfUrl ? (
@@ -326,6 +375,64 @@ export function PaperCard({
             </span>
           )}
           <span>{metaItems.join(" · ")}</span>
+          {paper.doi && (
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard
+                  .writeText(paper.doi!)
+                  .then(() => {
+                    setCopiedDoi(true);
+                    setTimeout(() => setCopiedDoi(false), 1800);
+                  })
+                  .catch(() => {});
+              }}
+              className="inline-flex items-center gap-1 rounded border border-[#2C2E35] bg-[#1E1F23] px-1.5 py-0.5 font-mono text-[10px] text-[#A1A1AA] transition-colors hover:border-[#F472B6]/45 hover:text-white"
+            >
+              {copiedDoi ? (
+                <>
+                  <Check className="h-2.5 w-2.5 text-[#4ADE80]" />
+                  <span className="text-[#4ADE80]">DOI tersalin</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="h-2.5 w-2.5" />
+                  <span>DOI</span>
+                </>
+              )}
+            </button>
+          )}
+          {(paper.doi || getSafeHttpUrl(paper.landingUrl)) && (
+            <button
+              type="button"
+              onClick={() => {
+                const link = paper.doi
+                  ? `https://doi.org/${paper.doi}`
+                  : getSafeHttpUrl(paper.landingUrl);
+                if (!link) return;
+                void navigator.clipboard
+                  .writeText(link)
+                  .then(() => {
+                    setCopiedLink(true);
+                    setTimeout(() => setCopiedLink(false), 1800);
+                  })
+                  .catch(() => {});
+              }}
+              className="inline-flex items-center gap-1 rounded border border-[#2C2E35] bg-[#1E1F23] px-1.5 py-0.5 text-[10px] text-[#A1A1AA] transition-colors hover:border-[#F472B6]/45 hover:text-white"
+            >
+              {copiedLink ? (
+                <>
+                  <Check className="h-2.5 w-2.5 text-[#4ADE80]" />
+                  <span className="text-[#4ADE80]">Tersalin</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="h-2.5 w-2.5" />
+                  <span>Salin tautan</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {abstractText ? (
@@ -376,6 +483,36 @@ export function PaperCard({
                     : "Terjemahkan abstrak"}
               </button>
 
+              {translatedAbstract && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard
+                      .writeText(
+                        `${translatedAbstract.title}\n\n${translatedAbstract.abstract}`
+                      )
+                      .then(() => {
+                        setCopiedTranslation(true);
+                        setTimeout(() => setCopiedTranslation(false), 1800);
+                      })
+                      .catch(() => {});
+                  }}
+                  className="inline-flex items-center gap-1 font-medium text-[#A1A1AA] transition-colors hover:text-[#F472B6]"
+                >
+                  {copiedTranslation ? (
+                    <>
+                      <Check className="h-3 w-3 text-[#4ADE80]" />
+                      <span className="text-[#4ADE80]">Tersalin</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3 w-3" />
+                      <span>Salin terjemahan</span>
+                    </>
+                  )}
+                </button>
+              )}
+
               {abstractText.length >= 20 && (
                 <button
                   type="button"
@@ -405,22 +542,62 @@ export function PaperCard({
               <p className="mt-1 text-xs text-[#F87171]">{takeawaysErr}</p>
             )}
             {showTakeaways && takeaways && (
-              <div className="animate-panel-open mt-2.5 grid gap-2 rounded-xl border border-[#2C2E35] bg-[#151619] p-3 text-xs sm:grid-cols-2">
-                <div>
-                  <span className="font-semibold text-[#F472B6]">Masalah:</span>{" "}
-                  <span className="text-[#E4E4E7]">{takeaways.problem}</span>
+              <div className="animate-panel-open mt-2.5 rounded-xl border border-[#2C2E35] bg-[#151619] p-3 text-xs">
+                <div className="mb-2 flex items-center justify-between gap-2 border-b border-[#232429] pb-1.5">
+                  <span className="text-[11px] font-semibold text-[#F9A8D4]">
+                    Intisari Terstruktur
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const text = [
+                        `Masalah: ${takeaways.problem}`,
+                        `Metode: ${takeaways.method}`,
+                        `Temuan: ${takeaways.finding}`,
+                        `Implikasi: ${takeaways.implication}`,
+                      ].join("\n");
+                      void navigator.clipboard
+                        .writeText(text)
+                        .then(() => {
+                          setCopiedTakeaways(true);
+                          setTimeout(() => setCopiedTakeaways(false), 1800);
+                        })
+                        .catch(() => {});
+                    }}
+                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[#A1A1AA] transition-colors hover:bg-[#1E1F23] hover:text-white"
+                  >
+                    {copiedTakeaways ? (
+                      <>
+                        <Check className="h-3 w-3 text-[#4ADE80]" />
+                        <span className="text-[#4ADE80]">Tersalin</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3 w-3" />
+                        <span>Salin intisari</span>
+                      </>
+                    )}
+                  </button>
                 </div>
-                <div>
-                  <span className="font-semibold text-[#F472B6]">Metode:</span>{" "}
-                  <span className="text-[#E4E4E7]">{takeaways.method}</span>
-                </div>
-                <div>
-                  <span className="font-semibold text-[#F472B6]">Temuan:</span>{" "}
-                  <span className="text-[#E4E4E7]">{takeaways.finding}</span>
-                </div>
-                <div>
-                  <span className="font-semibold text-[#F472B6]">Implikasi:</span>{" "}
-                  <span className="text-[#E4E4E7]">{takeaways.implication}</span>
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  {[
+                    { label: "Masalah", value: takeaways.problem },
+                    { label: "Metode", value: takeaways.method },
+                    { label: "Temuan", value: takeaways.finding },
+                    { label: "Implikasi", value: takeaways.implication },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className="rounded-lg border border-[#232429] bg-[#0E0F12]/90 p-2.5"
+                    >
+                      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[#F472B6]">
+                        {item.label}
+                      </span>
+                      <span className="leading-relaxed text-[#E4E4E7]">
+                        {item.value}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -573,7 +750,7 @@ export function PaperCard({
 
         {/* Inline 1-Click Citation Panel */}
         {showCitePanel && (
-          <div className="animate-panel-open mt-3 rounded-xl border border-[#2C2E35] bg-[#151619] p-3.5">
+          <div className="animate-panel-open mt-3 rounded-xl border border-[#2C2E35] border-t-2 border-t-[#DB2777]/65 bg-[#151619] p-3.5 shadow-lg">
             <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1">
                 {(
@@ -589,6 +766,14 @@ export function PaperCard({
                     onClick={() => {
                       setCiteFormat(fmt.id);
                       setCopiedCite(false);
+                      try {
+                        window.localStorage.setItem(
+                          "smartsari:v1:pref_cite_format",
+                          fmt.id
+                        );
+                      } catch {
+                        // Ignore storage errors
+                      }
                     }}
                     className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
                       citeFormat === fmt.id
@@ -628,7 +813,7 @@ export function PaperCard({
 
         {/* Unified Download & Word Export Panel */}
         {showConvertPanel && (
-          <div className="animate-panel-open mt-3 rounded-xl border border-[#2C2E35] bg-[#151619] p-3.5">
+          <div className="animate-panel-open mt-3 rounded-xl border border-[#2C2E35] border-t-2 border-t-[#DB2777]/65 bg-[#151619] p-3.5 shadow-lg">
             <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-[#232429] pb-3">
               {paper.pdfUrl && (
                 <button
@@ -655,9 +840,9 @@ export function PaperCard({
                 <span>Baca Terjemahan Full ID</span>
               </button>
 
-              {paper.landingUrl && (
+              {getSafeHttpUrl(paper.landingUrl) && (
                 <a
-                  href={paper.landingUrl}
+                  href={getSafeHttpUrl(paper.landingUrl)!}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn-tactile inline-flex min-h-[34px] items-center gap-1 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3 py-1 text-xs font-medium text-[#A1A1AA] hover:text-white sm:ml-auto"
@@ -673,7 +858,7 @@ export function PaperCard({
                 Ekspor ke Dokumen Word (.docx)
               </span>
               <span className="text-[11px] font-medium text-[#A1A1AA]">
-                SmartSari AI
+                SmartSari
               </span>
             </div>
 
@@ -727,7 +912,7 @@ export function PaperCard({
 
         {/* Inline Project & Note Panel (Saved Papers) */}
         {showNotePanel && bookmarkId && onUpdateBookmarkMeta && (
-          <div className="animate-panel-open mt-3 space-y-3 rounded-xl border border-[#2C2E35] bg-[#151619] p-3.5">
+          <div className="animate-panel-open mt-3 space-y-3 rounded-xl border border-[#2C2E35] border-t-2 border-t-[#DB2777]/65 bg-[#151619] p-3.5 shadow-lg">
             {projects && projects.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1 text-xs font-medium text-[#A1A1AA]">
@@ -759,10 +944,22 @@ export function PaperCard({
                 rows={2}
                 value={noteDraft}
                 onChange={(e) => setNoteDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !savingMeta) {
+                    e.preventDefault();
+                    setSavingMeta(true);
+                    void onUpdateBookmarkMeta(bookmarkId, {
+                      note: noteDraft.trim() || null,
+                    }).finally(() => setSavingMeta(false));
+                  }
+                }}
                 placeholder="Tulis catatan riset pribadi untuk jurnal ini (metode, kutipan penting, dll)..."
                 className="w-full rounded-lg border border-[#2C2E35] bg-[#0E0F12] px-3 py-2 text-xs text-[#F4F4F5] placeholder-[#71717A] focus:border-[#F472B6] focus:outline-none"
               />
-              <div className="mt-2 flex justify-end">
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className="text-[11px] text-[#71717A]">
+                  Ctrl+Enter untuk simpan
+                </span>
                 <button
                   type="button"
                   disabled={savingMeta}

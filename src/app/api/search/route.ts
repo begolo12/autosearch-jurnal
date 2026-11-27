@@ -65,6 +65,13 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  if (query.length > 200) {
+    return NextResponse.json(
+      { error: "Kata kunci pencarian maksimal 200 karakter." },
+      { status: 400 }
+    );
+  }
+
   const rawSources = (searchParams.get("sources") || "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
@@ -85,7 +92,12 @@ export async function GET(request: NextRequest) {
 
   const pdfOnly = searchParams.get("pdfOnly") === "true";
   const yearParam = searchParams.get("yearFrom");
-  const yearFrom = yearParam ? Number(yearParam) || null : null;
+  const parsedYear = yearParam ? Number(yearParam) : NaN;
+  const maxYear = new Date().getFullYear() + 1;
+  const yearFrom =
+    Number.isInteger(parsedYear) && parsedYear >= 1900 && parsedYear <= maxYear
+      ? parsedYear
+      : null;
   const sortRaw = searchParams.get("sort");
   const sort: SortOption =
     sortRaw === "impact" || sortRaw === "newest" || sortRaw === "citations"

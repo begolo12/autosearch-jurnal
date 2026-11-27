@@ -3,6 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { conversions } from "@/db/schema";
+import { isAllowedAuthOrigin } from "@/lib/auth-security";
 import {
   generateWordMarkdown,
   InferHubError,
@@ -13,26 +14,34 @@ import {
   fetchEuropePmcFullText,
   fetchPdfWithFallbacks,
 } from "@/lib/pdf";
+import { checkDailyAiQuota } from "@/lib/quota";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { attachSessionCookie, getSessionContext } from "@/lib/session";
 
 export const maxDuration = 60;
 
 const translateSchema = z.object({
-  paperKey: z.string().min(1),
-  title: z.string().min(1),
-  authors: z.array(z.string()).default([]),
+  paperKey: z.string().min(1).max(300),
+  title: z.string().min(1).max(500),
+  authors: z.array(z.string().max(160)).max(50).default([]),
   year: z.number().nullable().optional(),
-  venue: z.string().nullable().optional(),
-  doi: z.string().nullable().optional(),
-  abstract: z.string().nullable().optional(),
-  pdfUrl: z.string().nullable().optional(),
-  language: z.string().nullable().optional(),
+  venue: z.string().max(300).nullable().optional(),
+  doi: z.string().max(200).nullable().optional(),
+  abstract: z.string().max(15000).nullable().optional(),
+  pdfUrl: z.string().max(1000).nullable().optional(),
+  language: z.string().max(40).nullable().optional(),
   scope: z.enum(["full", "abstract"]).default("full"),
   force: z.boolean().optional(),
 });
 
 export async function POST(request: NextRequest) {
+  if (!isAllowedAuthOrigin(request)) {
+    return NextResponse.json(
+      { error: "Permintaan berasal dari sumber yang tidak diizinkan." },
+      { status: 403 }
+    );
+  }
+
   const { sessionId, isNew } = getSessionContext(request);
 
   let body: z.infer<typeof translateSchema>;
@@ -54,7 +63,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rl = await checkRateLimit(request, "translate_abstract", 20, 600);
+    const rl = await checkRateLimit(request, "translate_abstract", 20, 600, true);
     if (!rl.allowed) {
       return NextResponse.json(
         {
@@ -63,6 +72,17 @@ export async function POST(request: NextRequest) {
         {
           status: 429,
           headers: { "Retry-After": String(rl.retryAfterSeconds) },
+        }
+      );
+    }
+
+    const quota = await checkDailyAiQuota(request);
+    if (!quota.allowed) {
+      return NextResponse.json(
+        { error: quota.error, requireLogin: quota.requireLogin },
+        {
+          status: quota.status,
+          headers: { "Retry-After": String(quota.retryAfterSeconds) },
         }
       );
     }
@@ -77,7 +97,7 @@ export async function POST(request: NextRequest) {
     } catch (err) {
       if (err instanceof InferHubError) {
         return NextResponse.json(
-          { error: err.message, code: err.code },
+          { error: err.message },
           { status: err.code === "MISSING_API_KEY" ? 503 : err.status || 502 }
         );
       }
@@ -88,7 +108,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Full paper translation: check global Neon cache first
+  // Full paper translation: check session-scoped Neon cache first
   const db = getDb();
   if (!body.force) {
     try {
@@ -97,6 +117,7 @@ export async function POST(request: NextRequest) {
         .from(conversions)
         .where(
           and(
+            eq(conversions.sessionId, sessionId),
             eq(conversions.paperKey, body.paperKey),
             eq(conversions.mode, "translate_id")
           )
@@ -108,7 +129,6 @@ export async function POST(request: NextRequest) {
         return attachSessionCookie(
           NextResponse.json({
             markdown: existing[0].markdownContent,
-            model: existing[0].model,
             cached: true,
             sourceType: existing[0].pdfUrl ? "pdf" : "abstract",
             conversionId: existing[0].id,
@@ -122,8 +142,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Rate limit only on cache miss
-  const rl = await checkRateLimit(request, "translate_full", 10, 600);
+  // Rate limit only on cache miss (fail-closed)
+  const rl = await checkRateLimit(request, "translate_full", 10, 600, true);
   if (!rl.allowed) {
     return NextResponse.json(
       {
@@ -132,6 +152,17 @@ export async function POST(request: NextRequest) {
       {
         status: 429,
         headers: { "Retry-After": String(rl.retryAfterSeconds) },
+      }
+    );
+  }
+
+  const quota = await checkDailyAiQuota(request);
+  if (!quota.allowed) {
+    return NextResponse.json(
+      { error: quota.error, requireLogin: quota.requireLogin },
+      {
+        status: quota.status,
+        headers: { "Retry-After": String(quota.retryAfterSeconds) },
       }
     );
   }
@@ -158,7 +189,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { markdown, model } = await generateWordMarkdown({
+    const { markdown } = await generateWordMarkdown({
       title: body.title,
       authors: body.authors,
       year: body.year ?? null,
@@ -181,7 +212,7 @@ export async function POST(request: NextRequest) {
           year: body.year ?? null,
           mode: "translate_id",
           pdfUrl: body.pdfUrl ?? null,
-          model,
+          model: "smartsari-engine",
           markdownContent: markdown,
         })
         .returning({ id: conversions.id });
@@ -193,7 +224,6 @@ export async function POST(request: NextRequest) {
     return attachSessionCookie(
       NextResponse.json({
         markdown,
-        model,
         cached: false,
         sourceType: extractedText ? "pdf" : "abstract",
         conversionId,
@@ -204,7 +234,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     if (err instanceof InferHubError) {
       return NextResponse.json(
-        { error: err.message, code: err.code },
+        { error: err.message },
         { status: err.code === "MISSING_API_KEY" ? 503 : err.status || 502 }
       );
     }

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { isAllowedAuthOrigin } from "@/lib/auth-security";
 import { buildLiteratureMatrixDocxBuffer } from "@/lib/docx-builder";
 import { generateLiteratureMatrix, InferHubError } from "@/lib/inferhub";
+import { checkDailyAiQuota } from "@/lib/quota";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export const maxDuration = 60;
@@ -10,12 +12,12 @@ const matrixRequestSchema = z.object({
   papers: z
     .array(
       z.object({
-        title: z.string().min(1),
-        authors: z.array(z.string()).default([]),
+        title: z.string().min(1).max(500),
+        authors: z.array(z.string().max(160)).max(50).default([]),
         year: z.number().nullable().optional(),
-        venue: z.string().nullable().optional(),
-        tierLabel: z.string().nullable().optional(),
-        abstract: z.string().nullable().optional(),
+        venue: z.string().max(300).nullable().optional(),
+        tierLabel: z.string().max(40).nullable().optional(),
+        abstract: z.string().max(15000).nullable().optional(),
       })
     )
     .min(2, "Pilih minimal 2 jurnal untuk membuat matriks.")
@@ -24,26 +26,34 @@ const matrixRequestSchema = z.object({
   exportDocx: z.boolean().optional(),
   matrix: z
     .object({
-      synthesis: z.string(),
-      researchGaps: z.string(),
-      model: z.string(),
-      rows: z.array(
-        z.object({
-          title: z.string(),
-          authorsYear: z.string(),
-          tier: z.string(),
-          objective: z.string(),
-          method: z.string(),
-          sample: z.string(),
-          findings: z.string(),
-          limitations: z.string(),
-        })
-      ),
+      synthesis: z.string().max(10000),
+      researchGaps: z.string().max(10000),
+      rows: z
+        .array(
+          z.object({
+            title: z.string().max(500),
+            authorsYear: z.string().max(300),
+            tier: z.string().max(60),
+            objective: z.string().max(3000),
+            method: z.string().max(3000),
+            sample: z.string().max(3000),
+            findings: z.string().max(3000),
+            limitations: z.string().max(3000),
+          })
+        )
+        .max(10),
     })
     .optional(),
 });
 
 export async function POST(request: NextRequest) {
+  if (!isAllowedAuthOrigin(request)) {
+    return NextResponse.json(
+      { error: "Permintaan berasal dari sumber yang tidak diizinkan." },
+      { status: 403 }
+    );
+  }
+
   let body: z.infer<typeof matrixRequestSchema>;
   try {
     body = matrixRequestSchema.parse(await request.json());
@@ -56,6 +66,16 @@ export async function POST(request: NextRequest) {
   }
 
   if (body.exportDocx && body.matrix) {
+    const exportRl = await checkRateLimit(request, "ai_matrix_export", 20, 60, true);
+    if (!exportRl.allowed) {
+      return NextResponse.json(
+        {
+          error: `Terlalu banyak permintaan ekspor. Tunggu ${exportRl.retryAfterSeconds} detik.`,
+        },
+        { status: 429 }
+      );
+    }
+
     try {
       const buffer = await buildLiteratureMatrixDocxBuffer(body.matrix);
       return new NextResponse(new Uint8Array(buffer), {
@@ -82,11 +102,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const rl = await checkRateLimit(request, "ai_matrix", 10, 60);
+  const rl = await checkRateLimit(request, "ai_matrix", 10, 60, true);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Terlalu banyak permintaan. Tunggu ${rl.retryAfterSeconds} detik.` },
       { status: 429 }
+    );
+  }
+
+  const quota = await checkDailyAiQuota(request);
+  if (!quota.allowed) {
+    return NextResponse.json(
+      { error: quota.error, requireLogin: quota.requireLogin },
+      {
+        status: quota.status,
+        headers: { "Retry-After": String(quota.retryAfterSeconds) },
+      }
     );
   }
 

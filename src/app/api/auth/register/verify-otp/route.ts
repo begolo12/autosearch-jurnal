@@ -169,7 +169,10 @@ export async function POST(request: NextRequest) {
     }
 
     return attachAuthCookie(
-      NextResponse.json({ user: created }, { status: 201 }),
+      NextResponse.json(
+        { user: created },
+        { status: 201, headers: { "Cache-Control": "no-store" } }
+      ),
       created.id
     );
   } catch (err) {

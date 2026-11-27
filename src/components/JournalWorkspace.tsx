@@ -1,15 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowUp,
   BookOpen,
   Bookmark,
+  Check,
   Cloud,
+  Copy,
   FileDown,
   FileText,
   FolderOpen,
+  HelpCircle,
   History,
   Loader2,
   LogOut,
@@ -19,11 +23,13 @@ import {
   RefreshCw,
   Search,
   Send,
+  Share2,
   SlidersHorizontal,
   Sparkles,
   SquarePen,
   Trash2,
   User,
+  WifiOff,
   X,
 } from "lucide-react";
 import { AuthModal } from "@/components/AuthModal";
@@ -70,6 +76,7 @@ import {
   type SearchSource,
   type SortOption,
 } from "@/lib/types";
+import { getSafeHttpUrl } from "@/lib/url";
 
 type ActiveTab = "search" | "bookmarks" | "conversions" | "history";
 type TierPresetId = "all" | "q1" | "q1_q2" | "q1_q4" | "sinta";
@@ -239,12 +246,57 @@ export function JournalWorkspace() {
     null
   );
   const [convertingKey, setConvertingKey] = useState<string | null>(null);
+  const [confirmClearHistory, setConfirmClearHistory] = useState(false);
+  const [resultFilter, setResultFilter] = useState("");
+  const [isOffline, setIsOffline] = useState(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [copiedShareLink, setCopiedShareLink] = useState(false);
+  const [copiedAllApa, setCopiedAllApa] = useState(false);
   const [notice, setNotice] = useState<{
     type: "info" | "error" | "success";
     message: string;
     actionUrl?: string;
     actionLabel?: string;
   } | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    queueMicrotask(() => setIsOffline(!window.navigator.onLine));
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => setIsOffline(false);
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online", goOnline);
+    return () => {
+      window.removeEventListener("offline", goOffline);
+      window.removeEventListener("online", goOnline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "search" && searchResult?.query) {
+      document.title = `"${searchResult.query}" — SmartSari`;
+    } else if (activeTab === "bookmarks") {
+      document.title = `Tersimpan (${bookmarks.length}) — SmartSari`;
+    } else if (activeTab === "conversions") {
+      document.title = `Arsip Word (${conversions.length}) — SmartSari`;
+    } else if (activeTab === "history") {
+      document.title = "Riwayat — SmartSari";
+    } else {
+      document.title = "SmartSari — Pencarian Jurnal Terfilter & Akurat";
+    }
+  }, [activeTab, searchResult?.query, bookmarks.length, conversions.length]);
+
+  useEffect(() => {
+    if (!notice || notice.type === "error" || notice.actionUrl) return;
+    const timer = setTimeout(() => setNotice(null), 4500);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  useEffect(() => {
+    if (!confirmClearHistory) return;
+    const timer = setTimeout(() => setConfirmClearHistory(false), 4000);
+    return () => clearTimeout(timer);
+  }, [confirmClearHistory]);
 
   const resetToHome = useCallback(() => {
     setActiveTab("search");
@@ -360,129 +412,131 @@ export function JournalWorkspace() {
   }, []);
 
   useEffect(() => {
-    const snap = getWorkspaceSnapshot();
-    if (snap) {
-      setAuthUser(snap.authUser);
-      setProjects(snap.projects);
-      setBookmarks(snap.bookmarks);
-      setHistory(snap.history);
-      setConversions(snap.conversions);
-      setLoadingSidebar(false);
-    }
+    queueMicrotask(() => {
+      const snap = getWorkspaceSnapshot();
+      if (snap) {
+        setAuthUser(snap.authUser);
+        setProjects(snap.projects);
+        setBookmarks(snap.bookmarks);
+        setHistory(snap.history);
+        setConversions(snap.conversions);
+        setLoadingSidebar(false);
+      }
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const saved = getUiSession();
+      const urlParams = new URLSearchParams(window.location.search);
+      const saved = getUiSession();
 
-    const urlTab = urlParams.get("tab") as ActiveTab | null;
-    const urlProject = urlParams.get("project");
-    const urlQuery = urlParams.get("q");
-    const urlTier = urlParams.get("tier") as TierPresetId | null;
-    const urlPdf = urlParams.get("pdf");
-    const urlYear = urlParams.get("year");
-    const urlSort = urlParams.get("sort") as SortOption | null;
+      const urlTab = urlParams.get("tab") as ActiveTab | null;
+      const urlProject = urlParams.get("project");
+      const urlQuery = urlParams.get("q");
+      const urlTier = urlParams.get("tier") as TierPresetId | null;
+      const urlPdf = urlParams.get("pdf");
+      const urlYear = urlParams.get("year");
+      const urlSort = urlParams.get("sort") as SortOption | null;
 
-    if (saved) {
-      setActiveTab(
-        urlTab &&
+      if (saved) {
+        setActiveTab(
+          urlTab &&
+            ["search", "bookmarks", "conversions", "history"].includes(urlTab)
+            ? urlTab
+            : saved.activeTab
+        );
+        setSidebarOpen(saved.sidebarOpen);
+        setSelectedProjectId(urlProject ?? saved.selectedProjectId);
+        setQuery(urlQuery ?? saved.query);
+        if (saved.selectedSources?.length) {
+          setSelectedSources(saved.selectedSources);
+        }
+        setTierPreset(urlTier ?? saved.tierPreset);
+        setPdfOnly(urlPdf === "1" ? true : saved.pdfOnly);
+        setYearFrom(urlYear ?? saved.yearFrom);
+        setSort(urlSort ?? saved.sort);
+        setSelectedPapersMap(saved.selectedPapersMap ?? {});
+        if (saved.readerState) setReaderState(saved.readerState);
+        if (saved.networkState) setNetworkState(saved.networkState);
+
+        let restoredSearch = false;
+        if (saved.activeSearchCacheKey) {
+          const cached = getCachedSearch(saved.activeSearchCacheKey);
+          if (cached) {
+            setSearchResult(cached.data);
+            setActiveSearchCacheKey(saved.activeSearchCacheKey);
+            setSearchSyncBadge("Cache Lokal · Dipulihkan");
+            restoredSearch = true;
+          }
+        }
+
+        if (saved.activeBriefCacheKey) {
+          const cachedBrief = getCachedBrief(saved.activeBriefCacheKey);
+          if (cachedBrief) {
+            setSearchBrief(cachedBrief);
+            setActiveBriefCacheKey(saved.activeBriefCacheKey);
+          }
+        }
+
+        if (saved.activeMatrixKey) {
+          const cachedMatrix = getCachedMatrix(saved.activeMatrixKey);
+          if (cachedMatrix) {
+            setMatrixResult(cachedMatrix);
+            setActiveMatrixKey(saved.activeMatrixKey);
+          }
+        }
+
+        const effectiveQuery = (urlQuery ?? saved.query).trim();
+        const effectiveTab =
+          urlTab &&
           ["search", "bookmarks", "conversions", "history"].includes(urlTab)
-          ? urlTab
-          : saved.activeTab
-      );
-      setSidebarOpen(saved.sidebarOpen);
-      setSelectedProjectId(urlProject ?? saved.selectedProjectId);
-      setQuery(urlQuery ?? saved.query);
-      if (saved.selectedSources?.length) {
-        setSelectedSources(saved.selectedSources);
-      }
-      setTierPreset(urlTier ?? saved.tierPreset);
-      setPdfOnly(urlPdf === "1" ? true : saved.pdfOnly);
-      setYearFrom(urlYear ?? saved.yearFrom);
-      setSort(urlSort ?? saved.sort);
-      setSelectedPapersMap(saved.selectedPapersMap ?? {});
-      if (saved.readerState) setReaderState(saved.readerState);
-      if (saved.networkState) setNetworkState(saved.networkState);
+            ? urlTab
+            : saved.activeTab;
 
-      let restoredSearch = false;
-      if (saved.activeSearchCacheKey) {
-        const cached = getCachedSearch(saved.activeSearchCacheKey);
-        if (cached) {
-          setSearchResult(cached.data);
-          setActiveSearchCacheKey(saved.activeSearchCacheKey);
-          setSearchSyncBadge("Cache Lokal · Dipulihkan");
-          restoredSearch = true;
+        if (
+          !restoredSearch &&
+          effectiveTab === "search" &&
+          effectiveQuery.length >= 2 &&
+          (urlQuery || saved.activeSearchCacheKey)
+        ) {
+          pendingRestoreSearchRef.current = {
+            query: effectiveQuery,
+            pdfOnly: urlPdf === "1" ? true : saved.pdfOnly,
+            tierPreset: urlTier ?? saved.tierPreset,
+          };
+        }
+
+        if (
+          saved.scrollY &&
+          saved.scrollY > 0 &&
+          !saved.readerState &&
+          !saved.networkState &&
+          !saved.activeMatrixKey
+        ) {
+          const targetY = saved.scrollY;
+          requestAnimationFrame(() => window.scrollTo(0, targetY));
+        }
+      } else if (urlTab || urlQuery || urlProject) {
+        if (
+          urlTab &&
+          ["search", "bookmarks", "conversions", "history"].includes(urlTab)
+        ) {
+          setActiveTab(urlTab);
+        }
+        if (urlProject) setSelectedProjectId(urlProject);
+        if (urlTier) setTierPreset(urlTier);
+        if (urlPdf === "1") setPdfOnly(true);
+        if (urlYear) setYearFrom(urlYear);
+        if (urlSort) setSort(urlSort);
+        if (urlQuery && urlQuery.trim().length >= 2) {
+          setQuery(urlQuery);
+          pendingRestoreSearchRef.current = {
+            query: urlQuery.trim(),
+            pdfOnly: urlPdf === "1",
+            tierPreset: urlTier ?? "all",
+          };
         }
       }
 
-      if (saved.activeBriefCacheKey) {
-        const cachedBrief = getCachedBrief(saved.activeBriefCacheKey);
-        if (cachedBrief) {
-          setSearchBrief(cachedBrief);
-          setActiveBriefCacheKey(saved.activeBriefCacheKey);
-        }
-      }
-
-      if (saved.activeMatrixKey) {
-        const cachedMatrix = getCachedMatrix(saved.activeMatrixKey);
-        if (cachedMatrix) {
-          setMatrixResult(cachedMatrix);
-          setActiveMatrixKey(saved.activeMatrixKey);
-        }
-      }
-
-      const effectiveQuery = (urlQuery ?? saved.query).trim();
-      const effectiveTab =
-        urlTab &&
-        ["search", "bookmarks", "conversions", "history"].includes(urlTab)
-          ? urlTab
-          : saved.activeTab;
-
-      if (
-        !restoredSearch &&
-        effectiveTab === "search" &&
-        effectiveQuery.length >= 2 &&
-        (urlQuery || saved.activeSearchCacheKey)
-      ) {
-        pendingRestoreSearchRef.current = {
-          query: effectiveQuery,
-          pdfOnly: urlPdf === "1" ? true : saved.pdfOnly,
-          tierPreset: urlTier ?? saved.tierPreset,
-        };
-      }
-
-      if (
-        saved.scrollY &&
-        saved.scrollY > 0 &&
-        !saved.readerState &&
-        !saved.networkState &&
-        !saved.activeMatrixKey
-      ) {
-        const targetY = saved.scrollY;
-        requestAnimationFrame(() => window.scrollTo(0, targetY));
-      }
-    } else if (urlTab || urlQuery || urlProject) {
-      if (
-        urlTab &&
-        ["search", "bookmarks", "conversions", "history"].includes(urlTab)
-      ) {
-        setActiveTab(urlTab);
-      }
-      if (urlProject) setSelectedProjectId(urlProject);
-      if (urlTier) setTierPreset(urlTier);
-      if (urlPdf === "1") setPdfOnly(true);
-      if (urlYear) setYearFrom(urlYear);
-      if (urlSort) setSort(urlSort);
-      if (urlQuery && urlQuery.trim().length >= 2) {
-        setQuery(urlQuery);
-        pendingRestoreSearchRef.current = {
-          query: urlQuery.trim(),
-          pdfOnly: urlPdf === "1",
-          tierPreset: urlTier ?? "all",
-        };
-      }
-    }
-
-    sessionHydratedRef.current = true;
-    void reloadWorkspaceData();
+      sessionHydratedRef.current = true;
+      void reloadWorkspaceData();
+    });
   }, [reloadWorkspaceData]);
 
   useEffect(() => {
@@ -575,6 +629,7 @@ export function JournalWorkspace() {
       if (e.key === "Escape") {
         setShowFilterMenu(false);
         setShowAuthModal(false);
+        setShowShortcutsModal(false);
         setMatrixResult(null);
         setActiveMatrixKey(null);
         setNetworkState(null);
@@ -592,6 +647,9 @@ export function JournalWorkspace() {
           searchInputRef.current?.focus();
           searchInputRef.current?.select();
         }, 10);
+      } else if (e.key === "?" && !inEditable && !readerState) {
+        e.preventDefault();
+        setShowShortcutsModal((v) => !v);
       }
     };
 
@@ -855,12 +913,14 @@ export function JournalWorkspace() {
       const data = (await res.json()) as {
         brief?: SearchResearchBrief;
         error?: string;
+        requireLogin?: boolean;
       };
       if (!res.ok || !data.brief) {
         setNotice({
           type: "error",
           message: data.error || "Gagal menyusun ringkasan AI.",
         });
+        if (data.requireLogin) setShowAuthModal(true);
         return;
       }
       setSearchBrief(data.brief);
@@ -940,12 +1000,14 @@ export function JournalWorkspace() {
       const data = (await res.json()) as {
         matrix?: LiteratureMatrixResult;
         error?: string;
+        requireLogin?: boolean;
       };
       if (!res.ok || !data.matrix) {
         setNotice({
           type: "error",
           message: data.error || "Gagal menyusun Matriks Literatur AI.",
         });
+        if (data.requireLogin) setShowAuthModal(true);
         return;
       }
       setMatrixResult(data.matrix);
@@ -1085,15 +1147,38 @@ export function JournalWorkspace() {
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
+    clearAllLocalCache();
     setAuthUser(null);
     setSelectedProjectId(null);
+    setBookmarks([]);
+    setProjects([]);
+    setHistory([]);
+    setConversions([]);
+    setSearchResult(null);
+    setSearchBrief(null);
+    setMatrixResult(null);
+    setReaderState(null);
+    setNetworkState(null);
+    setSelectedPapersMap({});
+    setSearchSyncBadge(null);
     await reloadWorkspaceData();
   };
 
   const groupedResults = useMemo(() => {
     if (!searchResult?.papers) return [];
+    const rf = resultFilter.trim().toLowerCase();
+    const filtered = rf
+      ? searchResult.papers.filter(
+          (p) =>
+            p.title.toLowerCase().includes(rf) ||
+            (p.venue || "").toLowerCase().includes(rf) ||
+            (p.abstract || "").toLowerCase().includes(rf) ||
+            p.authors.some((a) => a.toLowerCase().includes(rf))
+        )
+      : searchResult.papers;
+
     const buckets = new Map<JournalTier, JournalPaper[]>();
-    for (const paper of searchResult.papers) {
+    for (const paper of filtered) {
       const tier = paper.journalMetrics?.primaryTier || "Q1";
       const list = buckets.get(tier) ?? [];
       list.push(paper);
@@ -1106,7 +1191,7 @@ export function JournalWorkspace() {
         papers: buckets.get(tier)!,
       })
     );
-  }, [searchResult]);
+  }, [searchResult, resultFilter]);
 
   const toggleSource = (source: SearchSource) => {
     const next = selectedSources.includes(source)
@@ -1246,12 +1331,14 @@ export function JournalWorkspace() {
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as {
           error?: string;
+          requireLogin?: boolean;
         };
         setNotice({
           type: "error",
           message:
             err.error || "Gagal mengonversi jurnal ke dokumen Word (.docx).",
         });
+        if (err.requireLogin) setShowAuthModal(true);
         return;
       }
 
@@ -1348,7 +1435,15 @@ export function JournalWorkspace() {
           className="min-w-0 flex-1 bg-transparent text-base text-[#F4F4F5] caret-[#F472B6] placeholder:text-[#71717A] focus:outline-none sm:text-sm"
         />
 
-        {query.trim().length > 0 && (
+        {/^((https?:\/\/)?(dx\.)?doi\.org\/)?10\.\d{4,9}\/\S+/i.test(
+          query.trim()
+        ) && (
+          <span className="shrink-0 rounded-full border border-[#DB2777]/45 bg-[#DB2777]/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-[#F9A8D4]">
+            DOI
+          </span>
+        )}
+
+        {query.trim().length > 0 ? (
           <button
             type="button"
             aria-label="Bersihkan kata kunci"
@@ -1360,6 +1455,10 @@ export function JournalWorkspace() {
           >
             <X className="h-3.5 w-3.5" />
           </button>
+        ) : (
+          <kbd className="hidden shrink-0 rounded border border-[#2C2E35] bg-[#151619] px-1.5 py-0.5 font-mono text-[10px] text-[#71717A] sm:inline-block">
+            Ctrl+K
+          </kbd>
         )}
 
         <select
@@ -1717,10 +1816,21 @@ export function JournalWorkspace() {
               {history.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => void handleClearHistory()}
-                  className="text-[11px] text-[#71717A] hover:text-[#F87171]"
+                  onClick={() => {
+                    if (!confirmClearHistory) {
+                      setConfirmClearHistory(true);
+                      return;
+                    }
+                    setConfirmClearHistory(false);
+                    void handleClearHistory();
+                  }}
+                  className={`text-[11px] transition-colors ${
+                    confirmClearHistory
+                      ? "font-semibold text-[#F87171]"
+                      : "text-[#71717A] hover:text-[#F87171]"
+                  }`}
                 >
-                  Hapus
+                  {confirmClearHistory ? "Yakin hapus?" : "Hapus"}
                 </button>
               )}
             </div>
@@ -1878,6 +1988,15 @@ export function JournalWorkspace() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowShortcutsModal(true)}
+              aria-label="Pintasan keyboard dan tips"
+              title="Pintasan & Tips (?)"
+              className="btn-tactile inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#2C2E35] bg-[#151619] text-[#A1A1AA] hover:border-[#F472B6]/45 hover:text-white"
+            >
+              <HelpCircle className="h-4 w-4" />
+            </button>
             <PwaRegistrar />
             {authUser ? (
               <div className="flex items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#151619] py-1 pl-2.5 pr-1.5 text-xs md:hidden">
@@ -1915,6 +2034,16 @@ export function JournalWorkspace() {
         )}
 
         <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5 sm:px-8">
+          {isOffline && (
+            <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2 text-xs text-amber-200">
+              <WifiOff className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                Anda sedang offline — menampilkan data tersimpan dari cache
+                lokal.
+              </span>
+            </div>
+          )}
+
           {notice && (
             <div
               role="status"
@@ -1931,9 +2060,9 @@ export function JournalWorkspace() {
                 <span>{notice.message}</span>
               </div>
               <div className="flex items-center gap-2">
-                {notice.actionUrl && (
+                {getSafeHttpUrl(notice.actionUrl) && (
                   <a
-                    href={notice.actionUrl}
+                    href={getSafeHttpUrl(notice.actionUrl)!}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs font-semibold underline"
@@ -1972,7 +2101,12 @@ export function JournalWorkspace() {
                 </div>
               </div>
 
-              <h1 className="mb-6 text-center text-[26px] font-medium tracking-[-0.02em] text-[#F4F4F5] sm:text-[34px]">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#DB2777]/30 bg-[#DB2777]/10 px-3 py-1 text-[11px] font-medium text-[#F9A8D4]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#F472B6]" />
+                Q1–Q4 Internasional · SINTA 1–6 · Open Access
+              </div>
+
+              <h1 className="mb-6 text-center text-[26px] font-semibold tracking-[-0.025em] text-[#F4F4F5] sm:text-[36px]">
                 Mau cari jurnal apa hari ini?
               </h1>
 
@@ -2005,7 +2139,7 @@ export function JournalWorkspace() {
               </div>
 
               {/* Minimal Vertical Starter List (Reference-Faithful) */}
-              <div className="mt-7 w-full max-w-md space-y-1">
+              <div className="mt-7 w-full max-w-md space-y-1.5">
                 {STARTER_SUGGESTIONS.map((item) => {
                   const Icon = item.icon;
                   return (
@@ -2013,7 +2147,7 @@ export function JournalWorkspace() {
                       key={item.query}
                       type="button"
                       onClick={() => void runSearch(item.query)}
-                      className="btn-tactile flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-xs text-[#A1A1AA] transition-colors hover:bg-[#1E1F23] hover:text-white"
+                      className="btn-tactile flex w-full items-center gap-3 rounded-xl border border-[#232429]/80 bg-[#151619]/60 px-3.5 py-2.5 text-left text-xs text-[#D4D4D8] transition-colors hover:border-[#2C2E35] hover:bg-[#1E1F23] hover:text-white"
                     >
                       <Icon className="h-4 w-4 shrink-0 text-[#F472B6]" />
                       <span>{item.label}</span>
@@ -2021,6 +2155,24 @@ export function JournalWorkspace() {
                   );
                 })}
               </div>
+
+              {history.length > 0 && (
+                <div className="mt-6 flex w-full max-w-xl flex-wrap items-center justify-center gap-1.5">
+                  <span className="mr-1 text-[11px] text-[#71717A]">
+                    Terakhir dicari:
+                  </span>
+                  {history.slice(0, 5).map((h) => (
+                    <button
+                      key={h.id}
+                      type="button"
+                      onClick={() => void runSearch(h.query)}
+                      className="btn-tactile max-w-[180px] truncate rounded-full border border-[#2C2E35] bg-[#151619] px-3 py-1 text-[11px] text-[#D4D4D8] hover:border-[#F472B6]/45 hover:text-white"
+                    >
+                      {h.query}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -2034,12 +2186,25 @@ export function JournalWorkspace() {
 
               {searching && (
                 <div className="divide-y divide-[#232429]">
-                  {[1, 2, 3].map((n) => (
-                    <div key={n} className="animate-pulse py-5">
-                      <div className="h-4 w-16 rounded bg-[#1E1F23]" />
-                      <div className="mt-2.5 h-5 w-3/4 rounded bg-[#1E1F23]" />
-                      <div className="mt-2 h-3.5 w-1/2 rounded bg-[#1E1F23]" />
-                      <div className="mt-3 h-12 w-full rounded bg-[#1E1F23]" />
+                  {[1, 2, 3, 4].map((n) => (
+                    <div
+                      key={n}
+                      className="animate-pulse py-5 sm:grid sm:grid-cols-[88px_1fr] sm:gap-5"
+                    >
+                      <div className="mb-2 flex gap-2 sm:mb-0 sm:block sm:space-y-1.5">
+                        <div className="h-5 w-14 rounded-md bg-[#1E1F23]" />
+                        <div className="h-4 w-12 rounded bg-[#151619]" />
+                      </div>
+                      <div>
+                        <div className="h-5 w-4/5 rounded bg-[#1E1F23]" />
+                        <div className="mt-2 h-3.5 w-1/2 rounded bg-[#151619]" />
+                        <div className="mt-3 h-12 w-full rounded-lg bg-[#151619]" />
+                        <div className="mt-3 flex gap-2">
+                          <div className="h-7 w-24 rounded-full bg-[#1E1F23]" />
+                          <div className="h-7 w-28 rounded-full bg-[#151619]" />
+                          <div className="h-7 w-20 rounded-full bg-[#151619]" />
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -2077,6 +2242,31 @@ export function JournalWorkspace() {
                       >
                         <RefreshCw className="h-2.5 w-2.5" />
                         Cek Baru
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void navigator.clipboard
+                            .writeText(window.location.href)
+                            .then(() => {
+                              setCopiedShareLink(true);
+                              setTimeout(() => setCopiedShareLink(false), 1800);
+                            })
+                            .catch(() => {});
+                        }}
+                        className="inline-flex items-center gap-1 rounded-full border border-[#2C2E35] bg-[#151619] px-2 py-0.5 text-[10px] font-medium text-[#A1A1AA] hover:border-[#F472B6]/45 hover:text-white"
+                      >
+                        {copiedShareLink ? (
+                          <>
+                            <Check className="h-2.5 w-2.5 text-[#4ADE80]" />
+                            <span className="text-[#4ADE80]">Tautan tersalin</span>
+                          </>
+                        ) : (
+                          <>
+                            <Share2 className="h-2.5 w-2.5" />
+                            <span>Bagikan</span>
+                          </>
+                        )}
                       </button>
                     </div>
                     <span
@@ -2148,6 +2338,69 @@ export function JournalWorkspace() {
                       <FileText className="h-3 w-3" />
                       <span>Ada PDF Gratis</span>
                     </button>
+
+                    {(yearFrom || selectedSources.length < ALL_SOURCES.length) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allSrc: SearchSource[] = [
+                            "openalex",
+                            "europepmc",
+                            "crossref",
+                          ];
+                          setYearFrom("");
+                          setSelectedSources(allSrc);
+                          void runSearch(
+                            searchResult.query,
+                            undefined,
+                            undefined,
+                            1,
+                            false,
+                            false,
+                            undefined,
+                            "",
+                            allSrc
+                          );
+                        }}
+                        className="btn-tactile inline-flex items-center gap-1 rounded-full border border-[#2C2E35] bg-[#151619] px-2.5 py-1 text-xs font-medium text-[#A1A1AA] hover:border-[#F472B6]/45 hover:text-white"
+                      >
+                        <X className="h-3 w-3" />
+                        <span>Reset filter</span>
+                      </button>
+                    )}
+
+                    {searchResult.papers.length >= 2 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const topFive = groupedResults
+                            .flatMap((g) => g.papers)
+                            .slice(0, 5);
+                          const nextMap: Record<string, JournalPaper> = {};
+                          for (const p of topFive) {
+                            nextMap[p.paperKey] = p;
+                          }
+                          setSelectedPapersMap(nextMap);
+                        }}
+                        className="btn-tactile inline-flex items-center gap-1 rounded-full border border-[#DB2777]/35 bg-[#DB2777]/12 px-2.5 py-1 text-xs font-medium text-[#F9A8D4] hover:border-[#F472B6] hover:bg-[#DB2777]/20"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        <span>Pilih Top 5</span>
+                      </button>
+                    )}
+
+                    {searchResult.papers.length > 3 && (
+                      <div className="relative ml-auto w-full sm:w-52">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-[#71717A]" />
+                        <input
+                          type="search"
+                          value={resultFilter}
+                          onChange={(e) => setResultFilter(e.target.value)}
+                          placeholder="Saring hasil..."
+                          className="w-full rounded-full border border-[#2C2E35] bg-[#151619] py-1 pl-7 pr-3 text-xs text-[#F4F4F5] placeholder:text-[#71717A] focus:border-[#F472B6] focus:outline-none"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Compact AI Research Brief & Query Optimizer */}
@@ -2189,7 +2442,7 @@ export function JournalWorkspace() {
                                 Intisari Riset AI
                               </span>
                               <span className="text-[11px] font-medium text-[#A1A1AA]">
-                                · SmartSari AI
+                                · SmartSari
                               </span>
                             </div>
                             <button
@@ -2523,6 +2776,50 @@ export function JournalWorkspace() {
                     )}
                     Daftar Pustaka .docx
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const text = filteredBookmarks
+                        .map((b, idx) => {
+                          const p: JournalPaper = {
+                            paperKey: b.paperKey,
+                            title: b.title,
+                            authors: b.authors,
+                            year: b.year,
+                            venue: b.venue,
+                            source: b.source as SearchSource,
+                            abstract: b.abstract,
+                            pdfUrl: b.pdfUrl,
+                            landingUrl: b.landingUrl,
+                            doi: b.doi,
+                            citations: b.citations,
+                            openAccess: Boolean(b.pdfUrl),
+                          };
+                          return `${idx + 1}. ${formatCitation(p, "apa")}`;
+                        })
+                        .join("\n\n");
+                      void navigator.clipboard
+                        .writeText(text)
+                        .then(() => {
+                          setCopiedAllApa(true);
+                          setTimeout(() => setCopiedAllApa(false), 1800);
+                        })
+                        .catch(() => {});
+                    }}
+                    className="btn-tactile inline-flex items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/40 hover:text-white"
+                  >
+                    {copiedAllApa ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-[#4ADE80]" />
+                        <span className="text-[#4ADE80]">Semua APA tersalin</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5 text-[#F472B6]" />
+                        <span>Salin Semua (APA)</span>
+                      </>
+                    )}
+                  </button>
                   {filteredBookmarks.length >= 2 && (
                     <button
                       type="button"
@@ -2693,7 +2990,7 @@ export function JournalWorkspace() {
                             {MODE_BADGE[conv.mode] || conv.mode}
                           </span>
                           <span className="text-[11px] font-medium text-[#A1A1AA]">
-                            SmartSari AI
+                            SmartSari
                           </span>
                           {conv.year && (
                             <span className="font-mono tabular-nums">
@@ -2739,10 +3036,17 @@ export function JournalWorkspace() {
                 {history.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => void handleClearHistory()}
+                    onClick={() => {
+                      if (!confirmClearHistory) {
+                        setConfirmClearHistory(true);
+                        return;
+                      }
+                      setConfirmClearHistory(false);
+                      void handleClearHistory();
+                    }}
                     className="text-xs font-medium text-[#F87171] hover:underline"
                   >
-                    Hapus Semua
+                    {confirmClearHistory ? "Klik lagi untuk hapus semua" : "Hapus Semua"}
                   </button>
                 )}
               </div>
@@ -2804,6 +3108,21 @@ export function JournalWorkspace() {
             </section>
           )}
         </main>
+
+        <footer className="mx-auto mt-auto flex w-full max-w-4xl flex-wrap items-center justify-between gap-3 border-t border-[#232429]/70 px-4 py-4 text-[11px] text-[#71717A] sm:px-8">
+          <span>&copy; 2026 SmartSari. Seluruh hak cipta dilindungi.</span>
+          <nav aria-label="Tautan hukum" className="flex flex-wrap items-center gap-4">
+            <Link href="/ketentuan" className="transition-colors hover:text-[#F472B6]">
+              Ketentuan
+            </Link>
+            <Link href="/privasi" className="transition-colors hover:text-[#F472B6]">
+              Privasi
+            </Link>
+            <Link href="/lisensi" className="transition-colors hover:text-[#F472B6]">
+              Lisensi &amp; Atribusi
+            </Link>
+          </nav>
+        </footer>
       </div>
 
       {/* Floating Scroll-to-Top Button */}
@@ -2972,6 +3291,65 @@ export function JournalWorkspace() {
             void reloadWorkspaceData();
           }}
         />
+      )}
+
+      {/* Keyboard Shortcuts & Tips Modal */}
+      {showShortcutsModal && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowShortcutsModal(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Pintasan Keyboard & Tips SmartSari"
+        >
+          <div className="animate-modal-in w-full max-w-md rounded-2xl border border-[#2C2E35] bg-[#151619] p-6 text-[#F4F4F5] shadow-2xl">
+            <div className="mb-4 flex items-center justify-between gap-2 border-b border-[#232429] pb-3">
+              <div className="flex items-center gap-2">
+                <HelpCircle className="h-4 w-4 text-[#F472B6]" />
+                <h2 className="text-base font-semibold text-white">
+                  Pintasan &amp; Tips Riset
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowShortcutsModal(false)}
+                aria-label="Tutup bantuan"
+                className="rounded-lg p-1 text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-xs">
+              {[
+                { key: "Ctrl+K / /", desc: "Fokus cepat ke bilah pencarian" },
+                { key: "Ctrl+Enter", desc: "Simpan catatan riset di kartu tersimpan" },
+                { key: "Esc", desc: "Tutup modal atau panel yang sedang terbuka" },
+                { key: "?", desc: "Buka / tutup jendela pintasan ini" },
+              ].map((item) => (
+                <div
+                  key={item.key}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-[#232429] bg-[#0E0F12] px-3 py-2"
+                >
+                  <span className="text-[#D4D4D8]">{item.desc}</span>
+                  <kbd className="shrink-0 rounded border border-[#2C2E35] bg-[#1E1F23] px-2 py-0.5 font-mono text-[11px] font-semibold text-[#F9A8D4]">
+                    {item.key}
+                  </kbd>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-xl border border-[#DB2777]/30 bg-[#DB2777]/10 p-3 text-xs leading-relaxed text-[#FBCFE8]">
+              <strong className="text-white">Tips:</strong> Tempel langsung
+              nomor <strong>DOI</strong> di pencarian, gunakan tombol{" "}
+              <strong>Pilih Top 5</strong> untuk membandingkan jurnal secara
+              instan, atau pakai <strong>Jejaring</strong> untuk menelusuri
+              referensi dan sitasi.
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

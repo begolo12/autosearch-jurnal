@@ -1,4 +1,5 @@
 import {
+  index,
   pgTable,
   uuid,
   text,
@@ -16,16 +17,25 @@ export interface SearchFilters {
   sort?: string;
 }
 
-export const searchHistory = pgTable("search_history", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  sessionId: text("session_id").notNull().default("global"),
-  query: text("query").notNull(),
-  filters: jsonb("filters").$type<SearchFilters>(),
-  resultCount: integer("result_count").notNull().default(0),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+export const searchHistory = pgTable(
+  "search_history",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: text("session_id").notNull().default("global"),
+    query: text("query").notNull(),
+    filters: jsonb("filters").$type<SearchFilters>(),
+    resultCount: integer("result_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("search_history_session_created_idx").on(
+      table.sessionId,
+      table.createdAt
+    ),
+  ]
+);
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -37,46 +47,58 @@ export const users = pgTable("users", {
     .notNull(),
 });
 
-export const emailOtpChallenges = pgTable("email_otp_challenges", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  email: text("email").notNull().unique(),
-  name: text("name").notNull(),
-  passwordHash: text("password_hash").notNull(),
-  otpHash: text("otp_hash").notNull(),
-  attempts: integer("attempts").notNull().default(0),
-  lastSentAt: timestamp("last_sent_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+export const emailOtpChallenges = pgTable(
+  "email_otp_challenges",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: text("email").notNull().unique(),
+    name: text("name").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    otpHash: text("otp_hash").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    lastSentAt: timestamp("last_sent_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [index("email_otp_expires_at_idx").on(table.expiresAt)]
+);
 
-export const passwordResetOtps = pgTable("password_reset_otps", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  email: text("email").notNull().unique(),
-  otpHash: text("otp_hash").notNull(),
-  attempts: integer("attempts").notNull().default(0),
-  lastSentAt: timestamp("last_sent_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+export const passwordResetOtps = pgTable(
+  "password_reset_otps",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: text("email").notNull().unique(),
+    otpHash: text("otp_hash").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    lastSentAt: timestamp("last_sent_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [index("password_reset_expires_at_idx").on(table.expiresAt)]
+);
 
-export const researchProjects = pgTable("research_projects", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  sessionId: text("session_id").notNull().default("global"),
-  name: text("name").notNull(),
-  description: text("description"),
-  color: text("color").notNull().default("#F472B6"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+export const researchProjects = pgTable(
+  "research_projects",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: text("session_id").notNull().default("global"),
+    name: text("name").notNull(),
+    description: text("description"),
+    color: text("color").notNull().default("#F472B6"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [index("research_projects_session_idx").on(table.sessionId)]
+);
 
 export const bookmarks = pgTable(
   "bookmarks",
@@ -111,33 +133,55 @@ export const bookmarks = pgTable(
   ]
 );
 
-export const conversions = pgTable("conversions", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  sessionId: text("session_id").notNull().default("global"),
-  paperKey: text("paper_key").notNull(),
-  title: text("title").notNull(),
-  authors: jsonb("authors").$type<string[]>(),
-  year: integer("year"),
-  mode: text("mode").notNull(),
-  pdfUrl: text("pdf_url"),
-  model: text("model").notNull(),
-  markdownContent: text("markdown_content").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+export const conversions = pgTable(
+  "conversions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: text("session_id").notNull().default("global"),
+    paperKey: text("paper_key").notNull(),
+    title: text("title").notNull(),
+    authors: jsonb("authors").$type<string[]>(),
+    year: integer("year"),
+    mode: text("mode").notNull(),
+    pdfUrl: text("pdf_url"),
+    model: text("model").notNull(),
+    markdownContent: text("markdown_content").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("conversions_session_created_idx").on(
+      table.sessionId,
+      table.createdAt
+    ),
+    index("conversions_session_paper_mode_idx").on(
+      table.sessionId,
+      table.paperKey,
+      table.mode
+    ),
+  ]
+);
 
-export const rateLimits = pgTable("rate_limits", {
-  key: text("key").primaryKey(),
-  count: integer("count").notNull().default(1),
-  resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
-});
+export const rateLimits = pgTable(
+  "rate_limits",
+  {
+    key: text("key").primaryKey(),
+    count: integer("count").notNull().default(1),
+    resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [index("rate_limits_reset_at_idx").on(table.resetAt)]
+);
 
-export const searchCache = pgTable("search_cache", {
-  cacheKey: text("cache_key").primaryKey(),
-  payload: jsonb("payload").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-});
+export const searchCache = pgTable(
+  "search_cache",
+  {
+    cacheKey: text("cache_key").primaryKey(),
+    payload: jsonb("payload").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [index("search_cache_expires_at_idx").on(table.expiresAt)]
+);

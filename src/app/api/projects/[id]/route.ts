@@ -3,7 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { researchProjects } from "@/db/schema";
+import { isAllowedAuthOrigin } from "@/lib/auth-security";
 import { attachSessionCookie, getSessionContext } from "@/lib/session";
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const patchProjectSchema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
@@ -18,9 +22,16 @@ export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  if (!isAllowedAuthOrigin(request)) {
+    return NextResponse.json(
+      { error: "Permintaan berasal dari sumber yang tidak diizinkan." },
+      { status: 403 }
+    );
+  }
+
   const { sessionId, isNew } = getSessionContext(request);
   const { id } = await context.params;
-  if (!id) {
+  if (!id || !UUID_REGEX.test(id)) {
     return NextResponse.json({ error: "ID proyek tidak valid." }, { status: 400 });
   }
 
@@ -48,7 +59,13 @@ export async function PATCH(
           eq(researchProjects.sessionId, sessionId)
         )
       )
-      .returning();
+      .returning({
+        id: researchProjects.id,
+        name: researchProjects.name,
+        description: researchProjects.description,
+        color: researchProjects.color,
+        createdAt: researchProjects.createdAt,
+      });
 
     if (!updated) {
       return NextResponse.json(
@@ -75,9 +92,16 @@ export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  if (!isAllowedAuthOrigin(request)) {
+    return NextResponse.json(
+      { error: "Permintaan berasal dari sumber yang tidak diizinkan." },
+      { status: 403 }
+    );
+  }
+
   const { sessionId, isNew } = getSessionContext(request);
   const { id } = await context.params;
-  if (!id) {
+  if (!id || !UUID_REGEX.test(id)) {
     return NextResponse.json({ error: "ID proyek tidak valid." }, { status: 400 });
   }
 

@@ -3,7 +3,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { bookmarks, researchProjects } from "@/db/schema";
+import { isAllowedAuthOrigin } from "@/lib/auth-security";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { attachSessionCookie, getSessionContext } from "@/lib/session";
+
+const projectColumns = {
+  id: researchProjects.id,
+  name: researchProjects.name,
+  description: researchProjects.description,
+  color: researchProjects.color,
+  createdAt: researchProjects.createdAt,
+};
 
 const createProjectSchema = z.object({
   name: z.string().trim().min(1, "Nama proyek wajib diisi.").max(80),
@@ -19,7 +29,7 @@ export async function GET(request: NextRequest) {
   try {
     const db = getDb();
     const rows = await db
-      .select()
+      .select(projectColumns)
       .from(researchProjects)
       .where(eq(researchProjects.sessionId, sessionId))
       .orderBy(desc(researchProjects.createdAt))
@@ -59,6 +69,21 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!isAllowedAuthOrigin(request)) {
+    return NextResponse.json(
+      { error: "Permintaan berasal dari sumber yang tidak diizinkan." },
+      { status: 403 }
+    );
+  }
+
+  const rl = await checkRateLimit(request, "projects_create", 30, 60);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Terlalu banyak permintaan. Tunggu ${rl.retryAfterSeconds} detik.` },
+      { status: 429 }
+    );
+  }
+
   const { sessionId, isNew } = getSessionContext(request);
   let body: z.infer<typeof createProjectSchema>;
   try {
@@ -81,7 +106,7 @@ export async function POST(request: NextRequest) {
         description: body.description ?? null,
         color: body.color || "#F472B6",
       })
-      .returning();
+      .returning(projectColumns);
 
     return attachSessionCookie(
       NextResponse.json(

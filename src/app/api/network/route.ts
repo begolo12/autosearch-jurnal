@@ -30,6 +30,13 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  if (title.length > 400 || (doi && doi.length > 200)) {
+    return NextResponse.json(
+      { error: "Parameter judul atau DOI terlalu panjang." },
+      { status: 400 }
+    );
+  }
+
   const cacheKey = crypto
     .createHash("sha256")
     .update(

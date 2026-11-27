@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { isAllowedAuthOrigin } from "@/lib/auth-security";
 import { buildBibliographyDocxBuffer } from "@/lib/docx-builder";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const exportSchema = z.object({
   title: z.string().trim().min(1).max(120).default("Daftar Pustaka SmartSari"),
@@ -8,8 +10,8 @@ const exportSchema = z.object({
   items: z
     .array(
       z.object({
-        citation: z.string().min(1),
-        note: z.string().nullable().optional(),
+        citation: z.string().min(1).max(2000),
+        note: z.string().max(2000).nullable().optional(),
       })
     )
     .min(1)
@@ -17,6 +19,21 @@ const exportSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  if (!isAllowedAuthOrigin(request)) {
+    return NextResponse.json(
+      { error: "Permintaan berasal dari sumber yang tidak diizinkan." },
+      { status: 403 }
+    );
+  }
+
+  const rl = await checkRateLimit(request, "bookmarks_export_docx", 20, 60);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Terlalu banyak permintaan ekspor. Tunggu ${rl.retryAfterSeconds} detik.` },
+      { status: 429 }
+    );
+  }
+
   let body: z.infer<typeof exportSchema>;
   try {
     body = exportSchema.parse(await request.json());

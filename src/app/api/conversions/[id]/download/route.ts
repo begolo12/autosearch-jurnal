@@ -1,26 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { conversions } from "@/db/schema";
 import { buildDocxBuffer } from "@/lib/docx-builder";
 import { sanitizeFilename } from "@/lib/pdf";
+import { getSessionContext } from "@/lib/session";
 import type { ConversionMode } from "@/lib/types";
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  const { sessionId } = getSessionContext(request);
   const { id } = await context.params;
-  if (!id) {
+  if (!id || !UUID_REGEX.test(id)) {
     return NextResponse.json({ error: "ID tidak valid." }, { status: 400 });
   }
 
   try {
     const db = getDb();
     const rows = await db
-      .select()
+      .select({
+        title: conversions.title,
+        authors: conversions.authors,
+        year: conversions.year,
+        mode: conversions.mode,
+        markdownContent: conversions.markdownContent,
+      })
       .from(conversions)
-      .where(eq(conversions.id, id))
+      .where(and(eq(conversions.id, id), eq(conversions.sessionId, sessionId)))
       .limit(1);
 
     if (rows.length === 0) {
@@ -38,7 +49,6 @@ export async function GET(
       venue: null,
       doi: null,
       mode: (record.mode as ConversionMode) || "clean",
-      model: record.model,
       markdownContent: record.markdownContent,
     });
 

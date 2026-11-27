@@ -103,11 +103,14 @@ export async function POST(request: NextRequest) {
 
     // Anti-enumeration: return identical 200 response when email is not registered
     if (userRows.length === 0) {
-      return NextResponse.json({
-        ok: true,
-        cooldownSeconds: 60,
-        expiresInMinutes: 10,
-      });
+      return NextResponse.json(
+        {
+          ok: true,
+          cooldownSeconds: 60,
+          expiresInMinutes: 10,
+        },
+        { headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     const user = userRows[0];
@@ -167,11 +170,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: mailResult.error }, { status: 502 });
     }
 
-    return NextResponse.json({
-      ok: true,
-      cooldownSeconds: 60,
-      expiresInMinutes: 10,
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        cooldownSeconds: 60,
+        expiresInMinutes: 10,
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (err) {
     console.error("POST /api/auth/forgot-password/request-otp error:", err);
     return NextResponse.json(

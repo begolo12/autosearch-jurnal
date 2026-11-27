@@ -108,13 +108,16 @@ export async function POST(request: NextRequest) {
     }
 
     return attachAuthCookie(
-      NextResponse.json({
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
+      NextResponse.json(
+        {
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+          },
         },
-      }),
+        { headers: { "Cache-Control": "no-store" } }
+      ),
       user.id
     );
   } catch (err) {

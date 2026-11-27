@@ -2,15 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { conversions } from "@/db/schema";
+import { isAllowedAuthOrigin } from "@/lib/auth-security";
 import { attachSessionCookie, getSessionContext } from "@/lib/session";
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  if (!isAllowedAuthOrigin(request)) {
+    return NextResponse.json(
+      { error: "Permintaan berasal dari sumber yang tidak diizinkan." },
+      { status: 403 }
+    );
+  }
+
   const { sessionId, isNew } = getSessionContext(request);
   const { id } = await context.params;
-  if (!id) {
+  if (!id || !UUID_REGEX.test(id)) {
     return NextResponse.json({ error: "ID tidak valid." }, { status: 400 });
   }
 

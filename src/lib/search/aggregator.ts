@@ -131,14 +131,12 @@ export async function aggregateJournalSearch(params: {
       });
       rawPapers.push(...result.value.papers);
     } else {
+      console.warn("[SmartSari] Search source error:", source, result.reason);
       sourceStats.push({
         source,
         count: 0,
         ok: false,
-        error:
-          result.reason instanceof Error
-            ? result.reason.message
-            : "Gagal menghubungi sumber",
+        error: "Sumber sedang tidak tersedia",
       });
     }
   });

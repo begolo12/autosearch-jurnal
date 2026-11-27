@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { isAllowedAuthOrigin } from "@/lib/auth-security";
 import { generateSearchResearchBrief, InferHubError } from "@/lib/inferhub";
+import { checkDailyAiQuota } from "@/lib/quota";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export const maxDuration = 60;
@@ -24,6 +26,13 @@ const briefSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  if (!isAllowedAuthOrigin(request)) {
+    return NextResponse.json(
+      { error: "Permintaan berasal dari sumber yang tidak diizinkan." },
+      { status: 403 }
+    );
+  }
+
   let body: z.infer<typeof briefSchema>;
   try {
     body = briefSchema.parse(await request.json());
@@ -34,13 +43,24 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const rl = await checkRateLimit(request, "ai_brief", 15, 600);
+  const rl = await checkRateLimit(request, "ai_brief", 15, 600, true);
   if (!rl.allowed) {
     return NextResponse.json(
       {
         error: `Terlalu banyak permintaan ringkasan AI. Tunggu ${rl.retryAfterSeconds} detik.`,
       },
       { status: 429 }
+    );
+  }
+
+  const quota = await checkDailyAiQuota(request);
+  if (!quota.allowed) {
+    return NextResponse.json(
+      { error: quota.error, requireLogin: quota.requireLogin },
+      {
+        status: quota.status,
+        headers: { "Retry-After": String(quota.retryAfterSeconds) },
+      }
     );
   }
 

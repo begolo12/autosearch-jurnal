@@ -92,7 +92,6 @@ export async function buildDocxBuffer(params: {
   venue: string | null;
   doi: string | null;
   mode: ConversionMode;
-  model: string;
   markdownContent: string;
 }): Promise<Buffer> {
   const children: Paragraph[] = [];
@@ -298,7 +297,7 @@ export async function buildDocxBuffer(params: {
   const doc = new Document({
     creator: "SmartSari",
     title: params.title,
-    description: `Dikonversi oleh SmartSari (${params.model})`,
+    description: "Dikonversi oleh SmartSari",
     sections: [
       {
         properties: {
@@ -318,7 +317,7 @@ export async function buildDocxBuffer(params: {
                 alignment: AlignmentType.RIGHT,
                 children: [
                   new TextRun({
-                    text: `SmartSari · ${params.model}  |  Halaman `,
+                    text: "SmartSari  |  Halaman ",
                     size: 16,
                     color: "78716C",
                     font: "Calibri",
@@ -507,7 +506,7 @@ export async function buildLiteratureMatrixDocxBuffer(
             spacing: { after: 80 },
             children: [
               new TextRun({
-                text: `SMARTSARI · MATRIKS LITERATUR AI (${matrix.model})`,
+                text: "SMARTSARI · MATRIKS LITERATUR",
                 bold: true,
                 size: 18,
                 color: "BE185D",

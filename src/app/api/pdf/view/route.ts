@@ -7,7 +7,7 @@ import {
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function GET(request: NextRequest) {
-  const rl = await checkRateLimit(request, "pdf_view", 40, 60);
+  const rl = await checkRateLimit(request, "pdf_view", 40, 60, true);
   if (!rl.allowed) {
     return NextResponse.json(
       {
@@ -27,6 +27,13 @@ export async function GET(request: NextRequest) {
   if (!url) {
     return NextResponse.json(
       { error: "Parameter URL PDF wajib diisi." },
+      { status: 400 }
+    );
+  }
+
+  if (url.length > 2000 || title.length > 300 || (doi && doi.length > 200)) {
+    return NextResponse.json(
+      { error: "Parameter permintaan PDF tidak valid." },
       { status: 400 }
     );
   }

@@ -140,9 +140,9 @@ export function setCachedAbstractTranslation(
 // 3. Full Paper Translations (30 days, max 25 papers)
 export function getCachedFullTranslation(
   paperKey: string
-): { markdown: string; model: string } | null {
+): { markdown: string } | null {
   return (
-    readCacheEntry<{ markdown: string; model: string }>(
+    readCacheEntry<{ markdown: string }>(
       "full_translations",
       paperKey
     )?.value ?? null
@@ -151,7 +151,7 @@ export function getCachedFullTranslation(
 
 export function setCachedFullTranslation(
   paperKey: string,
-  val: { markdown: string; model: string }
+  val: { markdown: string }
 ): void {
   writeCacheEntry("full_translations", paperKey, val, 25, 30 * DAY_MS);
 }

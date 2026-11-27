@@ -208,12 +208,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: mailResult.error }, { status: 502 });
     }
 
-    return NextResponse.json({
-      ok: true,
-      email: body.email,
-      cooldownSeconds: 60,
-      expiresInMinutes: 10,
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        email: body.email,
+        cooldownSeconds: 60,
+        expiresInMinutes: 10,
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (err) {
     console.error("POST /api/auth/register/request-otp error:", err);
     return NextResponse.json(

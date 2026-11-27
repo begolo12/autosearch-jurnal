@@ -1,7 +1,10 @@
+import dns from "node:dns/promises";
+import net from "node:net";
 import { extractText } from "unpdf";
 
 const MAX_PDF_BYTES = 25 * 1024 * 1024; // 25 MB
 const MAX_EXTRACTED_CHARS = 30000;
+const MAX_REDIRECT_HOPS = 5;
 
 export class PdfFetchError extends Error {
   code: "INVALID_URL" | "FETCH_FAILED" | "NOT_A_PDF" | "TOO_LARGE";
@@ -16,6 +19,37 @@ export class PdfFetchError extends Error {
     this.code = code;
     this.fallbackUrl = fallbackUrl;
   }
+}
+
+function isPrivateOrReservedIp(rawIp: string): boolean {
+  const ip = rawIp.toLowerCase().replace(/^\[|\]$/g, "");
+  const ipVersion = net.isIP(ip);
+
+  if (ipVersion === 4) {
+    const parts = ip.split(".").map((n) => Number(n));
+    if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return true;
+    const [a, b] = parts;
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64.0.0/10
+    if (a === 169 && b === 254) return true; // Link-local / cloud metadata
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a >= 224) return true; // Multicast & reserved
+    return false;
+  }
+
+  if (ipVersion === 6) {
+    if (ip === "::" || ip === "::1") return true;
+    if (ip.startsWith("fc") || ip.startsWith("fd")) return true; // ULA fc00::/7
+    if (/^fe[89ab]/.test(ip)) return true; // Link-local fe80::/10
+    if (ip.startsWith("::ffff:")) {
+      const mappedV4 = ip.slice(7);
+      return isPrivateOrReservedIp(mappedV4);
+    }
+    return false;
+  }
+
+  return false;
 }
 
 export function validateSafeExternalUrl(rawUrl: string): URL {
@@ -33,18 +67,21 @@ export function validateSafeExternalUrl(rawUrl: string): URL {
     );
   }
 
-  const host = parsed.hostname.toLowerCase();
+  if (parsed.username || parsed.password) {
+    throw new PdfFetchError(
+      "INVALID_URL",
+      "URL dengan kredensial tersemat tidak diizinkan."
+    );
+  }
+
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (
+    !host ||
     host === "localhost" ||
-    host === "127.0.0.1" ||
-    host === "::1" ||
-    host === "0.0.0.0" ||
+    host.endsWith(".localhost") ||
     host.endsWith(".local") ||
     host.endsWith(".internal") ||
-    /^10\./.test(host) ||
-    /^192\.168\./.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-    /^169\.254\./.test(host)
+    isPrivateOrReservedIp(host)
   ) {
     throw new PdfFetchError(
       "INVALID_URL",
@@ -55,23 +92,82 @@ export function validateSafeExternalUrl(rawUrl: string): URL {
   return parsed;
 }
 
-export async function fetchPdfBuffer(rawUrl: string): Promise<Buffer> {
-  const parsedUrl = validateSafeExternalUrl(rawUrl);
+async function assertSafeResolvedHost(url: URL): Promise<void> {
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (net.isIP(host)) {
+    if (isPrivateOrReservedIp(host)) {
+      throw new PdfFetchError(
+        "INVALID_URL",
+        "Akses ke alamat jaringan internal tidak diizinkan."
+      );
+    }
+    return;
+  }
 
-  const response = await fetch(parsedUrl.toString(), {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      Accept: "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8",
-    },
-    redirect: "follow",
-    signal: AbortSignal.timeout(20000),
-  });
-
-  if (!response.ok) {
+  try {
+    const records = await dns.lookup(host, { all: true });
+    for (const rec of records) {
+      if (isPrivateOrReservedIp(rec.address)) {
+        throw new PdfFetchError(
+          "INVALID_URL",
+          "Akses ke alamat jaringan internal tidak diizinkan."
+        );
+      }
+    }
+  } catch (err) {
+    if (err instanceof PdfFetchError) throw err;
     throw new PdfFetchError(
       "FETCH_FAILED",
-      `Server sumber mengembalikan status ${response.status}. Silakan buka PDF atau halaman sumber secara langsung.`,
+      "Gagal memverifikasi host sumber PDF.",
+      url.toString()
+    );
+  }
+}
+
+export async function fetchPdfBuffer(rawUrl: string): Promise<Buffer> {
+  let currentUrl = validateSafeExternalUrl(rawUrl);
+  await assertSafeResolvedHost(currentUrl);
+
+  let response: Response | null = null;
+  for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop++) {
+    response = await fetch(currentUrl.toString(), {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Accept: "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8",
+      },
+      redirect: "manual",
+      signal: AbortSignal.timeout(20000),
+    });
+
+    if (
+      response.status === 301 ||
+      response.status === 302 ||
+      response.status === 303 ||
+      response.status === 307 ||
+      response.status === 308
+    ) {
+      const location = response.headers.get("location");
+      if (!location || hop === MAX_REDIRECT_HOPS) {
+        throw new PdfFetchError(
+          "FETCH_FAILED",
+          "Terlalu banyak pengalihan URL saat mengambil PDF.",
+          rawUrl
+        );
+      }
+      const nextRaw = new URL(location, currentUrl).toString();
+      currentUrl = validateSafeExternalUrl(nextRaw);
+      await assertSafeResolvedHost(currentUrl);
+      continue;
+    }
+
+    break;
+  }
+
+  if (!response || !response.ok) {
+    throw new PdfFetchError(
+      "FETCH_FAILED",
+      `Server sumber mengembalikan status ${response?.status ?? 502}. Silakan buka PDF atau halaman sumber secara langsung.`,
       rawUrl
     );
   }
@@ -118,7 +214,7 @@ async function fetchUnpaywallMirrors(doi: string): Promise<string[]> {
     if (!clean) return [];
 
     const res = await fetch(
-      `https://api.unpaywall.org/v2/${encodeURIComponent(clean)}?email=pustakacari@autosearch.app`,
+      `https://api.unpaywall.org/v2/${encodeURIComponent(clean)}?email=hello@smartsari.my.id`,
       { signal: AbortSignal.timeout(6000) }
     );
     if (!res.ok) return [];
@@ -182,7 +278,7 @@ export async function fetchEuropePmcFullText(
       `https://www.ebi.ac.uk/europepmc/webservices/rest/${pmcId}/fullTextXML`,
       {
         headers: {
-          "User-Agent": "PustakaCari/2.0 (mailto:pustakacari@autosearch.app)",
+          "User-Agent": "SmartSari/2.0 (mailto:hello@smartsari.my.id)",
         },
         signal: AbortSignal.timeout(12000),
       }

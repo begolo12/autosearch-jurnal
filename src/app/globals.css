@@ -74,12 +74,27 @@ input[type="search"]::-webkit-search-cancel-button {
 }
 
 .ambient-rose-glow {
-  background-image: radial-gradient(
-    ellipse 62% 46% at 50% 45%,
-    rgba(219, 39, 119, 0.14) 0%,
-    rgba(157, 23, 77, 0.06) 44%,
-    transparent 74%
-  );
+  background-image:
+    radial-gradient(
+      ellipse 56% 40% at 50% 38%,
+      rgba(219, 39, 119, 0.14) 0%,
+      rgba(157, 23, 77, 0.05) 48%,
+      transparent 76%
+    ),
+    radial-gradient(
+      ellipse 38% 26% at 50% 60%,
+      rgba(244, 114, 182, 0.06) 0%,
+      transparent 70%
+    );
+}
+
+.glass-bar {
+  background-color: rgba(21, 22, 25, 0.85);
+  backdrop-filter: blur(12px);
+}
+
+.card-hover-glow:hover {
+  box-shadow: 0 0 0 1px rgba(244, 114, 182, 0.16), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
 }
 
 @keyframes fadeUp {

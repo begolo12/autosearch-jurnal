@@ -9,7 +9,17 @@ export async function GET(request: NextRequest) {
   try {
     const db = getDb();
     const rows = await db
-      .select()
+      .select({
+        id: conversions.id,
+        paperKey: conversions.paperKey,
+        title: conversions.title,
+        authors: conversions.authors,
+        year: conversions.year,
+        mode: conversions.mode,
+        pdfUrl: conversions.pdfUrl,
+        markdownContent: conversions.markdownContent,
+        createdAt: conversions.createdAt,
+      })
       .from(conversions)
       .where(eq(conversions.sessionId, sessionId))
       .orderBy(desc(conversions.createdAt))

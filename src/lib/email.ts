@@ -130,15 +130,17 @@ async function sendBrandedOtpEmail(params: {
       return { ok: true, usedSandbox: true };
     }
 
+    console.error("[SmartSari] Resend fallback error:", fallbackTry.status, fallbackTry.message);
     return {
       ok: false,
-      error: fallbackTry.message || "Gagal mengirim email OTP.",
+      error: "Gagal mengirim email verifikasi. Silakan coba beberapa saat lagi.",
     };
   }
 
+  console.error("[SmartSari] Resend primary error:", firstTry.status, firstTry.message);
   return {
     ok: false,
-    error: firstTry.message || "Gagal mengirim email OTP.",
+    error: "Gagal mengirim email verifikasi. Silakan coba beberapa saat lagi.",
   };
 }
 

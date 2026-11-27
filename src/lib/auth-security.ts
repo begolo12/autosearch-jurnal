@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { getDb } from "@/db";
 import { rateLimits } from "@/db/schema";
@@ -47,11 +47,21 @@ export const DUMMY_PASSWORD_HASH =
   "0123456789abcdef0123456789abcdef:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 function getSecuritySecret(): string {
-  return (
-    process.env.AUTH_SECRET?.trim() ||
-    process.env.DATABASE_URL?.trim() ||
-    "smartsari-dev-secret"
-  );
+  const base =
+    process.env.AUTH_SECRET?.trim() || process.env.DATABASE_URL?.trim();
+  if (!base) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Server security secret is not configured.");
+    }
+    return crypto
+      .createHash("sha256")
+      .update("human-challenge:smartsari-dev-secret")
+      .digest("hex");
+  }
+  return crypto
+    .createHash("sha256")
+    .update(`human-challenge:${base}`)
+    .digest("hex");
 }
 
 export function isDisposableEmail(email: string): boolean {
@@ -98,13 +108,15 @@ export function isAllowedAuthOrigin(request: NextRequest): boolean {
     const parsed = new URL(origin);
     const host = parsed.hostname.toLowerCase();
     const reqHost = request.nextUrl.hostname.toLowerCase();
+    const isDevLocal =
+      process.env.NODE_ENV !== "production" &&
+      (host === "localhost" || host === "127.0.0.1");
     return (
       host === reqHost ||
       host === "smartsari.my.id" ||
       host === "www.smartsari.my.id" ||
       host === "autosearch-jurnal.vercel.app" ||
-      host === "localhost" ||
-      host === "127.0.0.1"
+      isDevLocal
     );
   } catch {
     return false;
@@ -145,47 +157,35 @@ export async function checkAuthRateLimit(
 ): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
   const now = new Date();
   const nextReset = new Date(now.getTime() + windowSeconds * 1000);
+  const nowIso = now.toISOString();
+  const nextResetIso = nextReset.toISOString();
 
   try {
     const db = getDb();
-    const existing = await db
-      .select()
-      .from(rateLimits)
-      .where(eq(rateLimits.key, key))
-      .limit(1);
+    const [row] = await db
+      .insert(rateLimits)
+      .values({ key, count: 1, resetAt: nextReset })
+      .onConflictDoUpdate({
+        target: rateLimits.key,
+        set: {
+          count: sql`CASE WHEN ${rateLimits.resetAt} <= ${nowIso}::timestamptz THEN 1 ELSE ${rateLimits.count} + 1 END`,
+          resetAt: sql`CASE WHEN ${rateLimits.resetAt} <= ${nowIso}::timestamptz THEN ${nextResetIso}::timestamptz ELSE ${rateLimits.resetAt} END`,
+        },
+      })
+      .returning({ count: rateLimits.count, resetAt: rateLimits.resetAt });
 
-    if (existing.length === 0 || existing[0].resetAt <= now) {
-      await db
-        .insert(rateLimits)
-        .values({ key, count: 1, resetAt: nextReset })
-        .onConflictDoUpdate({
-          target: rateLimits.key,
-          set: { count: 1, resetAt: nextReset },
-        });
-      return { allowed: true, retryAfterSeconds: windowSeconds };
-    }
+    const count = row?.count ?? 1;
+    const resetAt = row?.resetAt ?? nextReset;
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil((resetAt.getTime() - now.getTime()) / 1000)
+    );
 
-    const current = existing[0];
-    if (current.count >= limit) {
-      const retryAfterSeconds = Math.max(
-        1,
-        Math.ceil((current.resetAt.getTime() - now.getTime()) / 1000)
-      );
+    if (count > limit) {
       return { allowed: false, retryAfterSeconds };
     }
 
-    await db
-      .update(rateLimits)
-      .set({ count: current.count + 1 })
-      .where(eq(rateLimits.key, key));
-
-    return {
-      allowed: true,
-      retryAfterSeconds: Math.max(
-        1,
-        Math.ceil((current.resetAt.getTime() - now.getTime()) / 1000)
-      ),
-    };
+    return { allowed: true, retryAfterSeconds };
   } catch (err) {
     console.error("Fail-closed auth rate limit error:", err);
     return { allowed: false, retryAfterSeconds: 60 };

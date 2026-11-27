@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { isAllowedAuthOrigin } from "@/lib/auth-security";
 import { chatAboutPaper, InferHubError } from "@/lib/inferhub";
 import {
   extractPdfText,
   fetchEuropePmcFullText,
   fetchPdfWithFallbacks,
 } from "@/lib/pdf";
+import { checkDailyAiQuota } from "@/lib/quota";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export const maxDuration = 60;
@@ -32,6 +34,13 @@ const chatRequestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  if (!isAllowedAuthOrigin(request)) {
+    return NextResponse.json(
+      { error: "Permintaan berasal dari sumber yang tidak diizinkan." },
+      { status: 403 }
+    );
+  }
+
   let body: z.infer<typeof chatRequestSchema>;
   try {
     body = chatRequestSchema.parse(await request.json());
@@ -42,11 +51,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const rl = await checkRateLimit(request, "ai_chat", 20, 60);
+  const rl = await checkRateLimit(request, "ai_chat", 20, 60, true);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Batas tanya AI tercapai. Tunggu ${rl.retryAfterSeconds} detik.` },
       { status: 429 }
+    );
+  }
+
+  const quota = await checkDailyAiQuota(request);
+  if (!quota.allowed) {
+    return NextResponse.json(
+      { error: quota.error, requireLogin: quota.requireLogin },
+      {
+        status: quota.status,
+        headers: { "Retry-After": String(quota.retryAfterSeconds) },
+      }
     );
   }
 
@@ -64,7 +84,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { reply, model } = await chatAboutPaper({
+    const { reply } = await chatAboutPaper({
       title: body.paper.title,
       authors: body.paper.authors,
       year: body.paper.year ?? null,
@@ -76,7 +96,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       reply,
-      model,
       usedFullText: Boolean(extractedText),
     });
   } catch (err) {

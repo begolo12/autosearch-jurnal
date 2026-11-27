@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { searchHistory } from "@/db/schema";
+import { isAllowedAuthOrigin } from "@/lib/auth-security";
 import { attachSessionCookie, getSessionContext } from "@/lib/session";
 
 export async function GET(request: NextRequest) {
@@ -13,7 +14,13 @@ export async function GET(request: NextRequest) {
   try {
     const db = getDb();
     const rows = await db
-      .select()
+      .select({
+        id: searchHistory.id,
+        query: searchHistory.query,
+        filters: searchHistory.filters,
+        resultCount: searchHistory.resultCount,
+        createdAt: searchHistory.createdAt,
+      })
       .from(searchHistory)
       .where(eq(searchHistory.sessionId, sessionId))
       .orderBy(desc(searchHistory.createdAt))
@@ -46,6 +53,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  if (!isAllowedAuthOrigin(request)) {
+    return NextResponse.json(
+      { error: "Permintaan berasal dari sumber yang tidak diizinkan." },
+      { status: 403 }
+    );
+  }
   const { sessionId, isNew } = getSessionContext(request);
   try {
     const db = getDb();

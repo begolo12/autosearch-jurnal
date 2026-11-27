@@ -123,7 +123,6 @@ export interface LiteratureMatrixResult {
   synthesis: string;
   researchGaps: string;
   rows: LiteratureMatrixRow[];
-  model: string;
 }
 
 export interface PaperChatMessage {
@@ -137,7 +136,6 @@ export interface SearchResearchBrief {
   dominantMethods: string;
   topRecommendation: string;
   suggestedQueries: Array<{ query: string; label: string }>;
-  model: string;
 }
 
 export interface PaperTakeaways {
@@ -145,7 +143,6 @@ export interface PaperTakeaways {
   method: string;
   finding: string;
   implication: string;
-  model: string;
 }
 
 export interface CitationNetworkResponse {
@@ -165,7 +162,6 @@ export interface ConversionRecord {
   year: number | null;
   mode: ConversionMode;
   pdfUrl: string | null;
-  model: string;
   markdownContent: string;
   createdAt: string;
 }

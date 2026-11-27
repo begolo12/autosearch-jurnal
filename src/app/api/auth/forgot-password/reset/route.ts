@@ -155,7 +155,10 @@ export async function POST(request: NextRequest) {
       .delete(rateLimits)
       .where(eq(rateLimits.key, `auth_login_email:${hashEmailKey(body.email)}`));
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json(
+      { ok: true },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (err) {
     console.error("POST /api/auth/forgot-password/reset error:", err);
     return NextResponse.json(

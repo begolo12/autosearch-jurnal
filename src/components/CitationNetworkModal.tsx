@@ -7,14 +7,18 @@ import {
   BookOpenText,
   ChevronRight,
   ExternalLink,
+  FileDown,
   GitBranch,
   Languages,
   Loader2,
+  Search,
   Sparkles,
   X,
 } from "lucide-react";
+import { exportCitationsBib } from "@/lib/citation";
 import { getCachedNetwork, setCachedNetwork } from "@/lib/local-cache";
 import type { CitationNetworkResponse, JournalPaper } from "@/lib/types";
+import { getSafeHttpUrl } from "@/lib/url";
 
 interface CitationNetworkModalProps {
   initialPaper: JournalPaper;
@@ -58,6 +62,7 @@ export function CitationNetworkModal({
   const [network, setNetwork] = useState<CitationNetworkResponse | null>(null);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [buildingMatrix, setBuildingMatrix] = useState(false);
+  const [networkFilter, setNetworkFilter] = useState("");
 
   useEffect(() => {
     onStateChange?.({ trail, activeTab });
@@ -65,69 +70,69 @@ export function CitationNetworkModal({
 
   useEffect(() => {
     let active = true;
-    setError(null);
-    setHoveredKey(null);
-
     const cacheKey = (activeSeed.doi || activeSeed.title).toLowerCase().trim();
-    const cached = getCachedNetwork(cacheKey);
-    if (cached) {
-      setNetwork(cached);
-      setLoading(false);
-      if (cached.citing.length === 0 && cached.references.length > 0) {
-        setActiveTab("references");
-      } else if (
-        cached.citing.length === 0 &&
-        cached.references.length === 0 &&
-        cached.related.length > 0
-      ) {
-        setActiveTab("related");
-      }
-      return () => {
-        active = false;
-      };
-    }
 
-    setLoading(true);
-    const params = new URLSearchParams({ title: activeSeed.title });
-    if (activeSeed.doi) params.set("doi", activeSeed.doi);
+    queueMicrotask(() => {
+      if (!active) return;
+      setError(null);
+      setHoveredKey(null);
 
-    fetch(`/api/network?${params.toString()}`)
-      .then(async (res) => {
-        const data = (await res.json()) as CitationNetworkResponse & {
-          error?: string;
-        };
-        if (!active) return;
-        if (!res.ok) {
-          setError(data.error || "Gagal memuat jejaring literatur.");
-          return;
-        }
-        setNetwork(data);
-        if (
-          data.citing.length > 0 ||
-          data.references.length > 0 ||
-          data.related.length > 0
-        ) {
-          setCachedNetwork(cacheKey, data);
-        }
-        if (
-          data.citing.length === 0 &&
-          data.references.length > 0
-        ) {
+      const cached = getCachedNetwork(cacheKey);
+      if (cached) {
+        setNetwork(cached);
+        setLoading(false);
+        if (cached.citing.length === 0 && cached.references.length > 0) {
           setActiveTab("references");
         } else if (
-          data.citing.length === 0 &&
-          data.references.length === 0 &&
-          data.related.length > 0
+          cached.citing.length === 0 &&
+          cached.references.length === 0 &&
+          cached.related.length > 0
         ) {
           setActiveTab("related");
         }
-      })
-      .catch(() => {
-        if (active) setError("Gangguan koneksi saat memuat jejaring OpenAlex.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+        return;
+      }
+
+      setLoading(true);
+      const params = new URLSearchParams({ title: activeSeed.title });
+      if (activeSeed.doi) params.set("doi", activeSeed.doi);
+
+      fetch(`/api/network?${params.toString()}`)
+        .then(async (res) => {
+          const data = (await res.json()) as CitationNetworkResponse & {
+            error?: string;
+          };
+          if (!active) return;
+          if (!res.ok) {
+            setError(data.error || "Gagal memuat jejaring literatur.");
+            return;
+          }
+          setNetwork(data);
+          if (
+            data.citing.length > 0 ||
+            data.references.length > 0 ||
+            data.related.length > 0
+          ) {
+            setCachedNetwork(cacheKey, data);
+          }
+          if (data.citing.length === 0 && data.references.length > 0) {
+            setActiveTab("references");
+          } else if (
+            data.citing.length === 0 &&
+            data.references.length === 0 &&
+            data.related.length > 0
+          ) {
+            setActiveTab("related");
+          }
+        })
+        .catch(() => {
+          if (active)
+            setError("Gangguan koneksi saat memuat jejaring OpenAlex.");
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    });
 
     return () => {
       active = false;
@@ -140,6 +145,32 @@ export function CitationNetworkModal({
     if (activeTab === "related") return network.related;
     return network.citing;
   }, [network, activeTab]);
+
+  const filteredTabPapers = useMemo(() => {
+    const q = networkFilter.trim().toLowerCase();
+    if (!q) return tabPapers;
+    return tabPapers.filter(
+      (p) =>
+        p.title.toLowerCase().includes(q) ||
+        (p.venue || "").toLowerCase().includes(q)
+    );
+  }, [tabPapers, networkFilter]);
+
+  const handleExportTabBib = () => {
+    if (tabPapers.length === 0) return;
+    const content = exportCitationsBib(tabPapers);
+    const blob = new Blob([content], {
+      type: "application/x-bibtex;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `jejaring-${activeTab}-smartsari.bib`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
 
   const graphNodes = useMemo(() => {
     const list = tabPapers.slice(0, 12);
@@ -181,6 +212,9 @@ export function CitationNetworkModal({
 
   return (
     <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm sm:p-6"
       role="dialog"
       aria-modal="true"
@@ -215,19 +249,29 @@ export function CitationNetworkModal({
               {showGraph ? "Sembunyikan Graf" : "Tampilkan Graf"}
             </button>
             {tabPapers.length > 0 && (
-              <button
-                type="button"
-                disabled={buildingMatrix}
-                onClick={() => void handleMatrixFromTab()}
-                className="btn-tactile inline-flex items-center gap-1.5 rounded-lg bg-[#DB2777] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
-              >
-                {buildingMatrix ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Sparkles className="h-3.5 w-3.5" />
-                )}
-                Matriks AI (Top {Math.min(4, 1 + tabPapers.length)})
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleExportTabBib}
+                  className="btn-tactile inline-flex items-center gap-1.5 rounded-lg border border-[#2C2E35] bg-[#1E1F23] px-3 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/40 hover:text-white"
+                >
+                  <FileDown className="h-3.5 w-3.5 text-[#F472B6]" />
+                  Ekspor .bib
+                </button>
+                <button
+                  type="button"
+                  disabled={buildingMatrix}
+                  onClick={() => void handleMatrixFromTab()}
+                  className="btn-tactile inline-flex items-center gap-1.5 rounded-lg bg-[#DB2777] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
+                >
+                  {buildingMatrix ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  Matriks AI (Top {Math.min(4, 1 + tabPapers.length)})
+                </button>
+              </>
             )}
             <button
               type="button"
@@ -321,6 +365,22 @@ export function CitationNetworkModal({
                     role="img"
                     aria-label="Graf koneksi sitasi jurnal"
                   >
+                    <circle
+                      cx={320}
+                      cy={140}
+                      r={60}
+                      fill="none"
+                      stroke="#232429"
+                      strokeDasharray="3 4"
+                    />
+                    <circle
+                      cx={320}
+                      cy={140}
+                      r={105}
+                      fill="none"
+                      stroke="#232429"
+                      strokeDasharray="3 4"
+                    />
                     {graphNodes.map((node) => (
                       <path
                         key={`edge-${node.paper.paperKey}`}
@@ -340,6 +400,12 @@ export function CitationNetworkModal({
                     ))}
 
                     {/* Center Seed Node */}
+                    <circle
+                      cx={320}
+                      cy={140}
+                      r={28}
+                      fill="rgba(219, 39, 119, 0.16)"
+                    />
                     <circle
                       cx={320}
                       cy={140}
@@ -417,10 +483,23 @@ export function CitationNetworkModal({
                     </div>
                     <span className="truncate text-[#F9A8D4]">
                       {hoveredPaper
-                        ? `${hoveredPaper.title} (${hoveredPaper.year || "t.t."})`
+                        ? `${hoveredPaper.journalMetrics?.tierLabel ? `[${hoveredPaper.journalMetrics.tierLabel}] ` : ""}${hoveredPaper.title} (${hoveredPaper.year || "t.t."}${hoveredPaper.citations !== null ? ` · ${hoveredPaper.citations.toLocaleString("id-ID")} sitasi` : ""})`
                         : "Klik atau arahkan ke simpul untuk melihat detail"}
                     </span>
                   </div>
+                </div>
+              )}
+
+              {tabPapers.length > 3 && (
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#71717A]" />
+                  <input
+                    type="search"
+                    value={networkFilter}
+                    onChange={(e) => setNetworkFilter(e.target.value)}
+                    placeholder="Filter judul atau jurnal..."
+                    className="w-full rounded-xl border border-[#232429] bg-[#0E0F12] py-2 pl-9 pr-3 text-xs text-[#F4F4F5] placeholder:text-[#71717A] focus:border-[#F472B6] focus:outline-none"
+                  />
                 </div>
               )}
 
@@ -428,9 +507,13 @@ export function CitationNetworkModal({
                 <div className="rounded-xl border border-[#232429] bg-[#0E0F12] p-6 text-center text-xs text-[#A1A1AA]">
                   Belum ada data {activeTab === "citing" ? "sitasi" : activeTab === "references" ? "referensi" : "jurnal terkait"} untuk artikel ini di OpenAlex.
                 </div>
+              ) : filteredTabPapers.length === 0 ? (
+                <div className="rounded-xl border border-[#232429] bg-[#0E0F12] p-6 text-center text-xs text-[#A1A1AA]">
+                  Tidak ada artikel yang cocok dengan filter &ldquo;{networkFilter}&rdquo;.
+                </div>
               ) : (
                 <div className="divide-y divide-[#232429] rounded-xl border border-[#232429] bg-[#0E0F12]">
-                  {tabPapers.map((p, idx) => {
+                  {filteredTabPapers.map((p, idx) => {
                     const isSaved = bookmarkedKeys.has(p.paperKey);
                     const isHot = hoveredKey === p.paperKey;
                     return (
@@ -517,9 +600,9 @@ export function CitationNetworkModal({
                             Telusuri Jejaring
                           </button>
 
-                          {p.landingUrl && (
+                          {getSafeHttpUrl(p.landingUrl) && (
                             <a
-                              href={p.landingUrl}
+                              href={getSafeHttpUrl(p.landingUrl)!}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="ml-auto inline-flex items-center gap-1 text-[11px] text-[#A1A1AA] hover:text-white"

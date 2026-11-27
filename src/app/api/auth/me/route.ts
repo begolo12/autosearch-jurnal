@@ -8,7 +8,10 @@ export async function GET(request: NextRequest) {
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value?.trim();
   const userId = verifyAuthToken(token);
   if (!userId) {
-    return NextResponse.json({ user: null });
+    return NextResponse.json(
+      { user: null },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   try {
@@ -23,9 +26,15 @@ export async function GET(request: NextRequest) {
       .where(eq(users.id, userId))
       .limit(1);
 
-    return NextResponse.json({ user: rows[0] ?? null });
+    return NextResponse.json(
+      { user: rows[0] ?? null },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (err) {
     console.error("GET /api/auth/me error:", err);
-    return NextResponse.json({ user: null });
+    return NextResponse.json(
+      { user: null },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   }
 }

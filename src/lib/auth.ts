@@ -13,11 +13,18 @@ export const AUTH_COOKIE_NAME = "smartsari_auth";
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 
 function getAuthSecret(): string {
-  return (
-    process.env.AUTH_SECRET?.trim() ||
-    process.env.DATABASE_URL?.trim() ||
-    "smartsari-dev-secret"
-  );
+  const base =
+    process.env.AUTH_SECRET?.trim() || process.env.DATABASE_URL?.trim();
+  if (!base) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Server authentication secret is not configured.");
+    }
+    return crypto
+      .createHash("sha256")
+      .update("auth-token:smartsari-dev-secret")
+      .digest("hex");
+  }
+  return crypto.createHash("sha256").update(`auth-token:${base}`).digest("hex");
 }
 
 export function hashPassword(password: string): string {
