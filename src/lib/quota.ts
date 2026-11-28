@@ -86,7 +86,7 @@ export async function checkDailyAiQuota(
   );
   const userLimit = Math.max(
     1,
-    Number(process.env.DAILY_USER_AI_LIMIT) || 20
+    Number(process.env.DAILY_USER_AI_LIMIT) || 100
   );
   const guestLimit = Math.max(
     1,
