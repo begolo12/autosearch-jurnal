@@ -14,9 +14,10 @@ import {
   Maximize2,
   MessageSquare,
   Send,
-  Sparkles,
   X,
 } from "lucide-react";
+import { FootnoteLinkedText } from "@/lib/footnote-links";
+import { useBodyScrollLock } from "@/lib/use-scroll-lock";
 import {
   getCachedFullTranslation,
   getCachedPaperChat,
@@ -57,18 +58,22 @@ function renderInlineMarkdown(text: string) {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
         <strong key={idx} className="font-semibold text-heading">
-          {part.slice(2, -2)}
+          <FootnoteLinkedText text={part.slice(2, -2)} idPrefix="reader-note-" />
         </strong>
       );
     }
     if (part.startsWith("*") && part.endsWith("*")) {
       return (
         <em key={idx} className="italic">
-          {part.slice(1, -1)}
+          <FootnoteLinkedText text={part.slice(1, -1)} idPrefix="reader-note-" />
         </em>
       );
     }
-    return <span key={idx}>{part}</span>;
+    return (
+      <span key={idx}>
+        <FootnoteLinkedText text={part} idPrefix="reader-note-" />
+      </span>
+    );
   });
 }
 
@@ -154,7 +159,7 @@ function MarkdownView({
           return (
             <ol key={i} className="list-decimal space-y-1.5 pl-5">
               {lines.map((l, j) => (
-                <li key={j}>
+                <li key={j} id={`reader-note-${j + 1}`} className="scroll-mt-4">
                   {renderInlineMarkdown(l.trim().replace(/^\d+\.\s+/, ""))}
                 </li>
               ))}
@@ -178,6 +183,7 @@ export function PdfReaderModal({
   onDownloadPdf,
   onDownloadTranslatedDocx,
 }: PdfReaderModalProps) {
+  useBodyScrollLock(true);
   const hasPdf = Boolean(paper.pdfUrl || paper.localPdfUrl);
   const [desktopView, setDesktopView] = useState<DesktopView>(
     initialDesktopView ??
@@ -513,7 +519,7 @@ export function PdfReaderModal({
       role="dialog"
       aria-modal="true"
       aria-label={`Pembaca Jurnal: ${paper.title}`}
-      className="animate-modal-in fixed inset-0 z-50 flex flex-col bg-canvas"
+      className="animate-modal-in fixed inset-0 z-50 flex flex-col overscroll-contain bg-canvas"
     >
       {/* Top Reader Toolbar */}
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface/95 px-3 py-2.5 shadow-sm backdrop-blur-md sm:px-5">
@@ -999,7 +1005,7 @@ export function PdfReaderModal({
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
               <div className="flex items-center gap-2">
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/15 text-accent-soft">
-                  <Sparkles className="h-3.5 w-3.5" />
+                  <MessageSquare className="h-3.5 w-3.5" />
                 </span>
                 <div>
                   <h3 className="text-sm font-semibold text-heading">
@@ -1071,7 +1077,7 @@ export function PdfReaderModal({
                     <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider opacity-75">
                       {msg.role === "assistant" ? (
                         <>
-                          <Sparkles className="h-3 w-3 text-accent-soft" />
+                          <FileText className="h-3 w-3 text-accent-soft" />
                           <span className="text-accent-tint">SmartSari</span>
                         </>
                       ) : (

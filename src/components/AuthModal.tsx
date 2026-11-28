@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { getActiveResolvedTheme } from "@/lib/appearance";
+import { useBodyScrollLock } from "@/lib/use-scroll-lock";
 import type { AuthUser } from "@/lib/types";
 
 interface AuthModalProps {
@@ -480,17 +481,19 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
     </div>
   );
 
+  useBodyScrollLock(true);
+
   return (
     <div
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain bg-black/75 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="Akun SmartSari"
     >
-      <div className="animate-modal-in max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl border border-line-strong bg-surface p-6 text-ink shadow-2xl">
+      <div className="animate-modal-in max-h-[92vh] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl border border-line-strong bg-surface p-6 text-ink shadow-2xl">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/15 text-accent-soft">

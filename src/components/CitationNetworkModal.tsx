@@ -12,11 +12,12 @@ import {
   Languages,
   Loader2,
   Search,
-  Sparkles,
+  Table2,
   X,
 } from "lucide-react";
 import { exportCitationsBib } from "@/lib/citation";
 import { getCachedNetwork, setCachedNetwork } from "@/lib/local-cache";
+import { useBodyScrollLock } from "@/lib/use-scroll-lock";
 import type { CitationNetworkResponse, JournalPaper } from "@/lib/types";
 import { getSafeHttpUrl } from "@/lib/url";
 
@@ -48,6 +49,7 @@ export function CitationNetworkModal({
   onOpenReader,
   onBuildMatrix,
 }: CitationNetworkModalProps) {
+  useBodyScrollLock(true);
   const [trail, setTrail] = useState<JournalPaper[]>(
     initialTrail && initialTrail.length > 0 ? initialTrail : [initialPaper]
   );
@@ -215,7 +217,7 @@ export function CitationNetworkModal({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm sm:p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain bg-black/75 p-3 backdrop-blur-sm sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-label="Jejaring Literatur & Snowballing"
@@ -267,7 +269,7 @@ export function CitationNetworkModal({
                   {buildingMatrix ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <Sparkles className="h-3.5 w-3.5" />
+                    <Table2 className="h-3.5 w-3.5" />
                   )}
                   Matriks AI (Top {Math.min(4, 1 + tabPapers.length)})
                 </button>

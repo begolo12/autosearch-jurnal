@@ -26,8 +26,8 @@ import {
   Settings,
   Share2,
   SlidersHorizontal,
-  Sparkles,
   SquarePen,
+  Table2,
   Trash2,
   Upload,
   User,
@@ -42,6 +42,8 @@ import { PaperCard } from "@/components/PaperCard";
 import { PdfReaderModal } from "@/components/PdfReaderModal";
 import { PwaRegistrar } from "@/components/PwaRegistrar";
 import { SettingsModal, type SettingsTabId } from "@/components/SettingsModal";
+import { FootnoteLinkedText } from "@/lib/footnote-links";
+import { useBodyScrollLock } from "@/lib/use-scroll-lock";
 import {
   DEFAULT_SEARCH_PREFS,
   getStoredSearchPrefs,
@@ -268,6 +270,7 @@ export function JournalWorkspace() {
   const [resultFilter, setResultFilter] = useState("");
   const [isOffline, setIsOffline] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  useBodyScrollLock(showShortcutsModal);
   const [copiedShareLink, setCopiedShareLink] = useState(false);
   const [copiedAllApa, setCopiedAllApa] = useState(false);
   const [notice, setNotice] = useState<{
@@ -2723,7 +2726,7 @@ export function JournalWorkspace() {
                           }}
                           className="btn-tactile inline-flex items-center gap-1 rounded-full border border-accent/35 bg-accent/12 px-2.5 py-1 text-xs font-medium text-accent-tint hover:border-accent-soft hover:bg-accent/20"
                         >
-                          <Sparkles className="h-3 w-3" />
+                          <Table2 className="h-3 w-3" />
                           <span>Pilih Top 5</span>
                         </button>
                       )}
@@ -2787,7 +2790,7 @@ export function JournalWorkspace() {
                       {!searchBrief ? (
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2 text-xs">
-                            <Sparkles className="h-3.5 w-3.5 shrink-0 text-accent-soft" />
+                            <BookOpen className="h-3.5 w-3.5 shrink-0 text-accent-soft" />
                             <span className="font-medium text-ink-strong">
                               Ringkasan AI &amp; saran kata kunci dari hasil
                               teratas
@@ -2802,7 +2805,7 @@ export function JournalWorkspace() {
                             {loadingBrief ? (
                               <Loader2 className="h-3 w-3 animate-spin" />
                             ) : (
-                              <Sparkles className="h-3 w-3" />
+                              <FileText className="h-3 w-3" />
                             )}
                             {loadingBrief ? "Menganalisis..." : "Analisis AI"}
                           </button>
@@ -2811,7 +2814,7 @@ export function JournalWorkspace() {
                         <div className="animate-panel-open space-y-3">
                           <div className="flex items-center justify-between gap-2 border-b border-line pb-2.5">
                             <div className="flex items-center gap-2">
-                              <Sparkles className="h-4 w-4 text-accent-soft" />
+                              <BookOpen className="h-4 w-4 text-accent-soft" />
                               <span className="text-xs font-semibold text-heading">
                                 Intisari Riset AI
                               </span>
@@ -2830,13 +2833,27 @@ export function JournalWorkspace() {
                           </div>
 
                           <p className="text-sm leading-relaxed text-ink-strong">
-                            {searchBrief.overview}
+                            <FootnoteLinkedText
+                              text={searchBrief.overview}
+                              idPrefix="search-paper-"
+                              maxIndex={searchResult.papers.length}
+                              titles={searchResult.papers.map((p) => p.title)}
+                            />
                           </p>
 
                           {searchBrief.keyFindings.length > 0 && (
                             <ul className="list-disc space-y-1 pl-5 text-xs leading-relaxed text-ink-body">
                               {searchBrief.keyFindings.map((item, idx) => (
-                                <li key={idx}>{item}</li>
+                                <li key={idx}>
+                                  <FootnoteLinkedText
+                                    text={item}
+                                    idPrefix="search-paper-"
+                                    maxIndex={searchResult.papers.length}
+                                    titles={searchResult.papers.map(
+                                      (p) => p.title
+                                    )}
+                                  />
+                                </li>
                               ))}
                             </ul>
                           )}
@@ -2960,43 +2977,62 @@ export function JournalWorkspace() {
                                 const savedEntry = bookmarkedMap.get(
                                   paper.paperKey
                                 );
+                                const globalIdx =
+                                  (searchResult.papers.findIndex(
+                                    (p) => p.paperKey === paper.paperKey
+                                  ) ?? -1) + 1;
                                 return (
-                                  <PaperCard
+                                  <div
                                     key={paper.paperKey}
-                                    paper={paper}
-                                    isBookmarked={Boolean(savedEntry)}
-                                    onToggleBookmark={handleToggleBookmark}
-                                    onDownloadPdf={handleDownloadPdf}
-                                    onOpenReader={(p, autoTranslate = false) =>
-                                      setReaderState({ paper: p, autoTranslate })
+                                    id={
+                                      globalIdx > 0
+                                        ? `search-paper-${globalIdx}`
+                                        : undefined
                                     }
-                                    onConvertWord={handleConvertWord}
-                                    downloadingPdfKey={downloadingPdfKey}
-                                    convertingKey={convertingKey}
-                                    selectedForMatrix={Boolean(
-                                      selectedPapersMap[paper.paperKey]
-                                    )}
-                                    onToggleSelectMatrix={
-                                      handleToggleSelectMatrix
-                                    }
-                                    onOpenNetwork={(p) =>
-                                      setNetworkState({
-                                        paper: p,
-                                        trail: [p],
-                                        activeTab: "citing",
-                                      })
-                                    }
-                                    bookmarkId={savedEntry?.id}
-                                    projectId={savedEntry?.projectId ?? null}
-                                    note={savedEntry?.note ?? null}
-                                    projects={projects}
-                                    onUpdateBookmarkMeta={
-                                      handleUpdateBookmarkMeta
-                                    }
-                                    onCreateProjectQuick={
-                                      handleCreateProjectQuick
-                                    }
-                                  />
+                                    className="scroll-mt-24"
+                                  >
+                                    <PaperCard
+                                      paper={paper}
+                                      isBookmarked={Boolean(savedEntry)}
+                                      onToggleBookmark={handleToggleBookmark}
+                                      onDownloadPdf={handleDownloadPdf}
+                                      onOpenReader={(
+                                        p,
+                                        autoTranslate = false
+                                      ) =>
+                                        setReaderState({
+                                          paper: p,
+                                          autoTranslate,
+                                        })
+                                      }
+                                      onConvertWord={handleConvertWord}
+                                      downloadingPdfKey={downloadingPdfKey}
+                                      convertingKey={convertingKey}
+                                      selectedForMatrix={Boolean(
+                                        selectedPapersMap[paper.paperKey]
+                                      )}
+                                      onToggleSelectMatrix={
+                                        handleToggleSelectMatrix
+                                      }
+                                      onOpenNetwork={(p) =>
+                                        setNetworkState({
+                                          paper: p,
+                                          trail: [p],
+                                          activeTab: "citing",
+                                        })
+                                      }
+                                      bookmarkId={savedEntry?.id}
+                                      projectId={savedEntry?.projectId ?? null}
+                                      note={savedEntry?.note ?? null}
+                                      projects={projects}
+                                      onUpdateBookmarkMeta={
+                                        handleUpdateBookmarkMeta
+                                      }
+                                      onCreateProjectQuick={
+                                        handleCreateProjectQuick
+                                      }
+                                    />
+                                  </div>
                                 );
                               })}
                             </div>
@@ -3235,7 +3271,7 @@ export function JournalWorkspace() {
                       {buildingMatrix ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
-                        <Sparkles className="h-3.5 w-3.5" />
+                        <Table2 className="h-3.5 w-3.5" />
                       )}
                       Matriks Literatur AI ({Math.min(5, filteredBookmarks.length)})
                     </button>
@@ -3649,7 +3685,7 @@ export function JournalWorkspace() {
             {buildingMatrix ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Sparkles className="h-3.5 w-3.5" />
+              <Table2 className="h-3.5 w-3.5" />
             )}
             {buildingMatrix
               ? "Menyusun..."
@@ -3806,12 +3842,12 @@ export function JournalWorkspace() {
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowShortcutsModal(false);
           }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain bg-black/75 p-4 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-label="Pintasan Keyboard & Tips SmartSari"
         >
-          <div className="animate-modal-in w-full max-w-md rounded-2xl border border-line-strong bg-surface p-6 text-ink shadow-2xl">
+          <div className="animate-modal-in max-h-[90vh] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl border border-line-strong bg-surface p-6 text-ink shadow-2xl">
             <div className="mb-4 flex items-center justify-between gap-2 border-b border-line pb-3">
               <div className="flex items-center gap-2">
                 <HelpCircle className="h-4 w-4 text-accent-soft" />

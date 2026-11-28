@@ -16,10 +16,10 @@ import {
   FolderOpen,
   GitBranch,
   Languages,
+  ListChecks,
   Loader2,
   Plus,
   Quote,
-  Sparkles,
   Square,
   StickyNote,
   Trash2,
@@ -340,7 +340,7 @@ export function PaperCard({
 
   const tierBadgeClass =
     tier === "Q1" || tier === "SINTA1"
-      ? "bg-accent text-white shadow-[0_0_12px_rgba(var(--accent-rgb),0.28)]"
+      ? "bg-accent text-white"
       : tier === "Q2" || tier === "SINTA2"
         ? "bg-accent/15 text-accent-soft border border-accent/35"
         : "border border-line-strong bg-elevated text-ink-body";
@@ -590,7 +590,7 @@ export function PaperCard({
                   {loadingTakeaways ? (
                     <Loader2 className="h-3 w-3 animate-spin text-accent-soft" />
                   ) : (
-                    <Sparkles className="h-3.5 w-3.5 text-accent-soft" />
+                    <ListChecks className="h-3.5 w-3.5 text-accent-soft" />
                   )}
                   {loadingTakeaways
                     ? "Meringkas..."
