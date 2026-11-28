@@ -361,7 +361,7 @@ export function PaperCard({
   if (paper.language) metaItems.push(paper.language);
 
   return (
-    <article className="-mx-3 rounded-2xl border border-transparent px-3.5 py-5 transition-all duration-150 hover:border-line hover:bg-surface/85 sm:grid sm:grid-cols-[88px_1fr] sm:gap-5">
+    <article className="-mx-3 rounded-2xl border border-transparent px-4 py-5 transition-all duration-150 hover:border-line-strong/70 hover:bg-surface/85 sm:grid sm:grid-cols-[96px_1fr] sm:gap-6">
       {/* Left Rank Indicator */}
       <div className="mb-2 flex items-baseline gap-2.5 sm:mb-0 sm:block sm:pt-0.5">
         {tierLabel ? (
@@ -400,7 +400,7 @@ export function PaperCard({
       {/* Main Content */}
       <div className="min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="text-[16px] font-semibold leading-snug tracking-[-0.015em] text-ink sm:text-[17px]">
+          <h3 className="text-[16.5px] font-semibold leading-[1.35] tracking-[-0.015em] text-ink sm:text-[17.5px]">
             {translatedAbstract ? translatedAbstract.title : paper.title}
           </h3>
           <button
@@ -503,7 +503,7 @@ export function PaperCard({
         </div>
 
         {abstractText ? (
-          <div className="mt-2.5 max-w-[68ch] text-sm leading-relaxed text-ink-body">
+          <div className="mt-2.5 max-w-[70ch] text-[13.5px] leading-[1.68] text-ink-body">
             <p>
               {translatedAbstract
                 ? translatedAbstract.abstract

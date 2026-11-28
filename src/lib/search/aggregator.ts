@@ -92,13 +92,13 @@ export async function aggregateJournalSearch(params: {
           ? await searchOpenAlexByTiers(
               query,
               activeTiers,
-              45,
+              28,
               Boolean(params.pdfOnly),
               page
             )
           : source === "europepmc"
-            ? await searchEuropePmcByTiers(query, activeTiers, 20, page)
-            : await searchCrossrefByTiers(query, activeTiers, 20, page);
+            ? await searchEuropePmcByTiers(query, activeTiers, 16, page)
+            : await searchCrossrefByTiers(query, activeTiers, 16, page);
       return { source, papers };
     })
   );

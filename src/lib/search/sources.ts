@@ -16,6 +16,42 @@ const REQUEST_HEADERS = {
   Accept: "application/json",
 };
 
+const SOURCE_CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours
+const SOURCE_CACHE_MAX = 4000;
+const sourceIdCache = new Map<
+  string,
+  { meta: OpenAlexSourceMeta; expiresAt: number }
+>();
+const sourceIssnCache = new Map<
+  string,
+  { meta: OpenAlexSourceMeta; expiresAt: number }
+>();
+
+function getCachedSource(
+  cache: Map<string, { meta: OpenAlexSourceMeta; expiresAt: number }>,
+  key: string
+): OpenAlexSourceMeta | undefined {
+  const entry = cache.get(key);
+  if (!entry) return undefined;
+  if (entry.expiresAt < Date.now()) {
+    cache.delete(key);
+    return undefined;
+  }
+  return entry.meta;
+}
+
+function setCachedSource(
+  cache: Map<string, { meta: OpenAlexSourceMeta; expiresAt: number }>,
+  key: string,
+  meta: OpenAlexSourceMeta
+) {
+  if (cache.size >= SOURCE_CACHE_MAX) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey) cache.delete(oldestKey);
+  }
+  cache.set(key, { meta, expiresAt: Date.now() + SOURCE_CACHE_TTL_MS });
+}
+
 const PREPRINT_BLOCKLIST = [
   "arxiv",
   "biorxiv",
@@ -201,9 +237,24 @@ export async function fetchOpenAlexSourcesByIds(
   const unique = Array.from(new Set(ids));
   if (unique.length === 0) return map;
 
+  const missing: string[] = [];
+  for (const id of unique) {
+    const cached = getCachedSource(sourceIdCache, id);
+    if (cached) {
+      const shortId = (cached.id || id).replace("https://openalex.org/", "");
+      map.set(id, cached);
+      map.set(shortId, cached);
+      if (cached.id) map.set(cached.id, cached);
+    } else {
+      missing.push(id);
+    }
+  }
+
+  if (missing.length === 0) return map;
+
   const chunks: string[][] = [];
-  for (let i = 0; i < unique.length; i += 50) {
-    chunks.push(unique.slice(i, i + 50));
+  for (let i = 0; i < missing.length; i += 50) {
+    chunks.push(missing.slice(i, i + 50));
   }
 
   await Promise.all(
@@ -219,7 +270,7 @@ export async function fetchOpenAlexSourcesByIds(
 
       const res = await fetch(url.toString(), {
         headers: REQUEST_HEADERS,
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(4000),
       });
       if (!res.ok) return;
 
@@ -229,6 +280,8 @@ export async function fetchOpenAlexSourcesByIds(
           const shortId = s.id.replace("https://openalex.org/", "");
           map.set(shortId, s);
           map.set(s.id, s);
+          setCachedSource(sourceIdCache, shortId, s);
+          setCachedSource(sourceIdCache, s.id, s);
         }
       }
     })
@@ -241,11 +294,25 @@ async function fetchOpenAlexSourcesByIssns(
   issns: string[]
 ): Promise<Map<string, OpenAlexSourceMeta>> {
   const map = new Map<string, OpenAlexSourceMeta>();
-  const unique = Array.from(new Set(issns)).slice(0, 50);
+  const unique = Array.from(
+    new Set(issns.map((i) => i.toUpperCase()))
+  ).slice(0, 50);
   if (unique.length === 0) return map;
 
+  const missing: string[] = [];
+  for (const issn of unique) {
+    const cached = getCachedSource(sourceIssnCache, issn);
+    if (cached) {
+      map.set(issn, cached);
+    } else {
+      missing.push(issn);
+    }
+  }
+
+  if (missing.length === 0) return map;
+
   const url = new URL("https://api.openalex.org/sources");
-  url.searchParams.set("filter", `issn:${unique.join("|")}`);
+  url.searchParams.set("filter", `issn:${missing.join("|")}`);
   url.searchParams.set("per-page", "50");
   url.searchParams.set(
     "select",
@@ -255,15 +322,21 @@ async function fetchOpenAlexSourcesByIssns(
 
   const res = await fetch(url.toString(), {
     headers: REQUEST_HEADERS,
-    signal: AbortSignal.timeout(12000),
+    signal: AbortSignal.timeout(4000),
   });
   if (!res.ok) return map;
 
   const data = (await res.json()) as { results?: OpenAlexSourceMeta[] };
   for (const s of data.results ?? []) {
-    if (s.issn_l) map.set(s.issn_l.toUpperCase(), s);
+    if (s.issn_l) {
+      const k = s.issn_l.toUpperCase();
+      map.set(k, s);
+      setCachedSource(sourceIssnCache, k, s);
+    }
     for (const issn of s.issn ?? []) {
-      map.set(issn.toUpperCase(), s);
+      const k = issn.toUpperCase();
+      map.set(k, s);
+      setCachedSource(sourceIssnCache, k, s);
     }
   }
   return map;
@@ -281,11 +354,15 @@ async function fetchOpenAlexWorks(
   url.searchParams.set("sort", "relevance_score:desc");
   url.searchParams.set("per-page", String(limit));
   url.searchParams.set("page", String(page));
+  url.searchParams.set(
+    "select",
+    "id,title,publication_year,cited_by_count,doi,language,abstract_inverted_index,open_access,best_oa_location,primary_location,authorships"
+  );
   url.searchParams.set("mailto", "hello@smartsari.my.id");
 
   const res = await fetch(url.toString(), {
     headers: REQUEST_HEADERS,
-    signal: AbortSignal.timeout(12000),
+    signal: AbortSignal.timeout(4000),
   });
 
   if (!res.ok) {
@@ -299,7 +376,7 @@ async function fetchOpenAlexWorks(
 export async function searchOpenAlexByTiers(
   query: string,
   tiers: JournalTier[],
-  limit = 45,
+  limit = 28,
   pdfOnly = false,
   page = 1
 ): Promise<JournalPaper[]> {
@@ -324,7 +401,7 @@ export async function searchOpenAlexByTiers(
       fetchOpenAlexWorks(
         query,
         `primary_location.source.type:journal,primary_location.source.country_code:ID${oaPart}`,
-        35,
+        22,
         page
       )
     );
@@ -420,7 +497,7 @@ export async function searchOpenAlexByTiers(
 export async function searchEuropePmcByTiers(
   query: string,
   tiers: JournalTier[],
-  limit = 20,
+  limit = 16,
   page = 1
 ): Promise<JournalPaper[]> {
   if (!tiers.some((t) => t.startsWith("Q"))) {
@@ -437,7 +514,7 @@ export async function searchEuropePmcByTiers(
 
   const res = await fetch(url.toString(), {
     headers: REQUEST_HEADERS,
-    signal: AbortSignal.timeout(12000),
+    signal: AbortSignal.timeout(2600),
   });
 
   if (!res.ok) {
@@ -560,7 +637,7 @@ export async function searchEuropePmcByTiers(
 export async function searchCrossrefByTiers(
   query: string,
   tiers: JournalTier[],
-  limit = 20,
+  limit = 16,
   page = 1
 ): Promise<JournalPaper[]> {
   const url = new URL("https://api.crossref.org/works");
@@ -578,7 +655,7 @@ export async function searchCrossrefByTiers(
       "User-Agent": "SmartSari/2.0 (mailto:hello@smartsari.my.id)",
       Accept: "application/json",
     },
-    signal: AbortSignal.timeout(9000),
+    signal: AbortSignal.timeout(3800),
   });
 
   if (!res.ok) {

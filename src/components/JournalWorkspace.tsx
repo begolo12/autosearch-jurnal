@@ -22,7 +22,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Send,
   Settings,
   Share2,
   SlidersHorizontal,
@@ -253,6 +252,7 @@ export function JournalWorkspace() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const sidebarSearchRef = useRef<HTMLInputElement>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
   const sessionHydratedRef = useRef(false);
   const pendingRestoreSearchRef = useRef<{
     query: string;
@@ -854,6 +854,10 @@ export function JournalWorkspace() {
       }
 
       try {
+        searchAbortRef.current?.abort();
+        const controller = new AbortController();
+        searchAbortRef.current = controller;
+
         const params = new URLSearchParams();
         params.set("q", q);
         if (
@@ -870,7 +874,9 @@ export function JournalWorkspace() {
         params.set("sort", effectiveSort);
         params.set("page", String(pageNum));
 
-        const res = await fetch(`/api/search?${params.toString()}`);
+        const res = await fetch(`/api/search?${params.toString()}`, {
+          signal: controller.signal,
+        });
         const data = (await res.json()) as SearchResponse & { error?: string };
 
         if (!res.ok) {
@@ -923,15 +929,20 @@ export function JournalWorkspace() {
           setSearchBrief(getCachedBrief(briefCacheKey));
           setCachedSearch(searchCacheKey, data);
           setSearchSyncBadge(null);
-          const hRes = await fetch("/api/history");
-          if (hRes.ok) {
-            const hJson = (await hRes.json()) as {
-              history?: SearchHistoryRecord[];
-            };
-            setHistory(hJson.history ?? []);
-          }
+          void fetch("/api/history")
+            .then(async (hRes) => {
+              if (!hRes.ok) return;
+              const hJson = (await hRes.json()) as {
+                history?: SearchHistoryRecord[];
+              };
+              setHistory(hJson.history ?? []);
+            })
+            .catch(() => {});
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
         if (!servedFromCache) {
           setSearchError("Tidak dapat terhubung ke server pencarian.");
         } else {
@@ -1715,12 +1726,17 @@ export function JournalWorkspace() {
           type="submit"
           disabled={searching}
           aria-label="Cari jurnal"
-          className="btn-tactile inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white hover:bg-accent-hover disabled:opacity-60"
+          className={`btn-tactile inline-flex shrink-0 items-center justify-center rounded-full bg-accent text-white hover:bg-accent-hover disabled:opacity-60 ${
+            compact ? "h-9 w-9" : "h-9 gap-1.5 px-4 text-xs font-semibold"
+          }`}
         >
           {searching ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            <Send className="h-4 w-4" />
+            <>
+              <Search className="h-3.5 w-3.5" />
+              {!compact && <span className="hidden sm:inline">Cari</span>}
+            </>
           )}
         </button>
       </form>
@@ -1857,7 +1873,7 @@ export function JournalWorkspace() {
             <img
               src="/logo-mark.png?v=2"
               alt="SmartSari"
-              className="h-6 w-6 object-contain drop-shadow-[0_0_8px_rgba(var(--accent-soft-rgb),0.35)]"
+              className="h-6 w-6 object-contain"
             />
             <span className="text-sm font-semibold tracking-[-0.01em] text-ink">
               Smart<span className="text-accent-soft">Sari</span>
@@ -2253,7 +2269,11 @@ export function JournalWorkspace() {
         }`}
       >
         {/* Top Utility Bar */}
-        <header className="flex items-center justify-between gap-2 px-3.5 py-3 sm:px-6">
+        <header
+          className={`flex items-center justify-between gap-2 px-3.5 py-3 sm:px-6 ${
+            !isLanding ? "border-b border-line/60" : ""
+          }`}
+        >
           <div className="flex min-w-0 items-center gap-2">
             {!sidebarOpen && (
               <button
@@ -2275,7 +2295,7 @@ export function JournalWorkspace() {
               <img
                 src="/logo-mark.png?v=2"
                 alt="SmartSari"
-                className="h-6 w-6 shrink-0 object-contain drop-shadow-[0_0_8px_rgba(var(--accent-soft-rgb),0.35)]"
+                className="h-6 w-6 shrink-0 object-contain"
               />
               <span className="text-sm font-semibold text-heading">
                 Smart<span className="text-accent-soft">Sari</span>
@@ -2377,7 +2397,7 @@ export function JournalWorkspace() {
           </div>
         )}
 
-        <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5 sm:px-8">
+        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-5 sm:px-8">
           {isOffline && (
             <div className="mb-4 flex items-center gap-2 rounded-xl border border-warn/35 bg-warn/10 px-4 py-2 text-xs text-warn-soft">
               <WifiOff className="h-3.5 w-3.5 shrink-0" />
@@ -2427,27 +2447,29 @@ export function JournalWorkspace() {
           )}
 
           {activeTab === "search" && isLanding && (
-            <div className="animate-fade-up flex min-h-[74vh] flex-col items-center justify-center">
-              <div className="mb-5 flex flex-col items-center gap-2">
+            <div className="animate-fade-up flex min-h-[74vh] flex-col items-center justify-center py-6">
+              <div className="mb-4 flex items-center gap-3 rounded-full border border-line-strong bg-surface/90 px-3.5 py-1.5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/logo-mark.png?v=2"
                   alt="SmartSari"
-                  className="h-20 w-20 object-contain drop-shadow-[0_0_22px_rgba(var(--accent-rgb),0.28)] sm:h-24 sm:w-24"
+                  className="h-6 w-6 object-contain"
                 />
-                <span className="rounded-full border border-line bg-surface/80 px-2.5 py-0.5 text-[11px] font-medium tracking-wide text-ink-muted">
-                  by <strong className="font-semibold text-ink-body">AirEvo</strong>
+                <span className="text-xs font-semibold tracking-tight text-heading">
+                  Smart<span className="text-accent-soft">Sari</span>
+                </span>
+                <span className="h-3 w-px bg-line-strong" aria-hidden="true" />
+                <span className="text-[11px] font-medium text-ink-secondary">
+                  by <strong className="font-semibold text-ink-strong">AirEvo</strong>
                 </span>
               </div>
 
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[11px] font-medium text-accent-tint">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent-soft" />
-                Q1–Q4 Internasional · SINTA 1–6 · Open Access
-              </div>
-
-              <h1 className="mb-6 text-center text-[26px] font-semibold tracking-[-0.025em] text-ink sm:text-[36px]">
+              <h1 className="mb-2 text-center text-[28px] font-bold tracking-[-0.025em] text-heading sm:text-[38px]">
                 Mau cari jurnal apa hari ini?
               </h1>
+              <p className="mb-7 max-w-xl text-center text-xs leading-relaxed text-ink-secondary sm:text-[13px]">
+                Indeks Q1–Q4 Internasional &amp; SINTA 1–6 · Akses PDF Terbuka · Ringkasan &amp; Ekspor Word
+              </p>
 
               {renderPillSearchBar(false)}
 
@@ -2479,8 +2501,8 @@ export function JournalWorkspace() {
                 </button>
               </div>
 
-              {/* Minimal Vertical Starter List */}
-              <div className="mt-7 w-full max-w-md space-y-1.5">
+              {/* Balanced Starter Topics */}
+              <div className="mt-7 grid w-full max-w-2xl gap-2 sm:grid-cols-2">
                 {STARTER_SUGGESTIONS.map((item) => {
                   const Icon = item.icon;
                   return (
@@ -2488,17 +2510,17 @@ export function JournalWorkspace() {
                       key={item.query}
                       type="button"
                       onClick={() => void runSearch(item.query)}
-                      className="btn-tactile flex w-full items-center gap-3 rounded-xl border border-line/80 bg-surface/75 px-3.5 py-2.5 text-left text-xs text-ink-body transition-colors hover:border-line-strong hover:bg-elevated hover:text-heading"
+                      className="btn-tactile flex w-full items-center gap-3 rounded-xl border border-line-strong/80 bg-surface/80 px-4 py-3 text-left text-xs text-ink-body transition-colors hover:border-accent-soft/45 hover:bg-elevated hover:text-heading"
                     >
                       <Icon className="h-4 w-4 shrink-0 text-accent-soft" />
-                      <span>{item.label}</span>
+                      <span className="leading-snug">{item.label}</span>
                     </button>
                   );
                 })}
               </div>
 
               {history.length > 0 && (
-                <div className="mt-6 flex w-full max-w-xl flex-wrap items-center justify-center gap-1.5">
+                <div className="mt-6 flex w-full max-w-2xl flex-wrap items-center justify-center gap-1.5">
                   <span className="mr-1 text-[11px] text-ink-muted">
                     Terakhir dicari:
                   </span>
@@ -2507,7 +2529,7 @@ export function JournalWorkspace() {
                       key={h.id}
                       type="button"
                       onClick={() => void runSearch(h.query)}
-                      className="btn-tactile max-w-[180px] truncate rounded-full border border-line-strong bg-surface px-3 py-1 text-[11px] text-ink-body hover:border-accent-soft/45 hover:text-heading"
+                      className="btn-tactile max-w-[190px] truncate rounded-full border border-line-strong bg-surface px-3 py-1 text-[11px] text-ink-body hover:border-accent-soft/45 hover:text-heading"
                     >
                       {h.query}
                     </button>
@@ -2526,28 +2548,36 @@ export function JournalWorkspace() {
               )}
 
               {searching && (
-                <div className="divide-y divide-line">
-                  {[1, 2, 3, 4].map((n) => (
-                    <div
-                      key={n}
-                      className="animate-pulse py-5 sm:grid sm:grid-cols-[88px_1fr] sm:gap-5"
-                    >
-                      <div className="mb-2 flex gap-2 sm:mb-0 sm:block sm:space-y-1.5">
-                        <div className="h-5 w-14 rounded-md bg-elevated" />
-                        <div className="h-4 w-12 rounded bg-surface" />
-                      </div>
-                      <div>
-                        <div className="h-5 w-4/5 rounded bg-elevated" />
-                        <div className="mt-2 h-3.5 w-1/2 rounded bg-surface" />
-                        <div className="mt-3 h-12 w-full rounded-lg bg-surface" />
-                        <div className="mt-3 flex gap-2">
-                          <div className="h-7 w-24 rounded-full bg-elevated" />
-                          <div className="h-7 w-28 rounded-full bg-surface" />
-                          <div className="h-7 w-20 rounded-full bg-surface" />
+                <div>
+                  <div className="mb-3 flex items-center gap-2 text-xs text-ink-secondary">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-soft" />
+                    <span>
+                      Mencari paralel di OpenAlex, Europe PMC, dan Crossref...
+                    </span>
+                  </div>
+                  <div className="divide-y divide-line">
+                    {[1, 2, 3, 4].map((n) => (
+                      <div
+                        key={n}
+                        className="animate-pulse py-5 sm:grid sm:grid-cols-[96px_1fr] sm:gap-6"
+                      >
+                        <div className="mb-2 flex gap-2 sm:mb-0 sm:block sm:space-y-1.5">
+                          <div className="h-5 w-14 rounded-md bg-elevated" />
+                          <div className="h-4 w-12 rounded bg-surface" />
+                        </div>
+                        <div>
+                          <div className="h-5 w-4/5 rounded bg-elevated" />
+                          <div className="mt-2 h-3.5 w-1/2 rounded bg-surface" />
+                          <div className="mt-3 h-12 w-full rounded-lg bg-surface" />
+                          <div className="mt-3 flex gap-2">
+                            <div className="h-7 w-24 rounded-full bg-elevated" />
+                            <div className="h-7 w-28 rounded-full bg-surface" />
+                            <div className="h-7 w-20 rounded-full bg-surface" />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
 
