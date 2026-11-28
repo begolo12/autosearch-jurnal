@@ -82,7 +82,7 @@ export async function checkDailyAiQuota(
 
   const globalLimit = Math.max(
     1,
-    Number(process.env.DAILY_GLOBAL_AI_LIMIT) || 1500
+    Number(process.env.DAILY_GLOBAL_AI_LIMIT) || 10000
   );
   const userLimit = Math.max(
     1,
