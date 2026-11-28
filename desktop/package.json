@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "SmartSari — Pencarian Jurnal Terfilter & Akurat",
   "main": "main.js",
-  "homepage": "https://autosearch-jurnal.vercel.app",
+  "homepage": "https://smartsari.my.id",
   "author": {
     "name": "SmartSari",
-    "email": "smartsari@autosearch.app"
+    "email": "hello@smartsari.my.id"
   },
   "license": "MIT",
   "scripts": {
@@ -51,7 +51,7 @@
         "deb"
       ],
       "category": "Education",
-      "maintainer": "PustakaCari <pustakacari@autosearch.app>",
+      "maintainer": "SmartSari <hello@smartsari.my.id>",
       "icon": "icon.png"
     }
   }

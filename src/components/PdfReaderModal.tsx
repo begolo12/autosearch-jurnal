@@ -20,6 +20,7 @@ import {
 import {
   getCachedFullTranslation,
   getCachedPaperChat,
+  notifyQuotaUpdated,
   setCachedFullTranslation,
   setCachedPaperChat,
 } from "@/lib/local-cache";
@@ -177,13 +178,14 @@ export function PdfReaderModal({
   onDownloadPdf,
   onDownloadTranslatedDocx,
 }: PdfReaderModalProps) {
+  const hasPdf = Boolean(paper.pdfUrl || paper.localPdfUrl);
   const [desktopView, setDesktopView] = useState<DesktopView>(
     initialDesktopView ??
-      (initialTranslate ? "split" : paper.pdfUrl ? "split" : "translate")
+      (initialTranslate ? "split" : hasPdf ? "split" : "translate")
   );
   const [mobileTab, setMobileTab] = useState<MobileTab>(
     initialMobileTab ??
-      (initialTranslate || !paper.pdfUrl ? "translate" : "pdf")
+      (initialTranslate || !hasPdf ? "translate" : "pdf")
   );
 
   useEffect(() => {
@@ -200,8 +202,12 @@ export function PdfReaderModal({
   const [downloadingDocx, setDownloadingDocx] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
-  const [pdfLoading, setPdfLoading] = useState(Boolean(paper.pdfUrl));
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(
+    Boolean(paper.pdfUrl && !paper.localPdfUrl)
+  );
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(
+    paper.localPdfUrl ?? null
+  );
   const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
 
   const [chatMessages, setChatMessages] = useState<PaperChatMessage[]>([]);
@@ -271,6 +277,7 @@ export function PdfReaderModal({
               doi: paper.doi,
               abstract: paper.abstract,
               pdfUrl: paper.pdfUrl,
+              customText: paper.customText ?? undefined,
             },
             messages: nextMessages,
           }),
@@ -299,6 +306,7 @@ export function PdfReaderModal({
         setChatError("Gangguan koneksi saat menghubungi asisten AI.");
       } finally {
         setChatLoading(false);
+        notifyQuotaUpdated();
       }
     },
     [chatLoading, chatMessages, paper]
@@ -320,6 +328,7 @@ export function PdfReaderModal({
           doi: paper.doi,
           abstract: paper.abstract,
           pdfUrl: paper.pdfUrl,
+          customText: paper.customText ?? undefined,
           language: paper.language,
           scope: "full",
         }),
@@ -346,6 +355,7 @@ export function PdfReaderModal({
       setTranslateError("Gangguan koneksi saat memanggil layanan terjemahan.");
     } finally {
       setTranslating(false);
+      notifyQuotaUpdated();
     }
   }, [paper]);
 
@@ -387,6 +397,7 @@ export function PdfReaderModal({
           doi: paper.doi,
           abstract: paper.abstract,
           pdfUrl: paper.pdfUrl,
+          customText: paper.customText ?? undefined,
           language: paper.language,
           scope: "full",
         }),
@@ -419,6 +430,7 @@ export function PdfReaderModal({
         })
         .finally(() => {
           if (active) setTranslating(false);
+          notifyQuotaUpdated();
         });
     }
 
@@ -429,11 +441,15 @@ export function PdfReaderModal({
     };
   }, [initialTranslate, onClose, paper]);
 
-  const pdfProxyUrl = paper.pdfUrl
-    ? `/api/pdf/view?url=${encodeURIComponent(paper.pdfUrl)}&title=${encodeURIComponent(paper.title)}${paper.doi ? `&doi=${encodeURIComponent(paper.doi)}` : ""}`
-    : null;
+  const pdfProxyUrl =
+    paper.pdfUrl && !paper.localPdfUrl
+      ? `/api/pdf/view?url=${encodeURIComponent(paper.pdfUrl)}&title=${encodeURIComponent(paper.title)}${paper.doi ? `&doi=${encodeURIComponent(paper.doi)}` : ""}`
+      : null;
 
   useEffect(() => {
+    if (paper.localPdfUrl) {
+      return;
+    }
     if (!pdfProxyUrl) return;
     let active = true;
     let createdUrl: string | null = null;
@@ -472,7 +488,7 @@ export function PdfReaderModal({
       active = false;
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
-  }, [pdfProxyUrl]);
+  }, [pdfProxyUrl, paper.localPdfUrl]);
 
   const handleDocxClick = async () => {
     setDownloadingDocx(true);
@@ -531,7 +547,7 @@ export function PdfReaderModal({
 
         {/* Desktop view mode switch */}
         <div className="hidden items-center gap-1 rounded-lg border border-[#2C2E35] bg-[#0E0F12] p-0.5 lg:flex">
-          {Boolean(paper.pdfUrl) && (
+          {hasPdf && (
             <>
               <button
                 type="button"
@@ -631,10 +647,10 @@ export function PdfReaderModal({
       {/* Mobile Tab Switcher */}
       <div
         className={`grid border-b border-[#232429] bg-[#151619] lg:hidden ${
-          paper.pdfUrl ? "grid-cols-3" : "grid-cols-2"
+          hasPdf ? "grid-cols-3" : "grid-cols-2"
         }`}
       >
-        {paper.pdfUrl && (
+        {hasPdf && (
           <button
             type="button"
             onClick={() => setMobileTab("pdf")}
@@ -684,7 +700,7 @@ export function PdfReaderModal({
             mobileTab === "pdf" ? "flex" : "hidden lg:flex"
           } ${desktopView === "translate" || desktopView === "chat" ? "lg:hidden" : ""}`}
         >
-          {pdfProxyUrl ? (
+          {(pdfProxyUrl || paper.localPdfUrl) ? (
             <div className="relative flex h-full w-full flex-col">
               <div className="flex items-center justify-between border-b border-[#232429] bg-[#151619] px-3 py-1.5 text-[11px] text-[#A1A1AA]">
                 <span className="inline-flex items-center gap-1.5">
@@ -697,7 +713,7 @@ export function PdfReaderModal({
                           : "bg-[#F87171]"
                     }`}
                   />
-                  Pratinjau PDF Langsung
+                  {paper.localPdfUrl ? "PDF Unggahan Pribadi" : "Pratinjau PDF Langsung"}
                 </span>
                 {getSafeHttpUrl(paper.pdfUrl) && (
                   <a

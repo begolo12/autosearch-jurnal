@@ -2,9 +2,14 @@
   "appId": "app.smartsari.jurnal",
   "appName": "SmartSari",
   "webDir": "www",
+  "backgroundColor": "#0E0F12",
   "server": {
     "url": "https://smartsari.my.id",
-    "cleartext": false
+    "cleartext": false,
+    "allowNavigation": [
+      "smartsari.my.id",
+      "challenges.cloudflare.com"
+    ]
   },
   "android": {
     "allowMixedContent": false

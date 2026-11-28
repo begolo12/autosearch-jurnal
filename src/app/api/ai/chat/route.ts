@@ -22,6 +22,7 @@ const chatRequestSchema = z.object({
     doi: z.string().max(200).nullable().optional(),
     abstract: z.string().max(15000).nullable().optional(),
     pdfUrl: z.string().max(1000).nullable().optional(),
+    customText: z.string().max(35000).nullable().optional(),
   }),
   messages: z
     .array(
@@ -71,8 +72,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let extractedText: string | null = null;
-  if (body.paper.pdfUrl) {
+  let extractedText: string | null = body.paper.customText?.trim()
+    ? body.paper.customText.trim().slice(0, 30000)
+    : null;
+  if (!extractedText && body.paper.pdfUrl) {
     try {
       const pdfBuf = await fetchPdfWithFallbacks(
         body.paper.pdfUrl,

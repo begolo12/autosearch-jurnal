@@ -316,3 +316,9 @@ export function clearAllLocalCache(): number {
   }
   return cleared;
 }
+
+export function notifyQuotaUpdated(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("smartsari:quota-updated"));
+  }
+}

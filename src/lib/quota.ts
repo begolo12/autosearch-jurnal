@@ -1,10 +1,11 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { getDb } from "@/db";
 import { rateLimits } from "@/db/schema";
 import { getClientIpHash } from "@/lib/auth-security";
 import { pruneExpiredRows } from "@/lib/rate-limit";
 import { resolveSessionContext, type SessionContext } from "@/lib/session";
+import type { DailyQuotaStatus } from "@/lib/types";
 
 export type DailyQuotaResult =
   | {
@@ -208,4 +209,99 @@ export async function checkDailyAiQuota(
       retryAfterSeconds: 60,
     };
   }
+}
+
+export async function getDailyAiQuotaStatus(request: NextRequest): Promise<{
+  status: DailyQuotaStatus;
+  session: SessionContext;
+}> {
+  const now = new Date();
+  const dayKey = now.toISOString().slice(0, 10);
+  const nextMidnight = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() + 1,
+      0,
+      0,
+      0,
+      0
+    )
+  );
+
+  const globalLimit = Math.max(
+    1,
+    Number(process.env.DAILY_GLOBAL_AI_LIMIT) || 10000
+  );
+  const userLimit = Math.max(
+    1,
+    Number(process.env.DAILY_USER_AI_LIMIT) || 100
+  );
+  const guestLimit = Math.max(
+    1,
+    Number(process.env.DAILY_GUEST_AI_LIMIT) || 3
+  );
+
+  const session = await resolveSessionContext(request);
+  const globalKey = `daily_global_ai:${dayKey}`;
+  const userKey = session.userId
+    ? `daily_user_ai:${dayKey}:${session.userId}`
+    : null;
+  const ipHash = session.userId ? null : getClientIpHash(request, "quota");
+  const ipKey = ipHash ? `daily_guest_ai_ip:${dayKey}:${ipHash}` : null;
+  const sidKey =
+    !session.userId && session.guestSessionId
+      ? `daily_guest_ai_sid:${dayKey}:${session.guestSessionId}`
+      : null;
+
+  const keys = [globalKey, userKey, ipKey, sidKey].filter(
+    (k): k is string => Boolean(k)
+  );
+
+  const limit = session.userId ? userLimit : guestLimit;
+  let used = 0;
+  let globalSaturated = false;
+
+  try {
+    const db = getDb();
+    const rows = await db
+      .select({
+        key: rateLimits.key,
+        count: rateLimits.count,
+        resetAt: rateLimits.resetAt,
+      })
+      .from(rateLimits)
+      .where(inArray(rateLimits.key, keys));
+
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      if (row.resetAt > now) {
+        counts.set(row.key, Math.max(0, row.count));
+      }
+    }
+
+    globalSaturated = (counts.get(globalKey) ?? 0) >= globalLimit;
+
+    if (userKey) {
+      used = counts.get(userKey) ?? 0;
+    } else {
+      const ipUsed = ipKey ? counts.get(ipKey) ?? 0 : 0;
+      const sidUsed = sidKey ? counts.get(sidKey) ?? 0 : 0;
+      used = Math.max(ipUsed, sidUsed);
+    }
+  } catch (err) {
+    console.warn("[SmartSari] Quota status read warning:", err);
+  }
+
+  return {
+    session,
+    status: {
+      tier: session.userId ? "user" : "guest",
+      used: Math.min(used, limit),
+      limit,
+      remaining: Math.max(0, limit - used),
+      resetAt: nextMidnight.toISOString(),
+      globalSaturated,
+    },
+  };
 }

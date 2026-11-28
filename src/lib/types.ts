@@ -32,6 +32,7 @@ export const TIER_PRIORITY_ORDER: JournalTier[] = [
 export interface JournalMetrics {
   quartile?: QuartileTier;
   sinta?: SintaTier;
+  sintaVerified?: boolean;
   primaryTier: JournalTier;
   tierLabel: string;
   impactFactor: number;
@@ -55,6 +56,8 @@ export interface JournalPaper {
   openAccess: boolean;
   language?: string | null;
   journalMetrics?: JournalMetrics;
+  customText?: string | null;
+  localPdfUrl?: string | null;
 }
 
 export interface SourceStat {
@@ -106,6 +109,15 @@ export interface AuthUser {
   id: string;
   email: string;
   name: string;
+}
+
+export interface DailyQuotaStatus {
+  tier: "user" | "guest";
+  used: number;
+  limit: number;
+  remaining: number;
+  resetAt: string;
+  globalSaturated: boolean;
 }
 
 export interface LiteratureMatrixRow {

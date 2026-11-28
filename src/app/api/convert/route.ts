@@ -30,6 +30,7 @@ const convertSchema = z.object({
   doi: z.string().max(200).nullable().optional(),
   abstract: z.string().max(15000).nullable().optional(),
   pdfUrl: z.string().max(1000).nullable().optional(),
+  customText: z.string().max(35000).nullable().optional(),
   mode: z.enum(["clean", "translate_id", "summary_id"]).default("clean"),
   force: z.boolean().optional(),
 });
@@ -122,8 +123,10 @@ export async function POST(request: NextRequest) {
   }
 
   // Validate content availability before consuming daily AI quota
-  let extractedText: string | null = null;
-  if (body.pdfUrl) {
+  let extractedText: string | null = body.customText?.trim()
+    ? body.customText.trim().slice(0, 30000)
+    : null;
+  if (!extractedText && body.pdfUrl) {
     try {
       const pdfBuffer = await fetchPdfWithFallbacks(body.pdfUrl, body.doi);
       extractedText = await extractPdfText(pdfBuffer);

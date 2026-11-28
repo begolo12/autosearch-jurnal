@@ -1,3 +1,4 @@
+import { lookupOfficialSintaTier } from "@/lib/search/sinta-registry";
 import type {
   JournalMetrics,
   JournalPaper,
@@ -137,14 +138,23 @@ export function classifyJournalMetrics(
   }
 
   let sinta: SintaTier | undefined;
-  if (src.country_code === "ID") {
-    if (c2y >= 1.5 || hIndex >= 25) {
+  let sintaVerified = false;
+  const officialSinta = lookupOfficialSintaTier([
+    src.issn_l,
+    ...(src.issn ?? []),
+  ]);
+
+  if (officialSinta) {
+    sinta = officialSinta.tier;
+    sintaVerified = true;
+  } else if (src.country_code === "ID") {
+    if (c2y >= 2.0 || hIndex >= 30) {
       sinta = "SINTA1";
-    } else if (c2y >= 0.8 || hIndex >= 15) {
+    } else if (c2y >= 1.0 || hIndex >= 18) {
       sinta = "SINTA2";
-    } else if (c2y >= 0.4 || hIndex >= 8) {
+    } else if (c2y >= 0.45 || hIndex >= 10) {
       sinta = "SINTA3";
-    } else if (c2y >= 0.2 || hIndex >= 4) {
+    } else if (c2y >= 0.2 || hIndex >= 5) {
       sinta = "SINTA4";
     } else if (c2y >= 0.05 || hIndex >= 2) {
       sinta = "SINTA5";
@@ -169,6 +179,7 @@ export function classifyJournalMetrics(
   return {
     quartile,
     sinta,
+    sintaVerified: sinta ? sintaVerified : undefined,
     primaryTier,
     tierLabel: formatTierLabel(primaryTier),
     impactFactor: Number(c2y.toFixed(2)),

@@ -17,9 +17,11 @@ export function PwaRegistrar() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {
-        // Ignore registration errors in restricted webviews
-      });
+      navigator.serviceWorker
+        .register("/sw.js", { updateViaCache: "none" })
+        .catch(() => {
+          // Ignore registration errors in restricted webviews
+        });
     }
 
     const isStandalone =
@@ -38,8 +40,17 @@ export function PwaRegistrar() {
       setInstallPrompt(e as BeforeInstallPromptEvent);
     };
 
+    const handleInstalled = () => {
+      setInstallPrompt(null);
+      setIsIosHint(false);
+    };
+
     window.addEventListener("beforeinstallprompt", handlePrompt);
-    return () => window.removeEventListener("beforeinstallprompt", handlePrompt);
+    window.addEventListener("appinstalled", handleInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handlePrompt);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
   }, []);
 
   if (!installPrompt && !isIosHint) return null;

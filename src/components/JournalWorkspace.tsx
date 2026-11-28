@@ -23,15 +23,19 @@ import {
   RefreshCw,
   Search,
   Send,
+  Settings,
   Share2,
   SlidersHorizontal,
   Sparkles,
   SquarePen,
   Trash2,
+  Upload,
   User,
   WifiOff,
   X,
+  Zap,
 } from "lucide-react";
+import { AccountModal } from "@/components/AccountModal";
 import { AuthModal } from "@/components/AuthModal";
 import { CitationNetworkModal } from "@/components/CitationNetworkModal";
 import { LiteratureMatrixModal } from "@/components/LiteratureMatrixModal";
@@ -51,6 +55,7 @@ import {
   getCachedSearch,
   getUiSession,
   getWorkspaceSnapshot,
+  notifyQuotaUpdated,
   patchUiSessionScroll,
   setCachedBrief,
   setCachedMatrix,
@@ -66,6 +71,7 @@ import {
   type BookmarkRecord,
   type ConversionMode,
   type ConversionRecord,
+  type DailyQuotaStatus,
   type JournalPaper,
   type JournalTier,
   type LiteratureMatrixResult,
@@ -195,6 +201,11 @@ export function JournalWorkspace() {
 
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [quotaStatus, setQuotaStatus] = useState<DailyQuotaStatus | null>(null);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const pdfUploadInputRef = useRef<HTMLInputElement>(null);
+  const uploadedBlobUrlRef = useRef<string | null>(null);
   const [projects, setProjects] = useState<ResearchProjectRecord[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     null
@@ -347,14 +358,27 @@ export function JournalWorkspace() {
     []
   );
 
+  const refreshQuota = useCallback(async () => {
+    try {
+      const res = await fetch("/api/quota", { cache: "no-store" });
+      if (res.ok) {
+        const qJson = (await res.json()) as DailyQuotaStatus;
+        setQuotaStatus(qJson);
+      }
+    } catch {
+      // Non-fatal
+    }
+  }, []);
+
   const reloadWorkspaceData = useCallback(async () => {
     try {
-      const [meRes, pRes, bRes, hRes, cRes] = await Promise.all([
+      const [meRes, pRes, bRes, hRes, cRes, qRes] = await Promise.all([
         fetch("/api/auth/me"),
         fetch("/api/projects"),
         fetch("/api/bookmarks"),
         fetch("/api/history"),
         fetch("/api/conversions"),
+        fetch("/api/quota", { cache: "no-store" }),
       ]);
 
       let nextUser: AuthUser | null = null;
@@ -393,6 +417,10 @@ export function JournalWorkspace() {
         };
         nextConversions = cJson.conversions ?? [];
         setConversions(nextConversions);
+      }
+      if (qRes.ok) {
+        const qJson = (await qRes.json()) as DailyQuotaStatus;
+        setQuotaStatus(qJson);
       }
 
       if (meRes.ok && bRes.ok && hRes.ok && cRes.ok) {
@@ -540,7 +568,26 @@ export function JournalWorkspace() {
   }, [reloadWorkspaceData]);
 
   useEffect(() => {
+    const onQuotaUpdated = () => {
+      void refreshQuota();
+    };
+    window.addEventListener("smartsari:quota-updated", onQuotaUpdated);
+    return () => {
+      window.removeEventListener("smartsari:quota-updated", onQuotaUpdated);
+      if (uploadedBlobUrlRef.current) {
+        URL.revokeObjectURL(uploadedBlobUrlRef.current);
+      }
+    };
+  }, [refreshQuota]);
+
+  useEffect(() => {
     if (!sessionHydratedRef.current) return;
+
+    const persistableReaderState = readerState?.paper.paperKey.startsWith(
+      "upload:"
+    )
+      ? null
+      : readerState;
 
     setUiSession({
       activeTab,
@@ -556,7 +603,7 @@ export function JournalWorkspace() {
       activeBriefCacheKey,
       activeMatrixKey,
       selectedPapersMap,
-      readerState,
+      readerState: persistableReaderState,
       networkState,
     });
 
@@ -932,6 +979,7 @@ export function JournalWorkspace() {
       });
     } finally {
       setLoadingBrief(false);
+      notifyQuotaUpdated();
     }
   };
 
@@ -1019,6 +1067,7 @@ export function JournalWorkspace() {
       });
     } finally {
       setBuildingMatrix(false);
+      notifyQuotaUpdated();
     }
   };
 
@@ -1324,6 +1373,7 @@ export function JournalWorkspace() {
           doi: paper.doi,
           abstract: paper.abstract,
           pdfUrl: paper.pdfUrl,
+          customText: paper.customText ?? undefined,
           mode,
         }),
       });
@@ -1371,6 +1421,85 @@ export function JournalWorkspace() {
       });
     } finally {
       setConvertingKey(null);
+      notifyQuotaUpdated();
+    }
+  };
+
+  const handleUploadPdfFile = async (file: File) => {
+    if (
+      file.type !== "application/pdf" &&
+      !file.name.toLowerCase().endsWith(".pdf")
+    ) {
+      setNotice({
+        type: "error",
+        message: "Pilih berkas berformat PDF (.pdf).",
+      });
+      return;
+    }
+
+    if (file.size > 4 * 1024 * 1024) {
+      setNotice({
+        type: "error",
+        message: "Ukuran berkas PDF maksimal 4 MB untuk unggah langsung.",
+      });
+      return;
+    }
+
+    setUploadingPdf(true);
+    setNotice(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/pdf/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await res.json()) as {
+        paperKey?: string;
+        title?: string;
+        extractedText?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.paperKey || !data.extractedText) {
+        setNotice({
+          type: "error",
+          message: data.error || "Gagal memproses berkas PDF.",
+        });
+        return;
+      }
+
+      if (uploadedBlobUrlRef.current) {
+        URL.revokeObjectURL(uploadedBlobUrlRef.current);
+      }
+      const blobUrl = URL.createObjectURL(file);
+      uploadedBlobUrlRef.current = blobUrl;
+
+      setReaderState({
+        paper: {
+          paperKey: data.paperKey,
+          title: data.title || "Dokumen PDF Pribadi",
+          authors: ["Dokumen Pribadi"],
+          year: new Date().getFullYear(),
+          venue: "PDF Unggahan Pribadi",
+          source: "openalex",
+          abstract: null,
+          pdfUrl: null,
+          landingUrl: null,
+          doi: null,
+          citations: null,
+          openAccess: true,
+          customText: data.extractedText,
+          localPdfUrl: blobUrl,
+        },
+        autoTranslate: false,
+      });
+    } catch {
+      setNotice({
+        type: "error",
+        message: "Gagal mengunggah PDF. Periksa koneksi internet Anda.",
+      });
+    } finally {
+      setUploadingPdf(false);
     }
   };
 
@@ -1896,6 +2025,54 @@ export function JournalWorkspace() {
 
         {/* Account & Cross-Device Sync Footer */}
         <div className="space-y-2 border-t border-[#232429] p-3">
+          {quotaStatus && (
+            <div className="rounded-xl border border-[#232429] bg-[#0E0F12] px-3 py-2">
+              <div className="mb-1.5 flex items-center justify-between text-[11px]">
+                <span className="inline-flex items-center gap-1 font-medium text-[#D4D4D8]">
+                  <Zap className="h-3 w-3 text-[#F472B6]" />
+                  Kuota AI Harian
+                </span>
+                <span
+                  className={`font-mono font-semibold ${
+                    quotaStatus.remaining === 0
+                      ? "text-[#F87171]"
+                      : quotaStatus.remaining <= 2
+                        ? "text-amber-300"
+                        : "text-[#4ADE80]"
+                  }`}
+                >
+                  {quotaStatus.remaining}/{quotaStatus.limit}
+                </span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#1E1F23]">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    quotaStatus.remaining === 0
+                      ? "bg-[#EF4444]"
+                      : quotaStatus.remaining <= 2
+                        ? "bg-amber-400"
+                        : "bg-[#DB2777]"
+                  }`}
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.round((quotaStatus.remaining / quotaStatus.limit) * 100)
+                    )}%`,
+                  }}
+                />
+              </div>
+              {quotaStatus.tier === "guest" && !authUser && (
+                <button
+                  type="button"
+                  onClick={() => setShowAuthModal(true)}
+                  className="mt-1.5 text-[10px] font-medium text-[#F472B6] hover:underline"
+                >
+                  Daftar gratis untuk kuota 100×/hari →
+                </button>
+              )}
+            </div>
+          )}
+
           {authUser ? (
             <div className="flex items-center justify-between gap-2 rounded-xl bg-[#1E1F23] px-3 py-2">
               <div className="flex min-w-0 items-center gap-2">
@@ -1911,14 +2088,26 @@ export function JournalWorkspace() {
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => void handleLogout()}
-                aria-label="Keluar dari akun"
-                className="rounded-lg p-1.5 text-[#A1A1AA] hover:bg-[#232429] hover:text-[#F87171]"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-              </button>
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setShowAccountModal(true)}
+                  aria-label="Pengaturan akun"
+                  title="Pengaturan akun"
+                  className="rounded-lg p-1.5 text-[#A1A1AA] hover:bg-[#232429] hover:text-white"
+                >
+                  <Settings className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleLogout()}
+                  aria-label="Keluar dari akun"
+                  title="Keluar"
+                  className="rounded-lg p-1.5 text-[#A1A1AA] hover:bg-[#232429] hover:text-[#F87171]"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
           ) : (
             <button
@@ -1988,6 +2177,49 @@ export function JournalWorkspace() {
           </div>
 
           <div className="flex items-center gap-2">
+            <input
+              ref={pdfUploadInputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) void handleUploadPdfFile(file);
+              }}
+            />
+            <button
+              type="button"
+              disabled={uploadingPdf}
+              onClick={() => pdfUploadInputRef.current?.click()}
+              title="Unggah PDF pribadi (maks. 4 MB) untuk baca, terjemahan ID, tanya AI, dan ekspor Word"
+              className="btn-tactile inline-flex h-8 items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#151619] px-3 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/45 hover:text-white disabled:opacity-60"
+            >
+              {uploadingPdf ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F472B6]" />
+              ) : (
+                <Upload className="h-3.5 w-3.5 text-[#F472B6]" />
+              )}
+              <span className="hidden sm:inline">Upload PDF</span>
+              <span className="sm:hidden">PDF</span>
+            </button>
+            {quotaStatus && (
+              <span
+                title={`Sisa kuota AI harian: ${quotaStatus.remaining} dari ${quotaStatus.limit}`}
+                className={`inline-flex h-8 items-center gap-1 rounded-full border border-[#2C2E35] bg-[#151619] px-2.5 font-mono text-[11px] font-semibold ${
+                  !sidebarOpen ? "inline-flex" : "md:hidden"
+                } ${
+                  quotaStatus.remaining === 0
+                    ? "text-[#F87171]"
+                    : quotaStatus.remaining <= 2
+                      ? "text-amber-300"
+                      : "text-[#4ADE80]"
+                }`}
+              >
+                <Zap className="h-3 w-3 text-[#F472B6]" />
+                {quotaStatus.remaining}/{quotaStatus.limit}
+              </span>
+            )}
             <button
               type="button"
               onClick={() => setShowShortcutsModal(true)}
@@ -1999,11 +2231,19 @@ export function JournalWorkspace() {
             </button>
             <PwaRegistrar />
             {authUser ? (
-              <div className="flex items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#151619] py-1 pl-2.5 pr-1.5 text-xs md:hidden">
+              <div className="flex items-center gap-1 rounded-full border border-[#2C2E35] bg-[#151619] py-1 pl-2.5 pr-1.5 text-xs md:hidden">
                 <User className="h-3.5 w-3.5 text-[#F472B6]" />
                 <span className="max-w-[90px] truncate font-medium text-white">
                   {authUser.name}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setShowAccountModal(true)}
+                  aria-label="Pengaturan akun"
+                  className="rounded-full p-1 text-[#A1A1AA] hover:bg-[#232429] hover:text-white"
+                >
+                  <Settings className="h-3 w-3" />
+                </button>
                 <button
                   type="button"
                   onClick={() => void handleLogout()}
@@ -3287,6 +3527,57 @@ export function JournalWorkspace() {
             setNotice({
               type: "success",
               message: `Masuk sebagai ${user.name}. Ruang riset Anda tersinkronisasi.`,
+            });
+            void reloadWorkspaceData();
+          }}
+        />
+      )}
+
+      {/* Self-Service Account Management Modal */}
+      {showAccountModal && authUser && (
+        <AccountModal
+          user={authUser}
+          onClose={() => setShowAccountModal(false)}
+          onProfileUpdated={(updated) => {
+            setAuthUser(updated);
+            setNotice({
+              type: "success",
+              message: `Profil diperbarui (${updated.name}).`,
+            });
+          }}
+          onLoggedOutAll={() => {
+            setShowAccountModal(false);
+            clearAllLocalCache();
+            setAuthUser(null);
+            setSelectedProjectId(null);
+            setBookmarks([]);
+            setProjects([]);
+            setHistory([]);
+            setConversions([]);
+            setNotice({
+              type: "info",
+              message: "Semua sesi di semua perangkat telah dikeluarkan.",
+            });
+            void reloadWorkspaceData();
+          }}
+          onAccountDeleted={() => {
+            setShowAccountModal(false);
+            clearAllLocalCache();
+            setAuthUser(null);
+            setSelectedProjectId(null);
+            setBookmarks([]);
+            setProjects([]);
+            setHistory([]);
+            setConversions([]);
+            setSearchResult(null);
+            setSearchBrief(null);
+            setMatrixResult(null);
+            setReaderState(null);
+            setNetworkState(null);
+            setSelectedPapersMap({});
+            setNotice({
+              type: "info",
+              message: "Akun dan seluruh data Anda telah dihapus permanen.",
             });
             void reloadWorkspaceData();
           }}

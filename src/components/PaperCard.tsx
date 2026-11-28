@@ -26,6 +26,7 @@ import { formatCitation, type CitationFormat } from "@/lib/citation";
 import {
   getCachedAbstractTranslation,
   getCachedTakeaways,
+  notifyQuotaUpdated,
   setCachedAbstractTranslation,
   setCachedTakeaways,
 } from "@/lib/local-cache";
@@ -199,6 +200,7 @@ export function PaperCard({
       setTakeawaysErr("Gagal menghubungi server AI.");
     } finally {
       setLoadingTakeaways(false);
+      notifyQuotaUpdated();
     }
   };
 
@@ -272,6 +274,7 @@ export function PaperCard({
       setAbstractTranslateErr("Gagal menghubungi server terjemahan.");
     } finally {
       setTranslatingAbstract(false);
+      notifyQuotaUpdated();
     }
   };
 
@@ -311,9 +314,19 @@ export function PaperCard({
       <div className="mb-2 flex items-baseline gap-2.5 sm:mb-0 sm:block sm:pt-0.5">
         {tierLabel ? (
           <span
-            className={`inline-block rounded-md px-2 py-0.5 font-mono text-xs font-semibold tracking-tight ${tierBadgeClass}`}
+            title={
+              tier?.startsWith("SINTA")
+                ? paper.journalMetrics?.sintaVerified
+                  ? "Terverifikasi daftar ISSN SINTA resmi"
+                  : "Estimasi SINTA berdasarkan metrik indeks OpenAlex"
+                : undefined
+            }
+            className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-mono text-xs font-semibold tracking-tight ${tierBadgeClass}`}
           >
             {tierLabel}
+            {tier?.startsWith("SINTA") && paper.journalMetrics?.sintaVerified && (
+              <Check className="h-3 w-3 shrink-0" />
+            )}
           </span>
         ) : (
           <span className="inline-block rounded-md border border-[#2C2E35] bg-[#1E1F23] px-2 py-0.5 font-mono text-[11px] font-medium text-[#A1A1AA]">
