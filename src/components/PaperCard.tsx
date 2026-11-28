@@ -17,10 +17,12 @@ import {
   GitBranch,
   Languages,
   Loader2,
+  Plus,
   Quote,
   Sparkles,
   Square,
   StickyNote,
+  Trash2,
 } from "lucide-react";
 import { formatCitation, type CitationFormat } from "@/lib/citation";
 import {
@@ -69,7 +71,10 @@ const MODE_OPTIONS: Array<{
 interface PaperCardProps {
   paper: JournalPaper;
   isBookmarked: boolean;
-  onToggleBookmark: (paper: JournalPaper) => Promise<void>;
+  onToggleBookmark: (
+    paper: JournalPaper,
+    options?: { projectId?: string | null; forceSave?: boolean }
+  ) => Promise<void>;
   onDownloadPdf: (paper: JournalPaper) => Promise<void>;
   onOpenReader: (paper: JournalPaper, autoTranslate?: boolean) => void;
   onConvertWord: (paper: JournalPaper, mode: ConversionMode) => Promise<void>;
@@ -86,6 +91,9 @@ interface PaperCardProps {
     bookmarkId: string,
     patch: { projectId?: string | null; note?: string | null }
   ) => Promise<void>;
+  onCreateProjectQuick?: (
+    name: string
+  ) => Promise<ResearchProjectRecord | null>;
 }
 
 export function PaperCard({
@@ -105,11 +113,15 @@ export function PaperCard({
   note,
   projects,
   onUpdateBookmarkMeta,
+  onCreateProjectQuick,
 }: PaperCardProps) {
   const [expandedAbstract, setExpandedAbstract] = useState(false);
   const [showConvertPanel, setShowConvertPanel] = useState(false);
   const [showCitePanel, setShowCitePanel] = useState(false);
   const [showNotePanel, setShowNotePanel] = useState(false);
+  const [showSavePanel, setShowSavePanel] = useState(false);
+  const [quickProjectName, setQuickProjectName] = useState("");
+  const [creatingQuickProject, setCreatingQuickProject] = useState(false);
   const [noteDraft, setNoteDraft] = useState(note || "");
   const [savingMeta, setSavingMeta] = useState(false);
   const [citeFormat, setCiteFormat] = useState<CitationFormat>("apa");
@@ -214,14 +226,54 @@ export function PaperCard({
       ? abstractText
       : `${abstractText.slice(0, 260).trimEnd()}...`;
 
-  const handleBookmarkClick = async () => {
+  const handleSaveToTarget = async (targetProjectId: string | null) => {
     setBookmarkPending(true);
     try {
-      await onToggleBookmark(paper);
+      await onToggleBookmark(paper, {
+        projectId: targetProjectId,
+        forceSave: true,
+      });
+      setShowSavePanel(false);
     } finally {
       setBookmarkPending(false);
     }
   };
+
+  const handleRemoveBookmark = async () => {
+    setBookmarkPending(true);
+    try {
+      await onToggleBookmark(paper);
+      setShowSavePanel(false);
+    } finally {
+      setBookmarkPending(false);
+    }
+  };
+
+  const handleQuickCreateAndSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onCreateProjectQuick || !quickProjectName.trim() || creatingQuickProject) {
+      return;
+    }
+    setCreatingQuickProject(true);
+    try {
+      const created = await onCreateProjectQuick(quickProjectName.trim());
+      if (created) {
+        setQuickProjectName("");
+        await onToggleBookmark(paper, {
+          projectId: created.id,
+          forceSave: true,
+        });
+        setShowSavePanel(false);
+      }
+    } finally {
+      setCreatingQuickProject(false);
+    }
+  };
+
+  const activeProjectName =
+    projectId && projects
+      ? projects.find((p) => p.id === projectId)?.name ?? null
+      : null;
 
   const handleCopyCitation = async () => {
     const text = formatCitation(paper, citeFormat);
@@ -652,6 +704,7 @@ export function PaperCard({
               setShowConvertPanel((v) => !v);
               setShowCitePanel(false);
               setShowNotePanel(false);
+              setShowSavePanel(false);
             }}
             className={`btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium disabled:opacity-60 ${
               showConvertPanel
@@ -684,6 +737,7 @@ export function PaperCard({
               setShowCitePanel((v) => !v);
               setShowConvertPanel(false);
               setShowNotePanel(false);
+              setShowSavePanel(false);
             }}
             className={`btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
               showCitePanel
@@ -728,19 +782,37 @@ export function PaperCard({
           <button
             type="button"
             disabled={bookmarkPending}
-            onClick={() => void handleBookmarkClick()}
+            onClick={() => {
+              setShowSavePanel((v) => !v);
+              setShowConvertPanel(false);
+              setShowCitePanel(false);
+              setShowNotePanel(false);
+            }}
             className={`btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
-              isBookmarked
+              isBookmarked || showSavePanel
                 ? "border-accent/45 bg-accent/15 text-accent-tint"
                 : "border-line-strong bg-elevated text-ink-strong hover:border-line-hover hover:text-heading"
             }`}
           >
-            {isBookmarked ? (
+            {bookmarkPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : isBookmarked ? (
               <BookmarkCheck className="h-3.5 w-3.5" />
             ) : (
               <Bookmark className="h-3.5 w-3.5" />
             )}
-            <span>{isBookmarked ? "Tersimpan" : "Simpan"}</span>
+            <span>
+              {isBookmarked
+                ? activeProjectName
+                  ? `Tersimpan · ${activeProjectName.length > 18 ? `${activeProjectName.slice(0, 18)}…` : activeProjectName}`
+                  : "Tersimpan"
+                : "Simpan"}
+            </span>
+            {showSavePanel ? (
+              <ChevronUp className="h-3 w-3" />
+            ) : (
+              <ChevronDown className="h-3 w-3" />
+            )}
           </button>
 
           {bookmarkId && onUpdateBookmarkMeta && (
@@ -750,6 +822,7 @@ export function PaperCard({
                 setShowNotePanel((v) => !v);
                 setShowConvertPanel(false);
                 setShowCitePanel(false);
+                setShowSavePanel(false);
               }}
               className={`btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
                 showNotePanel || note || projectId
@@ -762,6 +835,104 @@ export function PaperCard({
             </button>
           )}
         </div>
+
+        {/* Inline Direct Save to Library / Research Project Picker */}
+        {showSavePanel && (
+          <div className="animate-panel-open mt-3 space-y-3 rounded-xl border border-line-strong border-t-2 border-t-accent/65 bg-surface p-3.5 shadow-lg">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-heading">
+                Simpan ke Pustaka
+              </span>
+              {isBookmarked && (
+                <button
+                  type="button"
+                  disabled={bookmarkPending}
+                  onClick={() => void handleRemoveBookmark()}
+                  className="inline-flex min-h-[30px] items-center gap-1 rounded-full border border-danger/30 bg-danger/10 px-2.5 py-1 text-[11px] font-medium text-danger transition-colors hover:bg-danger/20 disabled:opacity-60"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Hapus dari Tersimpan
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={bookmarkPending}
+                onClick={() => void handleSaveToTarget(null)}
+                className={`btn-tactile inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
+                  isBookmarked && !projectId
+                    ? "border-accent bg-accent/15 text-accent-tint"
+                    : "border-line-strong bg-canvas text-ink-strong hover:border-accent-soft hover:text-heading"
+                }`}
+              >
+                {isBookmarked && !projectId ? (
+                  <Check className="h-3.5 w-3.5 text-accent-soft" />
+                ) : (
+                  <Bookmark className="h-3.5 w-3.5 text-ink-secondary" />
+                )}
+                <span>Tersimpan (Umum)</span>
+              </button>
+
+              {(projects ?? []).map((p) => {
+                const isCurrent = isBookmarked && projectId === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    disabled={bookmarkPending}
+                    onClick={() => void handleSaveToTarget(p.id)}
+                    className={`btn-tactile inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
+                      isCurrent
+                        ? "border-accent bg-accent/15 text-accent-tint"
+                        : "border-line-strong bg-canvas text-ink-strong hover:border-accent-soft hover:text-heading"
+                    }`}
+                  >
+                    {isCurrent ? (
+                      <Check className="h-3.5 w-3.5 text-accent-soft" />
+                    ) : (
+                      <FolderOpen className="h-3.5 w-3.5 text-accent-soft" />
+                    )}
+                    <span>{p.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {onCreateProjectQuick && (
+              <form
+                onSubmit={(e) => void handleQuickCreateAndSave(e)}
+                className="flex flex-wrap items-center gap-2 border-t border-line pt-2.5"
+              >
+                <input
+                  type="text"
+                  value={quickProjectName}
+                  onChange={(e) => setQuickProjectName(e.target.value)}
+                  placeholder="Nama proyek riset baru..."
+                  maxLength={80}
+                  className="min-h-[36px] min-w-[180px] flex-1 rounded-lg border border-line-strong bg-canvas px-3 py-1.5 text-xs text-ink placeholder:text-ink-muted focus:border-accent-soft focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={
+                    creatingQuickProject ||
+                    bookmarkPending ||
+                    !quickProjectName.trim()
+                  }
+                  className="btn-tactile inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+                >
+                  {creatingQuickProject ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="h-3.5 w-3.5" />
+                  )}
+                  <span>Buat &amp; Simpan</span>
+                </button>
+              </form>
+            )}
+          </div>
+        )}
 
         {/* Inline 1-Click Citation Panel */}
         {showCitePanel && (

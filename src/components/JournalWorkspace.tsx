@@ -1288,9 +1288,38 @@ export function JournalWorkspace() {
     }
   };
 
-  const handleToggleBookmark = async (paper: JournalPaper) => {
+  const handleCreateProjectQuick = async (
+    name: string
+  ): Promise<ResearchProjectRecord | null> => {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    try {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as { project: ResearchProjectRecord };
+      setProjects((prev) => [data.project, ...prev]);
+      return data.project;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleToggleBookmark = async (
+    paper: JournalPaper,
+    options?: { projectId?: string | null; forceSave?: boolean }
+  ) => {
     const existing = bookmarkedMap.get(paper.paperKey);
     if (existing) {
+      if (options?.forceSave) {
+        await handleUpdateBookmarkMeta(existing.id, {
+          projectId: options.projectId ?? null,
+        });
+        return;
+      }
       const res = await fetch(`/api/bookmarks/${existing.id}`, {
         method: "DELETE",
       });
@@ -1300,23 +1329,53 @@ export function JournalWorkspace() {
           type: "info",
           message: "Jurnal dihapus dari daftar Tersimpan.",
         });
+        if (existing.projectId) {
+          const pRes = await fetch("/api/projects");
+          if (pRes.ok) {
+            const pJson = (await pRes.json()) as {
+              projects?: ResearchProjectRecord[];
+            };
+            setProjects(pJson.projects ?? []);
+          }
+        }
       }
       return;
     }
 
+    const targetProjectId = options?.projectId ?? null;
     const res = await fetch("/api/bookmarks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(paper),
+      body: JSON.stringify({
+        ...paper,
+        projectId: targetProjectId,
+        tierLabel: paper.journalMetrics?.tierLabel ?? null,
+      }),
     });
 
     if (res.ok) {
       const data = (await res.json()) as { bookmark: BookmarkRecord };
       setBookmarks((prev) => [data.bookmark, ...prev]);
-      setNotice({
-        type: "success",
-        message: "Jurnal disimpan ke daftar Tersimpan Anda.",
-      });
+      if (targetProjectId) {
+        const projectName =
+          projects.find((p) => p.id === targetProjectId)?.name || "Proyek Riset";
+        setNotice({
+          type: "success",
+          message: `Jurnal disimpan ke proyek "${projectName}".`,
+        });
+        const pRes = await fetch("/api/projects");
+        if (pRes.ok) {
+          const pJson = (await pRes.json()) as {
+            projects?: ResearchProjectRecord[];
+          };
+          setProjects(pJson.projects ?? []);
+        }
+      } else {
+        setNotice({
+          type: "success",
+          message: "Jurnal disimpan ke daftar Tersimpan Anda.",
+        });
+      }
     } else {
       setNotice({
         type: "error",
@@ -2897,36 +2956,49 @@ export function JournalWorkspace() {
                             </div>
 
                             <div className="divide-y divide-line">
-                              {group.papers.map((paper) => (
-                                <PaperCard
-                                  key={paper.paperKey}
-                                  paper={paper}
-                                  isBookmarked={bookmarkedMap.has(
-                                    paper.paperKey
-                                  )}
-                                  onToggleBookmark={handleToggleBookmark}
-                                  onDownloadPdf={handleDownloadPdf}
-                                  onOpenReader={(p, autoTranslate = false) =>
-                                    setReaderState({ paper: p, autoTranslate })
-                                  }
-                                  onConvertWord={handleConvertWord}
-                                  downloadingPdfKey={downloadingPdfKey}
-                                  convertingKey={convertingKey}
-                                  selectedForMatrix={Boolean(
-                                    selectedPapersMap[paper.paperKey]
-                                  )}
-                                  onToggleSelectMatrix={
-                                    handleToggleSelectMatrix
-                                  }
-                                  onOpenNetwork={(p) =>
-                                    setNetworkState({
-                                      paper: p,
-                                      trail: [p],
-                                      activeTab: "citing",
-                                    })
-                                  }
-                                />
-                              ))}
+                              {group.papers.map((paper) => {
+                                const savedEntry = bookmarkedMap.get(
+                                  paper.paperKey
+                                );
+                                return (
+                                  <PaperCard
+                                    key={paper.paperKey}
+                                    paper={paper}
+                                    isBookmarked={Boolean(savedEntry)}
+                                    onToggleBookmark={handleToggleBookmark}
+                                    onDownloadPdf={handleDownloadPdf}
+                                    onOpenReader={(p, autoTranslate = false) =>
+                                      setReaderState({ paper: p, autoTranslate })
+                                    }
+                                    onConvertWord={handleConvertWord}
+                                    downloadingPdfKey={downloadingPdfKey}
+                                    convertingKey={convertingKey}
+                                    selectedForMatrix={Boolean(
+                                      selectedPapersMap[paper.paperKey]
+                                    )}
+                                    onToggleSelectMatrix={
+                                      handleToggleSelectMatrix
+                                    }
+                                    onOpenNetwork={(p) =>
+                                      setNetworkState({
+                                        paper: p,
+                                        trail: [p],
+                                        activeTab: "citing",
+                                      })
+                                    }
+                                    bookmarkId={savedEntry?.id}
+                                    projectId={savedEntry?.projectId ?? null}
+                                    note={savedEntry?.note ?? null}
+                                    projects={projects}
+                                    onUpdateBookmarkMeta={
+                                      handleUpdateBookmarkMeta
+                                    }
+                                    onCreateProjectQuick={
+                                      handleCreateProjectQuick
+                                    }
+                                  />
+                                );
+                              })}
                             </div>
                           </section>
                         ))}
@@ -3248,6 +3320,7 @@ export function JournalWorkspace() {
                         bookmarkId={b.id}
                         projectId={b.projectId}
                         note={b.note}
+                        onCreateProjectQuick={handleCreateProjectQuick}
                         projects={projects}
                         onUpdateBookmarkMeta={handleUpdateBookmarkMeta}
                       />

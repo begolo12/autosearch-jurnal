@@ -1,4 +1,8 @@
 import {
+  computeQueryRelevance,
+  isDoiQuery,
+} from "@/lib/search/query-relevance";
+import {
   searchCrossrefByTiers,
   searchEuropePmcByTiers,
   searchOpenAlexByTiers,
@@ -17,25 +21,6 @@ const ALL_SOURCES: SearchSource[] = ["openalex", "europepmc", "crossref"];
 
 function normalizeTitle(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function computeTitleRelevance(title: string, query: string): number {
-  const normTitle = title.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
-  const normQuery = query
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .trim();
-  if (!normQuery) return 0;
-
-  let score = normTitle.includes(normQuery) ? 1.0 : 0;
-  const tokens = Array.from(
-    new Set(normQuery.split(/\s+/).filter((t) => t.length >= 2))
-  );
-  if (tokens.length === 0) return score;
-
-  const matched = tokens.filter((t) => normTitle.includes(t)).length;
-  score += matched / tokens.length;
-  return score;
 }
 
 function tierRank(tier?: JournalTier): number {
@@ -166,6 +151,41 @@ export async function aggregateJournalSearch(params: {
   }
 
   let papers = Array.from(dedupedMap.values());
+  const directDoi = isDoiQuery(query);
+
+  // Drop empty "zombie" results that have neither a PDF nor a usable abstract (>= 40 chars)
+  if (!directDoi) {
+    papers = papers.filter(
+      (p) => Boolean(p.pdfUrl) || (p.abstract?.trim().length ?? 0) >= 40
+    );
+  }
+
+  // Enforce minimum keyword relevance so loose Crossref/OR matches cannot inject off-topic articles
+  const relevanceMap = new Map<string, ReturnType<typeof computeQueryRelevance>>();
+  for (const p of papers) {
+    relevanceMap.set(p.paperKey, computeQueryRelevance(p, query));
+  }
+
+  if (!directDoi && papers.length > 0) {
+    const strictMatched = papers.filter((p) => {
+      const rel = relevanceMap.get(p.paperKey)!;
+      if (rel.totalCore === 0) return true;
+      if (rel.totalCore === 1) return rel.matchedCore >= 1;
+      return (
+        rel.matchedAnchor ||
+        rel.matchedCore >= Math.ceil(rel.totalCore * 0.75)
+      );
+    });
+
+    if (strictMatched.length > 0) {
+      papers = strictMatched;
+    } else {
+      papers = papers.filter((p) => {
+        const rel = relevanceMap.get(p.paperKey)!;
+        return rel.totalCore === 0 || rel.matchedCore >= 1;
+      });
+    }
+  }
 
   if (params.pdfOnly) {
     papers = papers.filter((p) => Boolean(p.pdfUrl));
@@ -184,8 +204,8 @@ export async function aggregateJournalSearch(params: {
       tierRank(b.journalMetrics?.primaryTier);
     if (rankDiff !== 0) return rankDiff;
 
-    const relA = computeTitleRelevance(a.title, query);
-    const relB = computeTitleRelevance(b.title, query);
+    const relA = relevanceMap.get(a.paperKey)?.score ?? 0;
+    const relB = relevanceMap.get(b.paperKey)?.score ?? 0;
     const ifA = a.journalMetrics?.impactFactor ?? 0;
     const ifB = b.journalMetrics?.impactFactor ?? 0;
     const citA = a.citations ?? -1;

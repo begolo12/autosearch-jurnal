@@ -1,3 +1,7 @@
+import {
+  buildInternationalQuery,
+  isDoiQuery,
+} from "@/lib/search/query-relevance";
 import { lookupOfficialSintaTier } from "@/lib/search/sinta-registry";
 import type {
   JournalMetrics,
@@ -164,14 +168,15 @@ export function classifyJournalMetrics(
   }
 
   const tierSet = new Set(selectedTiers);
-  // Q1 always takes highest priority if selected
+  // Q1 takes top priority; Indonesian journals (SINTA) are prioritized under SINTA
+  // so they are not mislabeled as Q2-Q4 International journals.
   let primaryTier: JournalTier | null = null;
   if (quartile === "Q1" && tierSet.has("Q1")) {
     primaryTier = "Q1";
-  } else if (tierSet.has(quartile)) {
-    primaryTier = quartile;
   } else if (sinta && tierSet.has(sinta)) {
     primaryTier = sinta;
+  } else if (tierSet.has(quartile)) {
+    primaryTier = quartile;
   }
 
   if (!primaryTier) return null;
@@ -301,12 +306,13 @@ export async function searchOpenAlexByTiers(
   const wantsQ = tiers.some((t) => t.startsWith("Q"));
   const wantsSinta = tiers.some((t) => t.startsWith("SINTA"));
   const oaPart = pdfOnly ? ",open_access.is_oa:true" : "";
+  const intlQuery = buildInternationalQuery(query);
 
   const workBatches: Promise<OpenAlexWork[]>[] = [];
   if (wantsQ) {
     workBatches.push(
       fetchOpenAlexWorks(
-        query,
+        intlQuery,
         `primary_location.source.type:journal${oaPart}`,
         limit,
         page
@@ -424,7 +430,7 @@ export async function searchEuropePmcByTiers(
   const url = new URL(
     "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
   );
-  url.searchParams.set("query", query);
+  url.searchParams.set("query", buildInternationalQuery(query));
   url.searchParams.set("format", "json");
   url.searchParams.set("resultType", "core");
   url.searchParams.set("pageSize", String(Math.min(100, limit * page)));
@@ -558,7 +564,11 @@ export async function searchCrossrefByTiers(
   page = 1
 ): Promise<JournalPaper[]> {
   const url = new URL("https://api.crossref.org/works");
-  url.searchParams.set("query", query);
+  if (isDoiQuery(query)) {
+    url.searchParams.set("query", query);
+  } else {
+    url.searchParams.set("query.bibliographic", query);
+  }
   url.searchParams.set("rows", String(limit));
   url.searchParams.set("offset", String((page - 1) * limit));
   url.searchParams.set("filter", "type:journal-article");
