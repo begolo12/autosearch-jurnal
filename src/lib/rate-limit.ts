@@ -1,8 +1,13 @@
-import crypto from "crypto";
-import { sql } from "drizzle-orm";
+import { lt, sql } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { getDb } from "@/db";
-import { rateLimits } from "@/db/schema";
+import {
+  emailOtpChallenges,
+  passwordResetOtps,
+  rateLimits,
+  searchCache,
+} from "@/db/schema";
+import { getClientIpHash } from "@/lib/auth-security";
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -10,18 +15,19 @@ export interface RateLimitResult {
   retryAfterSeconds: number;
 }
 
-function getClientIpHash(request: NextRequest): string {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  const rawIp =
-    forwardedFor?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip")?.trim() ||
-    "unknown";
-
-  return crypto
-    .createHash("sha256")
-    .update(`pustakacari:${rawIp}`)
-    .digest("hex")
-    .slice(0, 32);
+export async function pruneExpiredRows(): Promise<void> {
+  try {
+    const db = getDb();
+    const now = new Date();
+    await Promise.all([
+      db.delete(rateLimits).where(lt(rateLimits.resetAt, now)),
+      db.delete(searchCache).where(lt(searchCache.expiresAt, now)),
+      db.delete(emailOtpChallenges).where(lt(emailOtpChallenges.expiresAt, now)),
+      db.delete(passwordResetOtps).where(lt(passwordResetOtps.expiresAt, now)),
+    ]);
+  } catch (err) {
+    console.warn("[SmartSari] Opportunistic TTL cleanup warning:", err);
+  }
 }
 
 export async function checkRateLimit(
@@ -31,12 +37,16 @@ export async function checkRateLimit(
   windowSeconds: number,
   failClosed = false
 ): Promise<RateLimitResult> {
-  const ipHash = getClientIpHash(request);
+  const ipHash = getClientIpHash(request, "rl");
   const key = `${bucket}:${ipHash}`;
   const now = new Date();
   const nextReset = new Date(now.getTime() + windowSeconds * 1000);
   const nowIso = now.toISOString();
   const nextResetIso = nextReset.toISOString();
+
+  if (Math.random() < 0.005) {
+    void pruneExpiredRows();
+  }
 
   try {
     const db = getDb();

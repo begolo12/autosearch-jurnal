@@ -13,6 +13,16 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.smartsari.my.id" }],
+        destination: "https://smartsari.my.id/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {
@@ -38,12 +48,12 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline'",
+              "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob:",
               "font-src 'self' data:",
-              "connect-src 'self'",
-              "frame-src 'self' blob:",
+              "connect-src 'self' https://challenges.cloudflare.com",
+              "frame-src 'self' blob: https://challenges.cloudflare.com",
               "object-src 'self' blob:",
               "base-uri 'self'",
               "form-action 'self'",

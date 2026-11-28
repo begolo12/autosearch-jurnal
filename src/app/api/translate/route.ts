@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { conversions } from "@/db/schema";
@@ -16,15 +16,17 @@ import {
 } from "@/lib/pdf";
 import { checkDailyAiQuota } from "@/lib/quota";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { attachSessionCookie, getSessionContext } from "@/lib/session";
+import { attachSessionCookie, resolveSessionContext } from "@/lib/session";
 
 export const maxDuration = 60;
+
+const MAX_CONVERSIONS_PER_SESSION = 50;
 
 const translateSchema = z.object({
   paperKey: z.string().min(1).max(300),
   title: z.string().min(1).max(500),
   authors: z.array(z.string().max(160)).max(50).default([]),
-  year: z.number().nullable().optional(),
+  year: z.number().int().min(1800).max(2100).nullable().optional(),
   venue: z.string().max(300).nullable().optional(),
   doi: z.string().max(200).nullable().optional(),
   abstract: z.string().max(15000).nullable().optional(),
@@ -42,7 +44,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { sessionId, isNew } = getSessionContext(request);
+  const session = await resolveSessionContext(request);
+  const { sessionId, isNew, clearStaleAuth } = session;
 
   let body: z.infer<typeof translateSchema>;
   try {
@@ -57,9 +60,14 @@ export async function POST(request: NextRequest) {
   // Fast on-card abstract translation
   if (body.scope === "abstract") {
     if (!body.abstract) {
-      return NextResponse.json(
-        { error: "Abstrak tidak tersedia untuk diterjemahkan." },
-        { status: 422 }
+      return attachSessionCookie(
+        NextResponse.json(
+          { error: "Abstrak tidak tersedia untuk diterjemahkan." },
+          { status: 422 }
+        ),
+        sessionId,
+        isNew,
+        clearStaleAuth
       );
     }
 
@@ -76,7 +84,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const quota = await checkDailyAiQuota(request);
+    const quota = await checkDailyAiQuota(request, session);
     if (!quota.allowed) {
       return NextResponse.json(
         { error: quota.error, requireLogin: quota.requireLogin },
@@ -93,8 +101,14 @@ export async function POST(request: NextRequest) {
         abstract: body.abstract,
         language: body.language,
       });
-      return attachSessionCookie(NextResponse.json(result), sessionId, isNew);
+      return attachSessionCookie(
+        NextResponse.json(result),
+        sessionId,
+        isNew,
+        clearStaleAuth
+      );
     } catch (err) {
+      await quota.refund();
       if (err instanceof InferHubError) {
         return NextResponse.json(
           { error: err.message },
@@ -134,7 +148,8 @@ export async function POST(request: NextRequest) {
             conversionId: existing[0].id,
           }),
           sessionId,
-          isNew
+          isNew,
+          clearStaleAuth
         );
       }
     } catch (err) {
@@ -156,17 +171,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const quota = await checkDailyAiQuota(request);
-  if (!quota.allowed) {
-    return NextResponse.json(
-      { error: quota.error, requireLogin: quota.requireLogin },
-      {
-        status: quota.status,
-        headers: { "Retry-After": String(quota.retryAfterSeconds) },
-      }
-    );
-  }
-
+  // Validate content availability before consuming daily AI quota
   let extractedText: string | null = null;
   if (body.pdfUrl) {
     try {
@@ -179,12 +184,28 @@ export async function POST(request: NextRequest) {
   }
 
   if (!extractedText && !body.abstract) {
+    return attachSessionCookie(
+      NextResponse.json(
+        {
+          error:
+            "PDF tidak dapat diakses langsung dan abstrak tidak tersedia untuk diterjemahkan.",
+        },
+        { status: 422 }
+      ),
+      sessionId,
+      isNew,
+      clearStaleAuth
+    );
+  }
+
+  const quota = await checkDailyAiQuota(request, session);
+  if (!quota.allowed) {
     return NextResponse.json(
+      { error: quota.error, requireLogin: quota.requireLogin },
       {
-        error:
-          "PDF tidak dapat diakses langsung dan abstrak tidak tersedia untuk diterjemahkan.",
-      },
-      { status: 422 }
+        status: quota.status,
+        headers: { "Retry-After": String(quota.retryAfterSeconds) },
+      }
     );
   }
 
@@ -217,6 +238,18 @@ export async function POST(request: NextRequest) {
         })
         .returning({ id: conversions.id });
       conversionId = inserted?.id ?? "";
+
+      const overflow = await db
+        .select({ id: conversions.id })
+        .from(conversions)
+        .where(eq(conversions.sessionId, sessionId))
+        .orderBy(desc(conversions.createdAt))
+        .offset(MAX_CONVERSIONS_PER_SESSION);
+      if (overflow.length > 0) {
+        await db
+          .delete(conversions)
+          .where(inArray(conversions.id, overflow.map((r) => r.id)));
+      }
     } catch (dbErr) {
       console.warn("Failed to cache translation:", dbErr);
     }
@@ -229,9 +262,11 @@ export async function POST(request: NextRequest) {
         conversionId,
       }),
       sessionId,
-      isNew
+      isNew,
+      clearStaleAuth
     );
   } catch (err) {
+    await quota.refund();
     if (err instanceof InferHubError) {
       return NextResponse.json(
         { error: err.message },

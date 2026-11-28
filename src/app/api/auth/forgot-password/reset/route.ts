@@ -1,10 +1,10 @@
 import crypto from "crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, gt, lt, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { passwordResetOtps, rateLimits, users } from "@/db/schema";
-import { hashPassword } from "@/lib/auth";
+import { clearAuthCookie, hashPassword } from "@/lib/auth";
 import {
   checkAuthRateLimit,
   getAuthClientIpHash,
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   if (!isAllowedAuthOrigin(request)) {
     return NextResponse.json(
       { error: "Permintaan berasal dari sumber yang tidak diizinkan." },
-      { status: 403 }
+      { status: 403, headers: { "Cache-Control": "no-store" } }
     );
   }
 
@@ -40,7 +40,13 @@ export async function POST(request: NextRequest) {
           ipRl.retryAfterSeconds / 60
         )} menit.`,
       },
-      { status: 429, headers: { "Retry-After": String(ipRl.retryAfterSeconds) } }
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(ipRl.retryAfterSeconds),
+          "Cache-Control": "no-store",
+        },
+      }
     );
   }
 
@@ -52,47 +58,69 @@ export async function POST(request: NextRequest) {
       err instanceof z.ZodError
         ? err.issues[0]?.message || "Data reset kata sandi tidak valid."
         : "Data reset kata sandi tidak valid.";
-    return NextResponse.json({ error: msg }, { status: 400 });
+    return NextResponse.json(
+      { error: msg },
+      { status: 400, headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   const pwdError = validateStrongPassword(body.newPassword);
   if (pwdError) {
-    return NextResponse.json({ error: pwdError }, { status: 400 });
+    return NextResponse.json(
+      { error: pwdError },
+      { status: 400, headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   try {
     const db = getDb();
-    const rows = await db
-      .select()
-      .from(passwordResetOtps)
-      .where(eq(passwordResetOtps.email, body.email))
-      .limit(1);
+    const now = new Date();
 
-    const pending = rows[0];
+    // Atomic attempt increment prevents concurrent OTP brute-force bypass
+    const [pending] = await db
+      .update(passwordResetOtps)
+      .set({ attempts: sql`${passwordResetOtps.attempts} + 1` })
+      .where(
+        and(
+          eq(passwordResetOtps.email, body.email),
+          lt(passwordResetOtps.attempts, 5),
+          gt(passwordResetOtps.expiresAt, now)
+        )
+      )
+      .returning();
+
     if (!pending) {
+      const existing = await db
+        .select({
+          id: passwordResetOtps.id,
+          attempts: passwordResetOtps.attempts,
+          expiresAt: passwordResetOtps.expiresAt,
+        })
+        .from(passwordResetOtps)
+        .where(eq(passwordResetOtps.email, body.email))
+        .limit(1);
+
+      const stale = existing[0];
+      if (stale) {
+        await db
+          .delete(passwordResetOtps)
+          .where(eq(passwordResetOtps.id, stale.id));
+
+        if (stale.attempts >= 5) {
+          return NextResponse.json(
+            { error: "Terlalu banyak percobaan OTP salah. Minta kode baru." },
+            { status: 429, headers: { "Cache-Control": "no-store" } }
+          );
+        }
+        return NextResponse.json(
+          { error: "Kode OTP sudah kedaluwarsa. Silakan minta kode baru." },
+          { status: 400, headers: { "Cache-Control": "no-store" } }
+        );
+      }
+
       return NextResponse.json(
         { error: "Kode OTP reset tidak ditemukan atau sudah kedaluwarsa." },
-        { status: 400 }
-      );
-    }
-
-    if (pending.expiresAt <= new Date()) {
-      await db
-        .delete(passwordResetOtps)
-        .where(eq(passwordResetOtps.id, pending.id));
-      return NextResponse.json(
-        { error: "Kode OTP sudah kedaluwarsa. Silakan minta kode baru." },
-        { status: 400 }
-      );
-    }
-
-    if (pending.attempts >= 5) {
-      await db
-        .delete(passwordResetOtps)
-        .where(eq(passwordResetOtps.id, pending.id));
-      return NextResponse.json(
-        { error: "Terlalu banyak percobaan OTP salah. Minta kode baru." },
-        { status: 429 }
+        { status: 400, headers: { "Cache-Control": "no-store" } }
       );
     }
 
@@ -111,42 +139,49 @@ export async function POST(request: NextRequest) {
     }
 
     if (!matches) {
-      const nextAttempts = pending.attempts + 1;
-      if (nextAttempts >= 5) {
+      if (pending.attempts >= 5) {
         await db
           .delete(passwordResetOtps)
           .where(eq(passwordResetOtps.id, pending.id));
         return NextResponse.json(
           { error: "Kode OTP salah 5 kali dan telah hangus. Minta kode baru." },
-          { status: 429 }
+          { status: 429, headers: { "Cache-Control": "no-store" } }
         );
       }
 
-      await db
-        .update(passwordResetOtps)
-        .set({ attempts: nextAttempts })
-        .where(eq(passwordResetOtps.id, pending.id));
-
       return NextResponse.json(
-        { error: `Kode OTP salah. Sisa percobaan: ${5 - nextAttempts} kali.` },
-        { status: 400 }
+        { error: `Kode OTP salah. Sisa percobaan: ${5 - pending.attempts} kali.` },
+        { status: 400, headers: { "Cache-Control": "no-store" } }
       );
     }
 
+    // Atomically consume OTP before resetting password
+    const consumed = await db
+      .delete(passwordResetOtps)
+      .where(eq(passwordResetOtps.id, pending.id))
+      .returning({ id: passwordResetOtps.id });
+
+    if (consumed.length === 0) {
+      return NextResponse.json(
+        { error: "Kode OTP reset sudah digunakan." },
+        { status: 409, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
+    // Bump tokenVersion to immediately revoke all previously issued auth cookies
     const updated = await db
       .update(users)
-      .set({ passwordHash: hashPassword(body.newPassword) })
+      .set({
+        passwordHash: hashPassword(body.newPassword),
+        tokenVersion: sql`${users.tokenVersion} + 1`,
+      })
       .where(eq(users.email, body.email))
       .returning({ id: users.id });
-
-    await db
-      .delete(passwordResetOtps)
-      .where(eq(passwordResetOtps.id, pending.id));
 
     if (updated.length === 0) {
       return NextResponse.json(
         { error: "Akun tidak ditemukan." },
-        { status: 404 }
+        { status: 404, headers: { "Cache-Control": "no-store" } }
       );
     }
 
@@ -155,15 +190,14 @@ export async function POST(request: NextRequest) {
       .delete(rateLimits)
       .where(eq(rateLimits.key, `auth_login_email:${hashEmailKey(body.email)}`));
 
-    return NextResponse.json(
-      { ok: true },
-      { headers: { "Cache-Control": "no-store" } }
+    return clearAuthCookie(
+      NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } })
     );
   } catch (err) {
     console.error("POST /api/auth/forgot-password/reset error:", err);
     return NextResponse.json(
       { error: "Gagal mengatur ulang kata sandi." },
-      { status: 500 }
+      { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }

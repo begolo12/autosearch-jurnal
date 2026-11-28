@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isAllowedSameOriginAssetRequest } from "@/lib/auth-security";
 import {
   fetchPdfWithFallbacks,
   PdfFetchError,
@@ -7,7 +8,14 @@ import {
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function GET(request: NextRequest) {
-  const rl = await checkRateLimit(request, "pdf_download", 40, 60, true);
+  if (!isAllowedSameOriginAssetRequest(request)) {
+    return NextResponse.json(
+      { error: "Akses unduhan PDF dari situs eksternal tidak diizinkan." },
+      { status: 403 }
+    );
+  }
+
+  const rl = await checkRateLimit(request, "pdf_download", 20, 60, true);
   if (!rl.allowed) {
     return NextResponse.json(
       {
@@ -47,6 +55,7 @@ export async function GET(request: NextRequest) {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,
+        "X-Content-Type-Options": "nosniff",
         "Cache-Control": "private, max-age=3600",
       },
     });
@@ -55,9 +64,11 @@ export async function GET(request: NextRequest) {
       const status =
         err.code === "INVALID_URL"
           ? 400
-          : err.code === "NOT_A_PDF"
-            ? 422
-            : 502;
+          : err.code === "TOO_LARGE"
+            ? 413
+            : err.code === "NOT_A_PDF"
+              ? 422
+              : 502;
       return NextResponse.json(
         {
           error: err.message,

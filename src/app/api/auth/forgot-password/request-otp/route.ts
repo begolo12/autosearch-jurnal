@@ -7,24 +7,26 @@ import { passwordResetOtps, users } from "@/db/schema";
 import {
   checkAuthRateLimit,
   getAuthClientIpHash,
+  getTrustedClientIp,
   hashEmailKey,
   isAllowedAuthOrigin,
-  verifyAndConsumeHumanChallenge,
+  verifyHumanVerification,
 } from "@/lib/auth-security";
 import { hashOtp, sendPasswordResetOtpEmail } from "@/lib/email";
 
 const forgotRequestSchema = z.object({
   email: z.string().trim().email("Format email tidak valid.").max(160).toLowerCase(),
   website: z.string().max(200).optional(),
-  challengeToken: z.string().min(10, "Verifikasi keamanan wajib diisi.").max(512),
-  challengeAnswer: z.string().trim().min(1, "Jawaban verifikasi wajib diisi.").max(16),
+  turnstileToken: z.string().max(4096).optional(),
+  challengeToken: z.string().max(512).optional(),
+  challengeAnswer: z.string().trim().max(16).optional(),
 });
 
 export async function POST(request: NextRequest) {
   if (!isAllowedAuthOrigin(request)) {
     return NextResponse.json(
       { error: "Permintaan berasal dari sumber yang tidak diizinkan." },
-      { status: 403 }
+      { status: 403, headers: { "Cache-Control": "no-store" } }
     );
   }
 
@@ -46,7 +48,13 @@ export async function POST(request: NextRequest) {
           retryAfter / 60
         )} menit.`,
       },
-      { status: 429, headers: { "Retry-After": String(retryAfter) } }
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(retryAfter),
+          "Cache-Control": "no-store",
+        },
+      }
     );
   }
 
@@ -58,21 +66,21 @@ export async function POST(request: NextRequest) {
       err instanceof z.ZodError
         ? err.issues[0]?.message || "Data permintaan tidak valid."
         : "Data permintaan tidak valid.";
-    return NextResponse.json({ error: msg }, { status: 400 });
+    return NextResponse.json(
+      { error: msg },
+      { status: 400, headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   if (body.website && body.website.trim().length > 0) {
     return NextResponse.json(
       { error: "Permintaan ditolak oleh filter keamanan." },
-      { status: 400 }
+      { status: 400, headers: { "Cache-Control": "no-store" } }
     );
   }
 
-  const emailRl = await checkAuthRateLimit(
-    `auth_forgot_email:${hashEmailKey(body.email)}`,
-    3,
-    3600
-  );
+  const emailKey = hashEmailKey(body.email);
+  const emailRl = await checkAuthRateLimit(`auth_forgot_email:${emailKey}`, 3, 3600);
   if (!emailRl.allowed) {
     return NextResponse.json(
       {
@@ -80,17 +88,28 @@ export async function POST(request: NextRequest) {
           emailRl.retryAfterSeconds / 60
         )} menit.`,
       },
-      { status: 429, headers: { "Retry-After": String(emailRl.retryAfterSeconds) } }
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(emailRl.retryAfterSeconds),
+          "Cache-Control": "no-store",
+        },
+      }
     );
   }
 
-  const challengeCheck = await verifyAndConsumeHumanChallenge(
-    body.challengeToken,
-    body.challengeAnswer,
-    2000
-  );
+  const challengeCheck = await verifyHumanVerification({
+    turnstileToken: body.turnstileToken,
+    challengeToken: body.challengeToken,
+    challengeAnswer: body.challengeAnswer,
+    remoteIp: getTrustedClientIp(request),
+    minElapsedMs: 2000,
+  });
   if (!challengeCheck.ok) {
-    return NextResponse.json({ error: challengeCheck.reason }, { status: 400 });
+    return NextResponse.json(
+      { error: challengeCheck.reason },
+      { status: 400, headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   try {
@@ -128,7 +147,13 @@ export async function POST(request: NextRequest) {
         const waitSec = 60 - elapsedSec;
         return NextResponse.json(
           { error: `Tunggu ${waitSec} detik sebelum meminta kode reset baru.` },
-          { status: 429, headers: { "Retry-After": String(waitSec) } }
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(waitSec),
+              "Cache-Control": "no-store",
+            },
+          }
         );
       }
     }
@@ -167,7 +192,10 @@ export async function POST(request: NextRequest) {
       await db
         .delete(passwordResetOtps)
         .where(eq(passwordResetOtps.email, body.email));
-      return NextResponse.json({ error: mailResult.error }, { status: 502 });
+      return NextResponse.json(
+        { error: mailResult.error },
+        { status: 502, headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     return NextResponse.json(
@@ -182,7 +210,7 @@ export async function POST(request: NextRequest) {
     console.error("POST /api/auth/forgot-password/request-otp error:", err);
     return NextResponse.json(
       { error: "Gagal mengirim kode reset kata sandi." },
-      { status: 500 }
+      { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }

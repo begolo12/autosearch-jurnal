@@ -5,7 +5,9 @@ import { getDb } from "@/db";
 import { bookmarks, researchProjects } from "@/db/schema";
 import { isAllowedAuthOrigin } from "@/lib/auth-security";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { attachSessionCookie, getSessionContext } from "@/lib/session";
+import { attachSessionCookie, resolveSessionContext } from "@/lib/session";
+
+const MAX_PROJECTS_PER_SESSION = 25;
 
 const projectColumns = {
   id: researchProjects.id,
@@ -25,7 +27,8 @@ const createProjectSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const { sessionId, isNew } = getSessionContext(request);
+  const { sessionId, isNew, clearStaleAuth } =
+    await resolveSessionContext(request);
   try {
     const db = getDb();
     const rows = await db
@@ -55,15 +58,19 @@ export async function GET(request: NextRequest) {
     }));
 
     return attachSessionCookie(
-      NextResponse.json({ projects }),
+      NextResponse.json(
+        { projects },
+        { headers: { "Cache-Control": "no-store" } }
+      ),
       sessionId,
-      isNew
+      isNew,
+      clearStaleAuth
     );
   } catch (err) {
     console.error("GET /api/projects error:", err);
     return NextResponse.json(
       { error: "Gagal memuat daftar proyek riset." },
-      { status: 500 }
+      { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }
@@ -80,11 +87,12 @@ export async function POST(request: NextRequest) {
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Terlalu banyak permintaan. Tunggu ${rl.retryAfterSeconds} detik.` },
-      { status: 429 }
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } }
     );
   }
 
-  const { sessionId, isNew } = getSessionContext(request);
+  const { sessionId, isNew, clearStaleAuth } =
+    await resolveSessionContext(request);
   let body: z.infer<typeof createProjectSchema>;
   try {
     body = createProjectSchema.parse(await request.json());
@@ -98,6 +106,20 @@ export async function POST(request: NextRequest) {
 
   try {
     const db = getDb();
+    const [countRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(researchProjects)
+      .where(eq(researchProjects.sessionId, sessionId));
+
+    if ((countRow?.count ?? 0) >= MAX_PROJECTS_PER_SESSION) {
+      return NextResponse.json(
+        {
+          error: `Batas maksimal ${MAX_PROJECTS_PER_SESSION} proyek riset tercapai.`,
+        },
+        { status: 400 }
+      );
+    }
+
     const [created] = await db
       .insert(researchProjects)
       .values({
@@ -114,7 +136,8 @@ export async function POST(request: NextRequest) {
         { status: 201 }
       ),
       sessionId,
-      isNew
+      isNew,
+      clearStaleAuth
     );
   } catch (err) {
     console.error("POST /api/projects error:", err);

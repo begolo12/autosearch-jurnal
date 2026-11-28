@@ -9,18 +9,19 @@ import {
 } from "@/lib/pdf";
 import { checkDailyAiQuota } from "@/lib/quota";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { attachSessionCookie } from "@/lib/session";
 
 export const maxDuration = 60;
 
 const chatRequestSchema = z.object({
   paper: z.object({
-    title: z.string().min(1),
-    authors: z.array(z.string()).default([]),
-    year: z.number().nullable().optional(),
-    venue: z.string().nullable().optional(),
-    doi: z.string().nullable().optional(),
-    abstract: z.string().nullable().optional(),
-    pdfUrl: z.string().nullable().optional(),
+    title: z.string().min(1).max(500),
+    authors: z.array(z.string().max(160)).max(50).default([]),
+    year: z.number().int().min(1800).max(2100).nullable().optional(),
+    venue: z.string().max(300).nullable().optional(),
+    doi: z.string().max(200).nullable().optional(),
+    abstract: z.string().max(15000).nullable().optional(),
+    pdfUrl: z.string().max(1000).nullable().optional(),
   }),
   messages: z
     .array(
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Batas tanya AI tercapai. Tunggu ${rl.retryAfterSeconds} detik.` },
-      { status: 429 }
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } }
     );
   }
 
@@ -94,11 +95,17 @@ export async function POST(request: NextRequest) {
       messages: body.messages,
     });
 
-    return NextResponse.json({
-      reply,
-      usedFullText: Boolean(extractedText),
-    });
+    return attachSessionCookie(
+      NextResponse.json({
+        reply,
+        usedFullText: Boolean(extractedText),
+      }),
+      quota.session.sessionId,
+      quota.session.isNew,
+      quota.session.clearStaleAuth
+    );
   } catch (err) {
+    await quota.refund();
     if (err instanceof InferHubError) {
       return NextResponse.json(
         { error: err.message },

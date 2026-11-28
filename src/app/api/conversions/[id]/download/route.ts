@@ -4,7 +4,8 @@ import { getDb } from "@/db";
 import { conversions } from "@/db/schema";
 import { buildDocxBuffer } from "@/lib/docx-builder";
 import { sanitizeFilename } from "@/lib/pdf";
-import { getSessionContext } from "@/lib/session";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { attachSessionCookie, resolveSessionContext } from "@/lib/session";
 import type { ConversionMode } from "@/lib/types";
 
 const UUID_REGEX =
@@ -14,7 +15,16 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const { sessionId } = getSessionContext(request);
+  const rl = await checkRateLimit(request, "conversions_download", 30, 60);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Terlalu banyak permintaan unduhan. Tunggu ${rl.retryAfterSeconds} detik.` },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } }
+    );
+  }
+
+  const { sessionId, isNew, clearStaleAuth } =
+    await resolveSessionContext(request);
   const { id } = await context.params;
   if (!id || !UUID_REGEX.test(id)) {
     return NextResponse.json({ error: "ID tidak valid." }, { status: 400 });
@@ -35,9 +45,14 @@ export async function GET(
       .limit(1);
 
     if (rows.length === 0) {
-      return NextResponse.json(
-        { error: "Riwayat konversi tidak ditemukan." },
-        { status: 404 }
+      return attachSessionCookie(
+        NextResponse.json(
+          { error: "Riwayat konversi tidak ditemukan." },
+          { status: 404, headers: { "Cache-Control": "no-store" } }
+        ),
+        sessionId,
+        isNew,
+        clearStaleAuth
       );
     }
 
@@ -53,19 +68,22 @@ export async function GET(
     });
 
     const filename = sanitizeFilename(`${record.title}-${record.mode}`, "docx");
-    return new NextResponse(new Uint8Array(docxBuffer), {
+    const res = new NextResponse(new Uint8Array(docxBuffer), {
       status: 200,
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "Content-Disposition": `attachment; filename="${filename}"`,
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store",
       },
     });
+    return attachSessionCookie(res, sessionId, isNew, clearStaleAuth);
   } catch (err) {
     console.error("GET /api/conversions/[id]/download error:", err);
     return NextResponse.json(
       { error: "Gagal membuat ulang berkas Word." },
-      { status: 500 }
+      { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }

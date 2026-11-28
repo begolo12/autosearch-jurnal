@@ -4,7 +4,8 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { researchProjects } from "@/db/schema";
 import { isAllowedAuthOrigin } from "@/lib/auth-security";
-import { attachSessionCookie, getSessionContext } from "@/lib/session";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { attachSessionCookie, resolveSessionContext } from "@/lib/session";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -29,7 +30,16 @@ export async function PATCH(
     );
   }
 
-  const { sessionId, isNew } = getSessionContext(request);
+  const rl = await checkRateLimit(request, "projects_mutate", 60, 60);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Terlalu banyak permintaan. Tunggu ${rl.retryAfterSeconds} detik.` },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } }
+    );
+  }
+
+  const { sessionId, isNew, clearStaleAuth } =
+    await resolveSessionContext(request);
   const { id } = await context.params;
   if (!id || !UUID_REGEX.test(id)) {
     return NextResponse.json({ error: "ID proyek tidak valid." }, { status: 400 });
@@ -77,7 +87,8 @@ export async function PATCH(
     return attachSessionCookie(
       NextResponse.json({ project: updated }),
       sessionId,
-      isNew
+      isNew,
+      clearStaleAuth
     );
   } catch (err) {
     console.error("PATCH /api/projects/[id] error:", err);
@@ -99,7 +110,16 @@ export async function DELETE(
     );
   }
 
-  const { sessionId, isNew } = getSessionContext(request);
+  const rl = await checkRateLimit(request, "projects_mutate", 60, 60);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Terlalu banyak permintaan. Tunggu ${rl.retryAfterSeconds} detik.` },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } }
+    );
+  }
+
+  const { sessionId, isNew, clearStaleAuth } =
+    await resolveSessionContext(request);
   const { id } = await context.params;
   if (!id || !UUID_REGEX.test(id)) {
     return NextResponse.json({ error: "ID proyek tidak valid." }, { status: 400 });
@@ -115,7 +135,12 @@ export async function DELETE(
           eq(researchProjects.sessionId, sessionId)
         )
       );
-    return attachSessionCookie(NextResponse.json({ ok: true }), sessionId, isNew);
+    return attachSessionCookie(
+      NextResponse.json({ ok: true }),
+      sessionId,
+      isNew,
+      clearStaleAuth
+    );
   } catch (err) {
     console.error("DELETE /api/projects/[id] error:", err);
     return NextResponse.json(

@@ -15,7 +15,7 @@ import {
   hashEmailKey,
   isAllowedAuthOrigin,
 } from "@/lib/auth-security";
-import { getGuestSessionId } from "@/lib/session";
+import { clearGuestSessionCookie, getGuestSessionId } from "@/lib/session";
 
 const loginSchema = z.object({
   email: z.string().trim().email("Format email tidak valid.").max(160).toLowerCase(),
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   if (!isAllowedAuthOrigin(request)) {
     return NextResponse.json(
       { error: "Permintaan berasal dari sumber yang tidak diizinkan." },
-      { status: 403 }
+      { status: 403, headers: { "Cache-Control": "no-store" } }
     );
   }
 
@@ -41,7 +41,10 @@ export async function POST(request: NextRequest) {
       },
       {
         status: 429,
-        headers: { "Retry-After": String(ipRl.retryAfterSeconds) },
+        headers: {
+          "Retry-After": String(ipRl.retryAfterSeconds),
+          "Cache-Control": "no-store",
+        },
       }
     );
   }
@@ -54,7 +57,10 @@ export async function POST(request: NextRequest) {
       err instanceof z.ZodError
         ? err.issues[0]?.message || "Data login tidak valid."
         : "Data login tidak valid.";
-    return NextResponse.json({ error: msg }, { status: 400 });
+    return NextResponse.json(
+      { error: msg },
+      { status: 400, headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   const emailRl = await checkAuthRateLimit(
@@ -71,7 +77,10 @@ export async function POST(request: NextRequest) {
       },
       {
         status: 429,
-        headers: { "Retry-After": String(emailRl.retryAfterSeconds) },
+        headers: {
+          "Retry-After": String(emailRl.retryAfterSeconds),
+          "Cache-Control": "no-store",
+        },
       }
     );
   }
@@ -79,7 +88,13 @@ export async function POST(request: NextRequest) {
   try {
     const db = getDb();
     const rows = await db
-      .select()
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        passwordHash: users.passwordHash,
+        tokenVersion: users.tokenVersion,
+      })
       .from(users)
       .where(eq(users.email, body.email))
       .limit(1);
@@ -94,7 +109,7 @@ export async function POST(request: NextRequest) {
     if (!user || !valid) {
       return NextResponse.json(
         { error: "Email atau kata sandi salah." },
-        { status: 401 }
+        { status: 401, headers: { "Cache-Control": "no-store" } }
       );
     }
 
@@ -107,24 +122,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return attachAuthCookie(
-      NextResponse.json(
-        {
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-          },
+    const res = NextResponse.json(
+      {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
         },
-        { headers: { "Cache-Control": "no-store" } }
-      ),
-      user.id
+      },
+      { headers: { "Cache-Control": "no-store" } }
     );
+    clearGuestSessionCookie(res);
+    return attachAuthCookie(res, user.id, user.tokenVersion);
   } catch (err) {
     console.error("POST /api/auth/login error:", err);
     return NextResponse.json(
       { error: "Gagal masuk ke akun." },
-      { status: 500 }
+      { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }

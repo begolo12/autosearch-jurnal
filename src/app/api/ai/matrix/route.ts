@@ -5,6 +5,7 @@ import { buildLiteratureMatrixDocxBuffer } from "@/lib/docx-builder";
 import { generateLiteratureMatrix, InferHubError } from "@/lib/inferhub";
 import { checkDailyAiQuota } from "@/lib/quota";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { attachSessionCookie } from "@/lib/session";
 
 export const maxDuration = 60;
 
@@ -14,7 +15,7 @@ const matrixRequestSchema = z.object({
       z.object({
         title: z.string().min(1).max(500),
         authors: z.array(z.string().max(160)).max(50).default([]),
-        year: z.number().nullable().optional(),
+        year: z.number().int().min(1800).max(2100).nullable().optional(),
         venue: z.string().max(300).nullable().optional(),
         tierLabel: z.string().max(40).nullable().optional(),
         abstract: z.string().max(15000).nullable().optional(),
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
         {
           error: `Terlalu banyak permintaan ekspor. Tunggu ${exportRl.retryAfterSeconds} detik.`,
         },
-        { status: 429 }
+        { status: 429, headers: { "Retry-After": String(exportRl.retryAfterSeconds) } }
       );
     }
 
@@ -84,6 +85,7 @@ export async function POST(request: NextRequest) {
           "Content-Type":
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           "Content-Disposition": `attachment; filename="matriks-literatur-smartsari.docx"`,
+          "X-Content-Type-Options": "nosniff",
         },
       });
     } catch (err) {
@@ -106,7 +108,7 @@ export async function POST(request: NextRequest) {
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Terlalu banyak permintaan. Tunggu ${rl.retryAfterSeconds} detik.` },
-      { status: 429 }
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } }
     );
   }
 
@@ -132,8 +134,14 @@ export async function POST(request: NextRequest) {
         abstract: p.abstract ?? null,
       }))
     );
-    return NextResponse.json({ matrix });
+    return attachSessionCookie(
+      NextResponse.json({ matrix }),
+      quota.session.sessionId,
+      quota.session.isNew,
+      quota.session.clearStaleAuth
+    );
   } catch (err) {
+    await quota.refund();
     if (err instanceof InferHubError) {
       return NextResponse.json(
         { error: err.message },

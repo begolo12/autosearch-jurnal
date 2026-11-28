@@ -4,14 +4,15 @@ import { isAllowedAuthOrigin } from "@/lib/auth-security";
 import { extractPaperTakeaways, InferHubError } from "@/lib/inferhub";
 import { checkDailyAiQuota } from "@/lib/quota";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { attachSessionCookie } from "@/lib/session";
 
 export const maxDuration = 60;
 
 const takeawaysSchema = z.object({
   title: z.string().trim().min(1).max(400),
   abstract: z.string().trim().min(20).max(8000),
-  venue: z.string().nullable().optional(),
-  year: z.number().nullable().optional(),
+  venue: z.string().max(300).nullable().optional(),
+  year: z.number().int().min(1800).max(2100).nullable().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
       {
         error: `Batas intisari AI tercapai. Tunggu ${rl.retryAfterSeconds} detik.`,
       },
-      { status: 429 }
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } }
     );
   }
 
@@ -61,8 +62,14 @@ export async function POST(request: NextRequest) {
       year: body.year ?? null,
     });
 
-    return NextResponse.json({ takeaways });
+    return attachSessionCookie(
+      NextResponse.json({ takeaways }),
+      quota.session.sessionId,
+      quota.session.isNew,
+      quota.session.clearStaleAuth
+    );
   } catch (err) {
+    await quota.refund();
     if (err instanceof InferHubError) {
       return NextResponse.json(
         { error: err.message },

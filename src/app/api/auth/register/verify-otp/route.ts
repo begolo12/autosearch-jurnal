@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, gt, lt, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/db";
@@ -11,7 +11,7 @@ import {
   isAllowedAuthOrigin,
 } from "@/lib/auth-security";
 import { hashOtp } from "@/lib/email";
-import { getGuestSessionId } from "@/lib/session";
+import { clearGuestSessionCookie, getGuestSessionId } from "@/lib/session";
 
 const verifyOtpSchema = z.object({
   email: z.string().trim().email("Format email tidak valid.").max(160).toLowerCase(),
@@ -21,11 +21,17 @@ const verifyOtpSchema = z.object({
     .regex(/^\d{6}$/, "Kode OTP harus terdiri dari 6 digit angka."),
 });
 
+function isPgUniqueViolation(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: string; cause?: { code?: string } };
+  return e.code === "23505" || e.cause?.code === "23505";
+}
+
 export async function POST(request: NextRequest) {
   if (!isAllowedAuthOrigin(request)) {
     return NextResponse.json(
       { error: "Permintaan berasal dari sumber yang tidak diizinkan." },
-      { status: 403 }
+      { status: 403, headers: { "Cache-Control": "no-store" } }
     );
   }
 
@@ -38,7 +44,13 @@ export async function POST(request: NextRequest) {
           ipRl.retryAfterSeconds / 60
         )} menit.`,
       },
-      { status: 429, headers: { "Retry-After": String(ipRl.retryAfterSeconds) } }
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(ipRl.retryAfterSeconds),
+          "Cache-Control": "no-store",
+        },
+      }
     );
   }
 
@@ -50,42 +62,67 @@ export async function POST(request: NextRequest) {
       err instanceof z.ZodError
         ? err.issues[0]?.message || "Kode OTP tidak valid."
         : "Kode OTP tidak valid.";
-    return NextResponse.json({ error: msg }, { status: 400 });
+    return NextResponse.json(
+      { error: msg },
+      { status: 400, headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   try {
     const db = getDb();
-    const rows = await db
-      .select()
-      .from(emailOtpChallenges)
-      .where(eq(emailOtpChallenges.email, body.email))
-      .limit(1);
+    const now = new Date();
 
-    const pending = rows[0];
+    // Atomically increment attempts before verifying so concurrent requests cannot bypass max 5 tries
+    const [pending] = await db
+      .update(emailOtpChallenges)
+      .set({ attempts: sql`${emailOtpChallenges.attempts} + 1` })
+      .where(
+        and(
+          eq(emailOtpChallenges.email, body.email),
+          lt(emailOtpChallenges.attempts, 5),
+          gt(emailOtpChallenges.expiresAt, now)
+        )
+      )
+      .returning();
+
     if (!pending) {
-      return NextResponse.json(
-        { error: "Kode OTP tidak ditemukan atau sudah kedaluwarsa. Minta kode baru." },
-        { status: 400 }
-      );
-    }
+      const existing = await db
+        .select({
+          id: emailOtpChallenges.id,
+          attempts: emailOtpChallenges.attempts,
+          expiresAt: emailOtpChallenges.expiresAt,
+        })
+        .from(emailOtpChallenges)
+        .where(eq(emailOtpChallenges.email, body.email))
+        .limit(1);
 
-    if (pending.expiresAt <= new Date()) {
-      await db
-        .delete(emailOtpChallenges)
-        .where(eq(emailOtpChallenges.id, pending.id));
-      return NextResponse.json(
-        { error: "Kode OTP sudah kedaluwarsa. Silakan minta kode baru." },
-        { status: 400 }
-      );
-    }
+      const stale = existing[0];
+      if (stale) {
+        await db
+          .delete(emailOtpChallenges)
+          .where(eq(emailOtpChallenges.id, stale.id));
 
-    if (pending.attempts >= 5) {
-      await db
-        .delete(emailOtpChallenges)
-        .where(eq(emailOtpChallenges.id, pending.id));
+        if (stale.attempts >= 5) {
+          return NextResponse.json(
+            {
+              error:
+                "Terlalu banyak percobaan OTP salah. Silakan ulangi pendaftaran.",
+            },
+            { status: 429, headers: { "Cache-Control": "no-store" } }
+          );
+        }
+        return NextResponse.json(
+          { error: "Kode OTP sudah kedaluwarsa. Silakan minta kode baru." },
+          { status: 400, headers: { "Cache-Control": "no-store" } }
+        );
+      }
+
       return NextResponse.json(
-        { error: "Terlalu banyak percobaan OTP salah. Silakan ulangi pendaftaran." },
-        { status: 429 }
+        {
+          error:
+            "Kode OTP tidak ditemukan atau sudah kedaluwarsa. Minta kode baru.",
+        },
+        { status: 400, headers: { "Cache-Control": "no-store" } }
       );
     }
 
@@ -104,60 +141,68 @@ export async function POST(request: NextRequest) {
     }
 
     if (!matches) {
-      const nextAttempts = pending.attempts + 1;
-      if (nextAttempts >= 5) {
+      if (pending.attempts >= 5) {
         await db
           .delete(emailOtpChallenges)
           .where(eq(emailOtpChallenges.id, pending.id));
         return NextResponse.json(
-          { error: "Kode OTP salah 5 kali dan telah hangus. Silakan ulangi pendaftaran." },
-          { status: 429 }
+          {
+            error:
+              "Kode OTP salah 5 kali dan telah hangus. Silakan ulangi pendaftaran.",
+          },
+          { status: 429, headers: { "Cache-Control": "no-store" } }
         );
       }
 
-      await db
-        .update(emailOtpChallenges)
-        .set({ attempts: nextAttempts })
-        .where(eq(emailOtpChallenges.id, pending.id));
-
       return NextResponse.json(
-        { error: `Kode OTP salah. Sisa percobaan: ${5 - nextAttempts} kali.` },
-        { status: 400 }
+        { error: `Kode OTP salah. Sisa percobaan: ${5 - pending.attempts} kali.` },
+        { status: 400, headers: { "Cache-Control": "no-store" } }
       );
     }
 
-    const existingUser = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, body.email))
-      .limit(1);
-
-    if (existingUser.length > 0) {
-      await db
-        .delete(emailOtpChallenges)
-        .where(eq(emailOtpChallenges.id, pending.id));
-      return NextResponse.json(
-        { error: "Email ini sudah terdaftar. Silakan masuk." },
-        { status: 409 }
-      );
-    }
-
-    const [created] = await db
-      .insert(users)
-      .values({
-        name: pending.name,
-        email: pending.email,
-        passwordHash: pending.passwordHash,
-      })
-      .returning({
-        id: users.id,
-        email: users.email,
-        name: users.name,
-      });
-
-    await db
+    // Atomically consume OTP row so two parallel requests cannot both succeed
+    const consumed = await db
       .delete(emailOtpChallenges)
-      .where(eq(emailOtpChallenges.id, pending.id));
+      .where(eq(emailOtpChallenges.id, pending.id))
+      .returning({ id: emailOtpChallenges.id });
+
+    if (consumed.length === 0) {
+      return NextResponse.json(
+        { error: "Kode OTP sudah digunakan." },
+        { status: 409, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
+    let created: {
+      id: string;
+      email: string;
+      name: string;
+      tokenVersion: number;
+    };
+    try {
+      const [inserted] = await db
+        .insert(users)
+        .values({
+          name: pending.name,
+          email: pending.email,
+          passwordHash: pending.passwordHash,
+        })
+        .returning({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          tokenVersion: users.tokenVersion,
+        });
+      created = inserted;
+    } catch (insertErr) {
+      if (isPgUniqueViolation(insertErr)) {
+        return NextResponse.json(
+          { error: "Gagal memverifikasi kode OTP. Silakan coba lagi atau masuk." },
+          { status: 400, headers: { "Cache-Control": "no-store" } }
+        );
+      }
+      throw insertErr;
+    }
 
     const guestId = getGuestSessionId(request);
     if (guestId) {
@@ -168,18 +213,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return attachAuthCookie(
-      NextResponse.json(
-        { user: created },
-        { status: 201, headers: { "Cache-Control": "no-store" } }
-      ),
-      created.id
+    const res = NextResponse.json(
+      {
+        user: {
+          id: created.id,
+          email: created.email,
+          name: created.name,
+        },
+      },
+      { status: 201, headers: { "Cache-Control": "no-store" } }
     );
+    clearGuestSessionCookie(res);
+    return attachAuthCookie(res, created.id, created.tokenVersion);
   } catch (err) {
     console.error("POST /api/auth/register/verify-otp error:", err);
     return NextResponse.json(
       { error: "Gagal memverifikasi kode OTP." },
-      { status: 500 }
+      { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }

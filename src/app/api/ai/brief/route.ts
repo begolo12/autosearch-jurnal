@@ -4,6 +4,7 @@ import { isAllowedAuthOrigin } from "@/lib/auth-security";
 import { generateSearchResearchBrief, InferHubError } from "@/lib/inferhub";
 import { checkDailyAiQuota } from "@/lib/quota";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { attachSessionCookie } from "@/lib/session";
 
 export const maxDuration = 60;
 
@@ -12,13 +13,13 @@ const briefSchema = z.object({
   papers: z
     .array(
       z.object({
-        title: z.string().min(1),
-        authors: z.array(z.string()).default([]),
-        year: z.number().nullable().optional(),
-        venue: z.string().nullable().optional(),
-        tierLabel: z.string().nullable().optional(),
-        abstract: z.string().nullable().optional(),
-        citations: z.number().nullable().optional(),
+        title: z.string().min(1).max(500),
+        authors: z.array(z.string().max(160)).max(50).default([]),
+        year: z.number().int().min(1800).max(2100).nullable().optional(),
+        venue: z.string().max(300).nullable().optional(),
+        tierLabel: z.string().max(40).nullable().optional(),
+        abstract: z.string().max(8000).nullable().optional(),
+        citations: z.number().int().min(0).max(10_000_000).nullable().optional(),
       })
     )
     .min(1)
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
       {
         error: `Terlalu banyak permintaan ringkasan AI. Tunggu ${rl.retryAfterSeconds} detik.`,
       },
-      { status: 429 }
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } }
     );
   }
 
@@ -78,8 +79,14 @@ export async function POST(request: NextRequest) {
       })),
     });
 
-    return NextResponse.json({ brief });
+    return attachSessionCookie(
+      NextResponse.json({ brief }),
+      quota.session.sessionId,
+      quota.session.isNew,
+      quota.session.clearStaleAuth
+    );
   } catch (err) {
+    await quota.refund();
     if (err instanceof InferHubError) {
       return NextResponse.json(
         { error: err.message },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   Check,
@@ -23,6 +23,27 @@ interface AuthModalProps {
   onSuccess: (user: AuthUser) => void;
 }
 
+interface TurnstileApi {
+  render: (
+    container: HTMLElement,
+    options: {
+      sitekey: string;
+      theme?: "dark" | "light" | "auto";
+      callback?: (token: string) => void;
+      "expired-callback"?: () => void;
+      "error-callback"?: () => void;
+    }
+  ) => string;
+  reset: (widgetId?: string) => void;
+  remove: (widgetId?: string) => void;
+}
+
+declare global {
+  interface Window {
+    turnstile?: TurnstileApi;
+  }
+}
+
 export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
   const [registerStep, setRegisterStep] = useState<"form" | "otp">("form");
@@ -33,6 +54,12 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [website, setWebsite] = useState("");
+
+  const [challengeMode, setChallengeMode] = useState<"math" | "turnstile">("math");
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const turnstileContainerRef = useRef<HTMLDivElement | null>(null);
+  const turnstileWidgetIdRef = useRef<string | null>(null);
 
   const [challengeQuestion, setChallengeQuestion] = useState("");
   const [challengeToken, setChallengeToken] = useState("");
@@ -54,13 +81,34 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
     setCapsLockOn(Boolean(e.getModifierState?.("CapsLock")));
   };
 
+  const resetTurnstileWidget = useCallback(() => {
+    setTurnstileToken("");
+    if (turnstileWidgetIdRef.current && window.turnstile) {
+      try {
+        window.turnstile.reset(turnstileWidgetIdRef.current);
+      } catch {
+        // Ignore widget reset errors
+      }
+    }
+  }, []);
+
   const fetchChallenge = useCallback(async () => {
     setLoadingChallenge(true);
     try {
       const res = await fetch("/api/auth/challenge", { cache: "no-store" });
       if (!res.ok) return;
-      const data = (await res.json()) as { question?: string; token?: string };
-      if (data.question && data.token) {
+      const data = (await res.json()) as {
+        mode?: "math" | "turnstile";
+        siteKey?: string;
+        question?: string;
+        token?: string;
+      };
+      if (data.mode === "turnstile" && data.siteKey) {
+        setChallengeMode("turnstile");
+        setTurnstileSiteKey(data.siteKey);
+        resetTurnstileWidget();
+      } else if (data.question && data.token) {
+        setChallengeMode("math");
         setChallengeQuestion(data.question);
         setChallengeToken(data.token);
         setChallengeAnswer("");
@@ -70,7 +118,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
     } finally {
       setLoadingChallenge(false);
     }
-  }, []);
+  }, [resetTurnstileWidget]);
 
   useEffect(() => {
     const needsChallenge =
@@ -85,6 +133,72 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
     });
     void id;
   }, [mode, registerStep, forgotStep, fetchChallenge]);
+
+  useEffect(() => {
+    const needsChallenge =
+      (mode === "register" && registerStep === "form") ||
+      (mode === "forgot" && forgotStep === "email");
+
+    if (!needsChallenge || challengeMode !== "turnstile" || !turnstileSiteKey) {
+      return;
+    }
+
+    let cancelled = false;
+    const renderWidget = () => {
+      if (cancelled || !turnstileContainerRef.current || !window.turnstile) {
+        return;
+      }
+      if (turnstileWidgetIdRef.current) {
+        try {
+          window.turnstile.remove(turnstileWidgetIdRef.current);
+        } catch {
+          // Ignore remove error
+        }
+        turnstileWidgetIdRef.current = null;
+      }
+      turnstileWidgetIdRef.current = window.turnstile.render(
+        turnstileContainerRef.current,
+        {
+          sitekey: turnstileSiteKey,
+          theme: "dark",
+          callback: (token) => setTurnstileToken(token),
+          "expired-callback": () => setTurnstileToken(""),
+          "error-callback": () => setTurnstileToken(""),
+        }
+      );
+    };
+
+    if (window.turnstile) {
+      renderWidget();
+    } else {
+      const existingScript = document.querySelector<HTMLScriptElement>(
+        'script[src^="https://challenges.cloudflare.com/turnstile/v0/api.js"]'
+      );
+      if (existingScript) {
+        existingScript.addEventListener("load", renderWidget, { once: true });
+      } else {
+        const script = document.createElement("script");
+        script.src =
+          "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+        script.async = true;
+        script.defer = true;
+        script.addEventListener("load", renderWidget, { once: true });
+        document.head.appendChild(script);
+      }
+    }
+
+    return () => {
+      cancelled = true;
+      if (turnstileWidgetIdRef.current && window.turnstile) {
+        try {
+          window.turnstile.remove(turnstileWidgetIdRef.current);
+        } catch {
+          // Ignore remove error
+        }
+        turnstileWidgetIdRef.current = null;
+      }
+    };
+  }, [challengeMode, turnstileSiteKey, mode, registerStep, forgotStep]);
 
   useEffect(() => {
     if (otpCooldown <= 0) return;
@@ -137,7 +251,12 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
 
     if (mode === "forgot") {
       if (forgotStep === "email") {
-        if (!challengeToken || !challengeAnswer.trim()) {
+        if (challengeMode === "turnstile") {
+          if (!turnstileToken) {
+            setError("Selesaikan verifikasi keamanan terlebih dahulu.");
+            return;
+          }
+        } else if (!challengeToken || !challengeAnswer.trim()) {
           setError("Lengkapi jawaban verifikasi keamanan terlebih dahulu.");
           return;
         }
@@ -149,8 +268,12 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
             body: JSON.stringify({
               email,
               website,
-              challengeToken,
-              challengeAnswer: challengeAnswer.trim(),
+              turnstileToken:
+                challengeMode === "turnstile" ? turnstileToken : undefined,
+              challengeToken:
+                challengeMode === "math" ? challengeToken : undefined,
+              challengeAnswer:
+                challengeMode === "math" ? challengeAnswer.trim() : undefined,
             }),
           });
           const data = (await res.json()) as {
@@ -234,7 +357,12 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
         setError("Konfirmasi kata sandi tidak cocok.");
         return;
       }
-      if (!challengeToken || !challengeAnswer.trim()) {
+      if (challengeMode === "turnstile") {
+        if (!turnstileToken) {
+          setError("Selesaikan verifikasi keamanan terlebih dahulu.");
+          return;
+        }
+      } else if (!challengeToken || !challengeAnswer.trim()) {
         setError("Lengkapi jawaban verifikasi keamanan terlebih dahulu.");
         return;
       }
@@ -249,8 +377,12 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
             email,
             password,
             website,
-            challengeToken,
-            challengeAnswer: challengeAnswer.trim(),
+            turnstileToken:
+              challengeMode === "turnstile" ? turnstileToken : undefined,
+            challengeToken:
+              challengeMode === "math" ? challengeToken : undefined,
+            challengeAnswer:
+              challengeMode === "math" ? challengeAnswer.trim() : undefined,
           }),
         });
         const data = (await res.json()) as {
@@ -313,30 +445,37 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           type="button"
           onClick={() => void fetchChallenge()}
           disabled={loadingChallenge}
-          aria-label="Muat ulang soal verifikasi"
+          aria-label="Muat ulang verifikasi keamanan"
           className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white disabled:opacity-50"
         >
           <RefreshCw
             className={`h-3 w-3 ${loadingChallenge ? "animate-spin" : ""}`}
           />
-          Ganti soal
+          {challengeMode === "turnstile" ? "Muat ulang" : "Ganti soal"}
         </button>
       </div>
 
-      <div className="flex items-center gap-2.5">
-        <span className="shrink-0 rounded-lg border border-[#232429] bg-[#151619] px-3 py-1.5 font-mono text-xs font-semibold text-white">
-          {challengeQuestion || "Memuat..."}
-        </span>
-        <input
-          type="text"
-          inputMode="numeric"
-          required
-          value={challengeAnswer}
-          onChange={(e) => setChallengeAnswer(e.target.value)}
-          placeholder="Jawaban angka"
-          className="min-w-0 flex-1 rounded-lg border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-sm text-white placeholder-[#71717A] focus:border-[#F472B6] focus:outline-none"
+      {challengeMode === "turnstile" ? (
+        <div
+          ref={turnstileContainerRef}
+          className="flex min-h-[65px] items-center justify-center overflow-hidden rounded-lg"
         />
-      </div>
+      ) : (
+        <div className="flex items-center gap-2.5">
+          <span className="shrink-0 rounded-lg border border-[#232429] bg-[#151619] px-3 py-1.5 font-mono text-xs font-semibold text-white">
+            {challengeQuestion || "Memuat..."}
+          </span>
+          <input
+            type="text"
+            inputMode="numeric"
+            required
+            value={challengeAnswer}
+            onChange={(e) => setChallengeAnswer(e.target.value)}
+            placeholder="Jawaban angka"
+            className="min-w-0 flex-1 rounded-lg border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-sm text-white placeholder-[#71717A] focus:border-[#F472B6] focus:outline-none"
+          />
+        </div>
+      )}
     </div>
   );
 
@@ -674,9 +813,10 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           {mode === "register" && registerStep === "otp" && (
             <div className="space-y-3">
               <div className="rounded-xl border border-[#DB2777]/35 bg-[#DB2777]/10 p-3.5 text-xs leading-relaxed text-[#FBCFE8]">
-                Kode OTP 6 digit telah dikirim ke{" "}
-                <strong className="text-white">{email}</strong>. Periksa Inbox
-                atau folder Spam Anda (berlaku 10 menit).
+                Jika <strong className="text-white">{email}</strong> belum
+                terdaftar dan valid, kode OTP 6 digit telah dikirim (berlaku 10
+                menit). Sudah punya akun? Silakan masuk atau gunakan Lupa Kata
+                Sandi.
               </div>
 
               <label className="block">

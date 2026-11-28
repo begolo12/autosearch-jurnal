@@ -235,7 +235,7 @@ async function fetchOpenAlexSourcesByIssns(
     "select",
     "id,display_name,issn_l,issn,type,country_code,summary_stats"
   );
-  url.searchParams.set("mailto", "pustakacari@autosearch.app");
+  url.searchParams.set("mailto", "hello@smartsari.my.id");
 
   const res = await fetch(url.toString(), {
     headers: REQUEST_HEADERS,
@@ -265,7 +265,7 @@ async function fetchOpenAlexWorks(
   url.searchParams.set("sort", "relevance_score:desc");
   url.searchParams.set("per-page", String(limit));
   url.searchParams.set("page", String(page));
-  url.searchParams.set("mailto", "pustakacari@autosearch.app");
+  url.searchParams.set("mailto", "hello@smartsari.my.id");
 
   const res = await fetch(url.toString(), {
     headers: REQUEST_HEADERS,

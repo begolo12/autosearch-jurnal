@@ -113,13 +113,13 @@ export default function KetentuanPage() {
             <p>
               Layanan disediakan &ldquo;sebagaimana adanya&rdquo; sesuai
               ketersediaan indeks sumber eksternal dan akses penerbit. Pertanyaan
-              terkait ketentuan layanan dapat dikirimkan ke{" "}
-              <a
-                href="mailto:hello@smartsari.my.id"
-                className="font-medium text-[#F472B6] hover:underline"
+              terkait ketentuan layanan dapat dikirimkan melalui{" "}
+              <Link
+                href="/kontak"
+                className="font-medium text-[#F472B6] underline-offset-2 hover:underline"
               >
-                hello@smartsari.my.id
-              </a>
+                Formulir Kontak SmartSari
+              </Link>
               .
             </p>
           </section>

@@ -5,6 +5,7 @@ import { extractText } from "unpdf";
 const MAX_PDF_BYTES = 25 * 1024 * 1024; // 25 MB
 const MAX_EXTRACTED_CHARS = 30000;
 const MAX_REDIRECT_HOPS = 5;
+const ALLOWED_PORTS = new Set(["", "80", "443", "8080", "8443"]);
 
 export class PdfFetchError extends Error {
   code: "INVALID_URL" | "FETCH_FAILED" | "NOT_A_PDF" | "TOO_LARGE";
@@ -21,31 +22,128 @@ export class PdfFetchError extends Error {
   }
 }
 
+function isPrivateIpv4Parts(a: number, b: number, c: number): boolean {
+  if (a === 0 || a === 10 || a === 127) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64.0.0/10
+  if (a === 169 && b === 254) return true; // Link-local / cloud metadata
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 0 && c === 0) return true; // 192.0.0.0/24
+  if (a === 192 && b === 0 && c === 2) return true; // TEST-NET-1
+  if (a === 192 && b === 168) return true;
+  if (a === 198 && (b === 18 || b === 19)) return true; // Benchmarking 198.18.0.0/15
+  if (a === 198 && b === 51 && c === 100) return true; // TEST-NET-2
+  if (a === 203 && b === 0 && c === 113) return true; // TEST-NET-3
+  if (a >= 224) return true; // Multicast & reserved
+  return false;
+}
+
+function expandIpv6Groups(rawIp: string): number[] | null {
+  const withoutZone = rawIp.split("%")[0].toLowerCase();
+  const lastColon = withoutZone.lastIndexOf(":");
+  let normalized = withoutZone;
+
+  // Convert embedded dotted IPv4 tail (e.g. ::ffff:127.0.0.1) into two 16-bit hex groups
+  if (lastColon !== -1 && withoutZone.slice(lastColon + 1).includes(".")) {
+    const v4Part = withoutZone.slice(lastColon + 1);
+    const octets = v4Part.split(".").map((n) => Number(n));
+    if (
+      octets.length !== 4 ||
+      octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)
+    ) {
+      return null;
+    }
+    const hi = ((octets[0] << 8) | octets[1]).toString(16);
+    const lo = ((octets[2] << 8) | octets[3]).toString(16);
+    normalized = `${withoutZone.slice(0, lastColon)}:${hi}:${lo}`;
+  }
+
+  const halves = normalized.split("::");
+  if (halves.length > 2) return null;
+
+  const left = halves[0] ? halves[0].split(":").filter(Boolean) : [];
+  const right = halves[1] ? halves[1].split(":").filter(Boolean) : [];
+  const missing = 8 - (left.length + right.length);
+
+  if (halves.length === 1 && missing !== 0) return null;
+  if (halves.length === 2 && missing < 0) return null;
+
+  const full =
+    halves.length === 2
+      ? [...left, ...Array<string>(missing).fill("0"), ...right]
+      : left;
+
+  if (full.length !== 8) return null;
+
+  const groups = full.map((g) => parseInt(g, 16));
+  if (groups.some((g) => Number.isNaN(g) || g < 0 || g > 0xffff)) return null;
+  return groups;
+}
+
 function isPrivateOrReservedIp(rawIp: string): boolean {
-  const ip = rawIp.toLowerCase().replace(/^\[|\]$/g, "");
+  const ip = rawIp.toLowerCase().replace(/^\[|\]$/g, "").split("%")[0];
   const ipVersion = net.isIP(ip);
 
   if (ipVersion === 4) {
     const parts = ip.split(".").map((n) => Number(n));
     if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return true;
-    const [a, b] = parts;
-    if (a === 0 || a === 10 || a === 127) return true;
-    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64.0.0/10
-    if (a === 169 && b === 254) return true; // Link-local / cloud metadata
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a >= 224) return true; // Multicast & reserved
-    return false;
+    return isPrivateIpv4Parts(parts[0], parts[1], parts[2]);
   }
 
   if (ipVersion === 6) {
-    if (ip === "::" || ip === "::1") return true;
-    if (ip.startsWith("fc") || ip.startsWith("fd")) return true; // ULA fc00::/7
-    if (/^fe[89ab]/.test(ip)) return true; // Link-local fe80::/10
-    if (ip.startsWith("::ffff:")) {
-      const mappedV4 = ip.slice(7);
-      return isPrivateOrReservedIp(mappedV4);
+    const g = expandIpv6Groups(ip);
+    if (!g) return true;
+
+    const allZeroExceptLast =
+      g[0] === 0 &&
+      g[1] === 0 &&
+      g[2] === 0 &&
+      g[3] === 0 &&
+      g[4] === 0 &&
+      g[5] === 0;
+
+    // :: and ::1 and IPv4-compatible ::w.x.y.z
+    if (allZeroExceptLast) return true;
+
+    // ::ffff:0:0/96 (IPv4-mapped IPv6, whether dotted or hex like ::ffff:7f00:1)
+    if (
+      g[0] === 0 &&
+      g[1] === 0 &&
+      g[2] === 0 &&
+      g[3] === 0 &&
+      g[4] === 0 &&
+      g[5] === 0xffff
+    ) {
+      return isPrivateIpv4Parts(g[6] >> 8, g[6] & 0xff, g[7] >> 8);
     }
+
+    // 64:ff9b::/96 (NAT64)
+    if (
+      g[0] === 0x0064 &&
+      g[1] === 0xff9b &&
+      g[2] === 0 &&
+      g[3] === 0 &&
+      g[4] === 0 &&
+      g[5] === 0
+    ) {
+      return isPrivateIpv4Parts(g[6] >> 8, g[6] & 0xff, g[7] >> 8);
+    }
+
+    // 2002::/16 (6to4)
+    if (g[0] === 0x2002) {
+      return isPrivateIpv4Parts(g[1] >> 8, g[1] & 0xff, g[2] >> 8);
+    }
+
+    // fc00::/7 (ULA)
+    if ((g[0] & 0xfe00) === 0xfc00) return true;
+    // fe80::/10 (link-local) & fec0::/10 (deprecated site-local)
+    if ((g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xffc0) === 0xfec0) return true;
+    // ff00::/8 (multicast)
+    if ((g[0] & 0xff00) === 0xff00) return true;
+    // 100::/64 (discard-only)
+    if (g[0] === 0x0100 && g[1] === 0 && g[2] === 0 && g[3] === 0) return true;
+    // 2001:db8::/32 (documentation)
+    if (g[0] === 0x2001 && g[1] === 0x0db8) return true;
+
     return false;
   }
 
@@ -64,6 +162,13 @@ export function validateSafeExternalUrl(rawUrl: string): URL {
     throw new PdfFetchError(
       "INVALID_URL",
       "Hanya protokol HTTP/HTTPS yang diizinkan."
+    );
+  }
+
+  if (!ALLOWED_PORTS.has(parsed.port)) {
+    throw new PdfFetchError(
+      "INVALID_URL",
+      "Port URL sumber PDF tidak diizinkan."
     );
   }
 
@@ -124,6 +229,38 @@ async function assertSafeResolvedHost(url: URL): Promise<void> {
   }
 }
 
+async function readResponseWithByteLimit(
+  response: Response,
+  rawUrl: string
+): Promise<Buffer> {
+  if (!response.body) {
+    return Buffer.alloc(0);
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+
+    totalBytes += value.byteLength;
+    if (totalBytes > MAX_PDF_BYTES) {
+      await reader.cancel().catch(() => {});
+      throw new PdfFetchError(
+        "TOO_LARGE",
+        "Ukuran PDF melebihi batas 25 MB.",
+        rawUrl
+      );
+    }
+    chunks.push(value);
+  }
+
+  return Buffer.concat(chunks, totalBytes);
+}
+
 export async function fetchPdfBuffer(rawUrl: string): Promise<Buffer> {
   let currentUrl = validateSafeExternalUrl(rawUrl);
   await assertSafeResolvedHost(currentUrl);
@@ -147,6 +284,7 @@ export async function fetchPdfBuffer(rawUrl: string): Promise<Buffer> {
       response.status === 307 ||
       response.status === 308
     ) {
+      await response.body?.cancel().catch(() => {});
       const location = response.headers.get("location");
       if (!location || hop === MAX_REDIRECT_HOPS) {
         throw new PdfFetchError(
@@ -165,6 +303,7 @@ export async function fetchPdfBuffer(rawUrl: string): Promise<Buffer> {
   }
 
   if (!response || !response.ok) {
+    await response?.body?.cancel().catch(() => {});
     throw new PdfFetchError(
       "FETCH_FAILED",
       `Server sumber mengembalikan status ${response?.status ?? 502}. Silakan buka PDF atau halaman sumber secara langsung.`,
@@ -174,6 +313,7 @@ export async function fetchPdfBuffer(rawUrl: string): Promise<Buffer> {
 
   const contentLength = Number(response.headers.get("content-length") || "0");
   if (contentLength > MAX_PDF_BYTES) {
+    await response.body?.cancel().catch(() => {});
     throw new PdfFetchError(
       "TOO_LARGE",
       "Ukuran PDF melebihi batas 25 MB.",
@@ -181,16 +321,7 @@ export async function fetchPdfBuffer(rawUrl: string): Promise<Buffer> {
     );
   }
 
-  const arrayBuffer = await response.arrayBuffer();
-  if (arrayBuffer.byteLength > MAX_PDF_BYTES) {
-    throw new PdfFetchError(
-      "TOO_LARGE",
-      "Ukuran PDF melebihi batas 25 MB.",
-      rawUrl
-    );
-  }
-
-  const buffer = Buffer.from(arrayBuffer);
+  const buffer = await readResponseWithByteLimit(response, rawUrl);
   const contentType = (response.headers.get("content-type") || "").toLowerCase();
   const headerMagic = buffer.subarray(0, 5).toString("ascii");
 

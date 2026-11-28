@@ -10,21 +10,28 @@ import {
 } from "@/db/schema";
 
 export const AUTH_COOKIE_NAME = "smartsari_auth";
-const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
+const THIRTY_DAYS_SECONDS = 60 * 60 * 24 * 30;
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function getAuthSecret(): string {
-  const base =
-    process.env.AUTH_SECRET?.trim() || process.env.DATABASE_URL?.trim();
-  if (!base) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("Server authentication secret is not configured.");
+export function deriveAppSecret(purpose: string): string {
+  const secret = process.env.AUTH_SECRET?.trim();
+  if (process.env.NODE_ENV === "production") {
+    if (!secret || secret.length < 32) {
+      throw new Error(
+        "AUTH_SECRET must be set to at least 32 characters in production."
+      );
     }
     return crypto
       .createHash("sha256")
-      .update("auth-token:smartsari-dev-secret")
+      .update(`${purpose}:${secret}`)
       .digest("hex");
   }
-  return crypto.createHash("sha256").update(`auth-token:${base}`).digest("hex");
+  const base = secret || "smartsari-dev-secret-change-in-production";
+  return crypto
+    .createHash("sha256")
+    .update(`${purpose}:${base}`)
+    .digest("hex");
 }
 
 export function hashPassword(password: string): string {
@@ -48,51 +55,87 @@ export function verifyPassword(password: string, stored: string): boolean {
   }
 }
 
-export function signAuthToken(userId: string): string {
+export function signAuthToken(userId: string, tokenVersion = 1): string {
+  const payload = {
+    uid: userId,
+    v: tokenVersion,
+    exp: Date.now() + THIRTY_DAYS_SECONDS * 1000,
+  };
+  const payloadB64 = Buffer.from(JSON.stringify(payload), "utf8").toString(
+    "base64url"
+  );
+  const data = `v2.${payloadB64}`;
   const sig = crypto
-    .createHmac("sha256", getAuthSecret())
-    .update(userId)
-    .digest("hex");
-  return `${userId}.${sig}`;
+    .createHmac("sha256", deriveAppSecret("auth-token"))
+    .update(data)
+    .digest("base64url");
+  return `${data}.${sig}`;
 }
 
-export function verifyAuthToken(token: string | undefined): string | null {
+export function verifyAuthTokenPayload(
+  token: string | undefined
+): { userId: string; tokenVersion: number } | null {
   if (!token) return null;
-  const dotIdx = token.lastIndexOf(".");
-  if (dotIdx <= 0) return null;
-  const userId = token.slice(0, dotIdx);
-  const sig = token.slice(dotIdx + 1);
-  if (
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      userId
-    )
-  ) {
+  const parts = token.split(".");
+  if (parts.length !== 3 || parts[0] !== "v2") return null;
+  const [, payloadB64, sig] = parts;
+  if (!payloadB64 || !sig) return null;
+
+  const expected = crypto
+    .createHmac("sha256", deriveAppSecret("auth-token"))
+    .update(`v2.${payloadB64}`)
+    .digest("base64url");
+
+  try {
+    const sigBuf = Buffer.from(sig, "utf8");
+    const expectedBuf = Buffer.from(expected, "utf8");
+    if (
+      sigBuf.length !== expectedBuf.length ||
+      !crypto.timingSafeEqual(sigBuf, expectedBuf)
+    ) {
+      return null;
+    }
+  } catch {
     return null;
   }
-  const expected = crypto
-    .createHmac("sha256", getAuthSecret())
-    .update(userId)
-    .digest("hex");
+
   try {
-    const sigBuf = Buffer.from(sig, "hex");
-    const expectedBuf = Buffer.from(expected, "hex");
-    if (sigBuf.length !== expectedBuf.length) return null;
-    return crypto.timingSafeEqual(sigBuf, expectedBuf) ? userId : null;
+    const parsed = JSON.parse(
+      Buffer.from(payloadB64, "base64url").toString("utf8")
+    ) as { uid?: unknown; v?: unknown; exp?: unknown };
+    if (
+      typeof parsed.uid !== "string" ||
+      !UUID_REGEX.test(parsed.uid) ||
+      typeof parsed.v !== "number" ||
+      !Number.isInteger(parsed.v) ||
+      parsed.v < 1 ||
+      typeof parsed.exp !== "number" ||
+      !Number.isFinite(parsed.exp) ||
+      Date.now() >= parsed.exp
+    ) {
+      return null;
+    }
+    return { userId: parsed.uid, tokenVersion: parsed.v };
   } catch {
     return null;
   }
 }
 
+export function verifyAuthToken(token: string | undefined): string | null {
+  return verifyAuthTokenPayload(token)?.userId ?? null;
+}
+
 export function attachAuthCookie<T extends NextResponse>(
   response: T,
-  userId: string
+  userId: string,
+  tokenVersion = 1
 ): T {
-  response.cookies.set(AUTH_COOKIE_NAME, signAuthToken(userId), {
+  response.cookies.set(AUTH_COOKIE_NAME, signAuthToken(userId, tokenVersion), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: ONE_YEAR_SECONDS,
+    maxAge: THIRTY_DAYS_SECONDS,
   });
   return response;
 }

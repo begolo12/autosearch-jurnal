@@ -2,15 +2,28 @@ import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { users } from "@/db/schema";
-import { AUTH_COOKIE_NAME, verifyAuthToken } from "@/lib/auth";
+import {
+  AUTH_COOKIE_NAME,
+  clearAuthCookie,
+  verifyAuthTokenPayload,
+} from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value?.trim();
-  const userId = verifyAuthToken(token);
-  if (!userId) {
+  if (!token) {
     return NextResponse.json(
       { user: null },
       { headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
+  const payload = verifyAuthTokenPayload(token);
+  if (!payload) {
+    return clearAuthCookie(
+      NextResponse.json(
+        { user: null },
+        { headers: { "Cache-Control": "no-store" } }
+      )
     );
   }
 
@@ -21,13 +34,30 @@ export async function GET(request: NextRequest) {
         id: users.id,
         email: users.email,
         name: users.name,
+        tokenVersion: users.tokenVersion,
       })
       .from(users)
-      .where(eq(users.id, userId))
+      .where(eq(users.id, payload.userId))
       .limit(1);
 
+    const user = rows[0];
+    if (!user || user.tokenVersion !== payload.tokenVersion) {
+      return clearAuthCookie(
+        NextResponse.json(
+          { user: null },
+          { headers: { "Cache-Control": "no-store" } }
+        )
+      );
+    }
+
     return NextResponse.json(
-      { user: rows[0] ?? null },
+      {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+        },
+      },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {

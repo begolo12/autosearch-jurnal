@@ -1,11 +1,11 @@
 import crypto from "crypto";
-import { and, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { searchCache, searchHistory } from "@/db/schema";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { aggregateJournalSearch } from "@/lib/search/aggregator";
-import { attachSessionCookie, getSessionContext } from "@/lib/session";
+import { attachSessionCookie, resolveSessionContext } from "@/lib/session";
 import {
   TIER_PRIORITY_ORDER,
   type JournalTier,
@@ -41,7 +41,8 @@ function buildSearchCacheKey(params: {
 }
 
 export async function GET(request: NextRequest) {
-  const { sessionId, isNew } = getSessionContext(request);
+  const { sessionId, isNew, clearStaleAuth } =
+    await resolveSessionContext(request);
   const rl = await checkRateLimit(request, "search", 30, 60);
   if (!rl.allowed) {
     return NextResponse.json(
@@ -152,9 +153,12 @@ export async function GET(request: NextRequest) {
       }
 
       const res = NextResponse.json(payload, {
-        headers: { "X-Search-Cache": "HIT" },
+        headers: {
+          "X-Search-Cache": "HIT",
+          "Cache-Control": "no-store",
+        },
       });
-      return attachSessionCookie(res, sessionId, isNew);
+      return attachSessionCookie(res, sessionId, isNew, clearStaleAuth);
     }
   } catch (err) {
     console.warn("Search cache read failed:", err);
@@ -210,13 +214,30 @@ export async function GET(request: NextRequest) {
         },
         resultCount: result.total,
       });
+
+      if (Math.random() < 0.1) {
+        const overflow = await db
+          .select({ id: searchHistory.id })
+          .from(searchHistory)
+          .where(eq(searchHistory.sessionId, sessionId))
+          .orderBy(desc(searchHistory.createdAt))
+          .offset(100);
+        if (overflow.length > 0) {
+          await db
+            .delete(searchHistory)
+            .where(inArray(searchHistory.id, overflow.map((r) => r.id)));
+        }
+      }
     } catch (err) {
       console.warn("Failed to log search history:", err);
     }
   }
 
   const res = NextResponse.json(result, {
-    headers: { "X-Search-Cache": "MISS" },
+    headers: {
+      "X-Search-Cache": "MISS",
+      "Cache-Control": "no-store",
+    },
   });
-  return attachSessionCookie(res, sessionId, isNew);
+  return attachSessionCookie(res, sessionId, isNew, clearStaleAuth);
 }

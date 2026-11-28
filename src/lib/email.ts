@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { deriveAppSecret } from "@/lib/auth";
 
 export function hashOtp(
   otp: string,
@@ -6,8 +7,8 @@ export function hashOtp(
   expiresAtMs: number
 ): string {
   return crypto
-    .createHash("sha256")
-    .update(`smartsari-otp:${email.trim().toLowerCase()}:${otp}:${expiresAtMs}`)
+    .createHmac("sha256", deriveAppSecret("email-otp"))
+    .update(`${email.trim().toLowerCase()}:${otp}:${expiresAtMs}`)
     .digest("hex");
 }
 
@@ -23,6 +24,7 @@ async function postResendEmail(params: {
   apiKey: string;
   from: string;
   to: string;
+  replyTo?: string;
   subject: string;
   html: string;
   text: string;
@@ -36,6 +38,7 @@ async function postResendEmail(params: {
     body: JSON.stringify({
       from: params.from,
       to: [params.to],
+      ...(params.replyTo ? { reply_to: params.replyTo } : {}),
       subject: params.subject,
       html: params.html,
       text: params.text,
@@ -175,4 +178,136 @@ export async function sendPasswordResetOtpEmail(params: {
     ignoreText:
       "Jika Anda tidak meminta reset kata sandi, abaikan email ini — akun Anda tetap aman.",
   });
+}
+
+export async function sendAlreadyRegisteredNoticeEmail(params: {
+  to: string;
+  name: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  if (!apiKey) {
+    return { ok: false, error: "Layanan email belum dikonfigurasi." };
+  }
+
+  const primaryFrom =
+    process.env.RESEND_FROM_EMAIL?.trim() ||
+    "SmartSari <no-reply@smartsari.my.id>";
+  const safeName = escapeHtml(params.name);
+
+  const html = `
+  <div style="background:#0E0F12;padding:28px 16px;font-family:Inter,Arial,sans-serif;color:#F4F4F5;">
+    <div style="max-width:480px;margin:0 auto;background:#151619;border:1px solid #2C2E35;border-radius:16px;padding:28px;">
+      <div style="font-size:16px;font-weight:700;letter-spacing:-0.01em;margin-bottom:16px;">
+        Smart<span style="color:#F472B6;">Sari</span>
+      </div>
+      <p style="font-size:14px;line-height:1.6;color:#E4E4E7;margin:0 0 14px;">
+        Halo <strong>${safeName}</strong>,
+      </p>
+      <p style="font-size:14px;line-height:1.6;color:#A1A1AA;margin:0 0 16px;">
+        Seseorang mencoba mendaftar akun baru menggunakan alamat email ini. Email Anda sudah terdaftar di SmartSari — silakan langsung <strong>Masuk</strong> atau gunakan fitur <strong>Lupa Kata Sandi</strong> jika diperlukan.
+      </p>
+      <p style="font-size:12px;line-height:1.5;color:#71717A;margin:0;">
+        Jika ini bukan permintaan Anda, Anda dapat mengabaikan email ini dengan aman.
+      </p>
+    </div>
+  </div>`;
+
+  const text = `Halo ${params.name},\n\nSeseorang mencoba mendaftar akun baru menggunakan email ini. Email Anda sudah terdaftar di SmartSari — silakan Masuk atau gunakan fitur Lupa Kata Sandi.\n\nJika ini bukan Anda, abaikan email ini.`;
+
+  const firstTry = await postResendEmail({
+    apiKey,
+    from: primaryFrom,
+    to: params.to,
+    subject: "Pemberitahuan Akun SmartSari Sudah Terdaftar",
+    html,
+    text,
+  });
+
+  if (firstTry.ok) return { ok: true };
+
+  if (firstTry.status === 403 && !primaryFrom.includes("resend.dev")) {
+    const fallbackTry = await postResendEmail({
+      apiKey,
+      from: "SmartSari <onboarding@resend.dev>",
+      to: params.to,
+      subject: "Pemberitahuan Akun SmartSari Sudah Terdaftar",
+      html,
+      text,
+    });
+    if (fallbackTry.ok) return { ok: true };
+  }
+
+  return { ok: false, error: firstTry.message || "Gagal mengirim email." };
+}
+
+export async function sendContactMessageEmail(params: {
+  to: string;
+  fromName: string;
+  fromEmail: string;
+  category: string;
+  message: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  if (!apiKey) {
+    return { ok: false, error: "Layanan email belum dikonfigurasi di server." };
+  }
+
+  const primaryFrom =
+    process.env.RESEND_FROM_EMAIL?.trim() ||
+    "SmartSari <no-reply@smartsari.my.id>";
+
+  const safeCategory = params.category.replace(/[\r\n]+/g, " ").trim();
+  const safeName = params.fromName.replace(/[\r\n]+/g, " ").trim();
+  const safeEmail = params.fromEmail.replace(/[\r\n]+/g, " ").trim();
+  const subject = `[SmartSari · ${safeCategory}] Pesan dari ${safeName}`;
+
+  const html = `
+  <div style="background:#0E0F12;padding:28px 16px;font-family:Inter,Arial,sans-serif;color:#F4F4F5;">
+    <div style="max-width:540px;margin:0 auto;background:#151619;border:1px solid #2C2E35;border-radius:16px;padding:28px;">
+      <div style="font-size:16px;font-weight:700;letter-spacing:-0.01em;margin-bottom:16px;">
+        Smart<span style="color:#F472B6;">Sari</span> · Formulir Kontak
+      </div>
+      <div style="background:#0E0F12;border:1px solid #232429;border-radius:12px;padding:14px 16px;margin-bottom:18px;font-size:13px;line-height:1.6;">
+        <div><strong style="color:#A1A1AA;">Kategori:</strong> <span style="color:#F9A8D4;">${escapeHtml(safeCategory)}</span></div>
+        <div><strong style="color:#A1A1AA;">Pengirim:</strong> ${escapeHtml(safeName)}</div>
+        <div><strong style="color:#A1A1AA;">Email Balasan:</strong> ${escapeHtml(safeEmail)}</div>
+      </div>
+      <div style="font-size:14px;line-height:1.65;color:#E4E4E7;white-space:normal;">
+        ${escapeHtml(params.message).replace(/\r?\n/g, "<br/>")}
+      </div>
+    </div>
+  </div>`;
+
+  const text = `SmartSari · Formulir Kontak\nKategori: ${safeCategory}\nPengirim: ${safeName}\nEmail Balasan: ${safeEmail}\n\n${params.message}`;
+
+  const firstTry = await postResendEmail({
+    apiKey,
+    from: primaryFrom,
+    to: params.to,
+    replyTo: safeEmail,
+    subject,
+    html,
+    text,
+  });
+
+  if (firstTry.ok) return { ok: true };
+
+  if (firstTry.status === 403 && !primaryFrom.includes("resend.dev")) {
+    const fallbackTry = await postResendEmail({
+      apiKey,
+      from: "SmartSari <onboarding@resend.dev>",
+      to: params.to,
+      replyTo: safeEmail,
+      subject,
+      html,
+      text,
+    });
+    if (fallbackTry.ok) return { ok: true };
+  }
+
+  console.error("[SmartSari] Contact email error:", firstTry.status, firstTry.message);
+  return {
+    ok: false,
+    error: "Gagal mengirim pesan. Silakan coba beberapa saat lagi.",
+  };
 }

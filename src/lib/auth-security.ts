@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { getDb } from "@/db";
 import { rateLimits } from "@/db/schema";
+import { deriveAppSecret } from "@/lib/auth";
 
 const DISPOSABLE_DOMAINS = new Set([
   "mailinator.com",
@@ -46,22 +47,27 @@ const DISPOSABLE_DOMAINS = new Set([
 export const DUMMY_PASSWORD_HASH =
   "0123456789abcdef0123456789abcdef:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-function getSecuritySecret(): string {
-  const base =
-    process.env.AUTH_SECRET?.trim() || process.env.DATABASE_URL?.trim();
-  if (!base) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("Server security secret is not configured.");
-    }
-    return crypto
-      .createHash("sha256")
-      .update("human-challenge:smartsari-dev-secret")
-      .digest("hex");
-  }
-  return crypto
-    .createHash("sha256")
-    .update(`human-challenge:${base}`)
-    .digest("hex");
+function isAllowedHostname(host: string, reqHost: string): boolean {
+  const normalized = host.toLowerCase();
+  const vercelHost = process.env.VERCEL_URL
+    ? process.env.VERCEL_URL.replace(/^https?:\/\//i, "")
+        .split("/")[0]
+        .split(":")[0]
+        .toLowerCase()
+    : "";
+
+  const isDevLocal =
+    process.env.NODE_ENV !== "production" &&
+    (normalized === "localhost" || normalized === "127.0.0.1");
+
+  return (
+    normalized === reqHost ||
+    normalized === "smartsari.my.id" ||
+    normalized === "www.smartsari.my.id" ||
+    normalized === "autosearch-jurnal.vercel.app" ||
+    (Boolean(vercelHost) && normalized === vercelHost) ||
+    isDevLocal
+  );
 }
 
 export function isDisposableEmail(email: string): boolean {
@@ -96,51 +102,83 @@ export function validateStrongPassword(password: string): string | null {
 }
 
 export function isAllowedAuthOrigin(request: NextRequest): boolean {
-  const secFetchSite = request.headers.get("sec-fetch-site");
-  if (secFetchSite && secFetchSite.toLowerCase() === "cross-site") {
+  const secFetchSite = request.headers.get("sec-fetch-site")?.toLowerCase();
+  if (secFetchSite === "cross-site") {
     return false;
   }
 
+  const reqHost = request.nextUrl.hostname.toLowerCase();
   const origin = request.headers.get("origin");
-  if (!origin) return true;
-
-  try {
-    const parsed = new URL(origin);
-    const host = parsed.hostname.toLowerCase();
-    const reqHost = request.nextUrl.hostname.toLowerCase();
-    const isDevLocal =
-      process.env.NODE_ENV !== "production" &&
-      (host === "localhost" || host === "127.0.0.1");
-    return (
-      host === reqHost ||
-      host === "smartsari.my.id" ||
-      host === "www.smartsari.my.id" ||
-      host === "autosearch-jurnal.vercel.app" ||
-      isDevLocal
-    );
-  } catch {
-    return false;
+  if (origin) {
+    try {
+      const parsed = new URL(origin);
+      return isAllowedHostname(parsed.hostname, reqHost);
+    } catch {
+      return false;
+    }
   }
+
+  const referer = request.headers.get("referer");
+  if (referer) {
+    try {
+      const parsed = new URL(referer);
+      return isAllowedHostname(parsed.hostname, reqHost);
+    } catch {
+      return false;
+    }
+  }
+
+  return secFetchSite === "same-origin" || process.env.NODE_ENV !== "production";
 }
 
-export function getAuthClientIpHash(request: NextRequest): string {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  const rawIp =
-    forwardedFor?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip")?.trim() ||
-    "unknown";
+export function isAllowedSameOriginAssetRequest(request: NextRequest): boolean {
+  return isAllowedAuthOrigin(request);
+}
 
+export function getTrustedClientIp(request: NextRequest): string {
+  const vercelIp = request.headers
+    .get("x-vercel-forwarded-for")
+    ?.split(",")[0]
+    ?.trim();
+  if (vercelIp) return vercelIp;
+
+  const cfIp = request.headers.get("cf-connecting-ip")?.trim();
+  if (cfIp) return cfIp;
+
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
+
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    const parts = forwardedFor
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parts.length > 0) {
+      return parts[parts.length - 1];
+    }
+  }
+
+  return "unknown";
+}
+
+export function getClientIpHash(request: NextRequest, scope = "ip"): string {
+  const rawIp = getTrustedClientIp(request);
   return crypto
-    .createHash("sha256")
-    .update(`smartsari-auth:${rawIp}`)
+    .createHmac("sha256", deriveAppSecret("ip-hash"))
+    .update(`${scope}:${rawIp}`)
     .digest("hex")
     .slice(0, 32);
 }
 
+export function getAuthClientIpHash(request: NextRequest): string {
+  return getClientIpHash(request, "auth");
+}
+
 export function hashEmailKey(email: string): string {
   return crypto
-    .createHash("sha256")
-    .update(`smartsari-email:${email.trim().toLowerCase()}`)
+    .createHmac("sha256", deriveAppSecret("email-key"))
+    .update(email.trim().toLowerCase())
     .digest("hex")
     .slice(0, 32);
 }
@@ -192,6 +230,76 @@ export async function checkAuthRateLimit(
   }
 }
 
+export function getTurnstileSiteKey(): string | null {
+  const key = (
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
+    process.env.TURNSTILE_SITE_KEY ||
+    ""
+  ).trim();
+  return key || null;
+}
+
+export function isTurnstileEnabled(): boolean {
+  return Boolean(
+    process.env.TURNSTILE_SECRET_KEY?.trim() && getTurnstileSiteKey()
+  );
+}
+
+export async function verifyTurnstileToken(
+  token: string,
+  remoteIp?: string
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
+  if (!secret) {
+    return {
+      ok: false,
+      reason: "Konfigurasi verifikasi keamanan server tidak lengkap.",
+    };
+  }
+
+  try {
+    const body = new URLSearchParams();
+    body.set("secret", secret);
+    body.set("response", token);
+    if (remoteIp && remoteIp !== "unknown") {
+      body.set("remoteip", remoteIp);
+    }
+
+    const res = await fetch(
+      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString(),
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        reason: "Verifikasi keamanan sementara gagal. Silakan coba lagi.",
+      };
+    }
+
+    const data = (await res.json()) as { success?: boolean };
+    if (!data.success) {
+      return {
+        ok: false,
+        reason: "Verifikasi anti-bot gagal. Silakan ulangi tantangan keamanan.",
+      };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    console.error("Cloudflare Turnstile verify error:", err);
+    return {
+      ok: false,
+      reason: "Gagal menghubungi layanan verifikasi anti-bot.",
+    };
+  }
+}
+
 export function createHumanChallenge(): { question: string; token: string } {
   const a = crypto.randomInt(3, 15);
   const b = crypto.randomInt(2, 13);
@@ -216,7 +324,7 @@ export function createHumanChallenge(): { question: string; token: string } {
   ).toString("base64url");
 
   const sig = crypto
-    .createHmac("sha256", getSecuritySecret())
+    .createHmac("sha256", deriveAppSecret("human-challenge"))
     .update(payloadB64)
     .digest("base64url");
 
@@ -239,7 +347,7 @@ export async function verifyAndConsumeHumanChallenge(
   const payloadB64 = token.slice(0, dotIdx);
   const sig = token.slice(dotIdx + 1);
   const expectedSig = crypto
-    .createHmac("sha256", getSecuritySecret())
+    .createHmac("sha256", deriveAppSecret("human-challenge"))
     .update(payloadB64)
     .digest("base64url");
 
@@ -331,4 +439,35 @@ export async function verifyAndConsumeHumanChallenge(
   }
 
   return { ok: true };
+}
+
+export async function verifyHumanVerification(params: {
+  turnstileToken?: string;
+  challengeToken?: string;
+  challengeAnswer?: string;
+  remoteIp?: string;
+  minElapsedMs?: number;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (isTurnstileEnabled()) {
+    const token = params.turnstileToken?.trim() || "";
+    if (token.length < 10) {
+      return {
+        ok: false,
+        reason: "Selesaikan verifikasi keamanan terlebih dahulu.",
+      };
+    }
+    return verifyTurnstileToken(token, params.remoteIp);
+  }
+
+  const challengeToken = params.challengeToken?.trim() || "";
+  const challengeAnswer = params.challengeAnswer?.trim() || "";
+  if (challengeToken.length < 10 || challengeAnswer.length === 0) {
+    return { ok: false, reason: "Verifikasi keamanan wajib diisi." };
+  }
+
+  return verifyAndConsumeHumanChallenge(
+    challengeToken,
+    challengeAnswer,
+    params.minElapsedMs ?? 2000
+  );
 }

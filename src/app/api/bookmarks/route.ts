@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { bookmarks, researchProjects } from "@/db/schema";
 import { isAllowedAuthOrigin } from "@/lib/auth-security";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { attachSessionCookie, getSessionContext } from "@/lib/session";
+import { attachSessionCookie, resolveSessionContext } from "@/lib/session";
+import { getSafeHttpUrl } from "@/lib/url";
+
+const MAX_BOOKMARKS_PER_SESSION = 200;
 
 const bookmarkColumns = {
   id: bookmarks.id,
@@ -30,21 +33,22 @@ const bookmarkSchema = z.object({
   paperKey: z.string().min(1).max(300),
   title: z.string().min(1).max(500),
   authors: z.array(z.string().max(160)).max(50).default([]),
-  year: z.number().nullable().optional(),
+  year: z.number().int().min(1800).max(2100).nullable().optional(),
   venue: z.string().max(300).nullable().optional(),
   source: z.string().min(1).max(40),
   abstract: z.string().max(15000).nullable().optional(),
   pdfUrl: z.string().max(1000).nullable().optional(),
   landingUrl: z.string().max(1000).nullable().optional(),
   doi: z.string().max(200).nullable().optional(),
-  citations: z.number().nullable().optional(),
+  citations: z.number().int().min(0).max(10_000_000).nullable().optional(),
   projectId: z.string().uuid().nullable().optional(),
   note: z.string().max(2000).nullable().optional(),
   tierLabel: z.string().max(40).nullable().optional(),
 });
 
 export async function GET(request: NextRequest) {
-  const { sessionId, isNew } = getSessionContext(request);
+  const { sessionId, isNew, clearStaleAuth } =
+    await resolveSessionContext(request);
   try {
     const db = getDb();
     const rows = await db
@@ -54,15 +58,19 @@ export async function GET(request: NextRequest) {
       .orderBy(desc(bookmarks.createdAt))
       .limit(100);
     return attachSessionCookie(
-      NextResponse.json({ bookmarks: rows }),
+      NextResponse.json(
+        { bookmarks: rows },
+        { headers: { "Cache-Control": "no-store" } }
+      ),
       sessionId,
-      isNew
+      isNew,
+      clearStaleAuth
     );
   } catch (err) {
     console.error("GET /api/bookmarks error:", err);
     return NextResponse.json(
       { error: "Gagal memuat daftar jurnal tersimpan." },
-      { status: 500 }
+      { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }
@@ -79,11 +87,12 @@ export async function POST(request: NextRequest) {
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Terlalu banyak permintaan. Tunggu ${rl.retryAfterSeconds} detik.` },
-      { status: 429 }
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } }
     );
   }
 
-  const { sessionId, isNew } = getSessionContext(request);
+  const { sessionId, isNew, clearStaleAuth } =
+    await resolveSessionContext(request);
 
   let body: z.infer<typeof bookmarkSchema>;
   try {
@@ -131,7 +140,22 @@ export async function POST(request: NextRequest) {
       return attachSessionCookie(
         NextResponse.json({ bookmark: existing[0], existed: true }),
         sessionId,
-        isNew
+        isNew,
+        clearStaleAuth
+      );
+    }
+
+    const [countRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(bookmarks)
+      .where(eq(bookmarks.sessionId, sessionId));
+
+    if ((countRow?.count ?? 0) >= MAX_BOOKMARKS_PER_SESSION) {
+      return NextResponse.json(
+        {
+          error: `Batas maksimal ${MAX_BOOKMARKS_PER_SESSION} jurnal tersimpan tercapai. Hapus bookmark lama terlebih dahulu.`,
+        },
+        { status: 400 }
       );
     }
 
@@ -146,8 +170,8 @@ export async function POST(request: NextRequest) {
         venue: body.venue ?? null,
         source: body.source,
         abstract: body.abstract ?? null,
-        pdfUrl: body.pdfUrl ?? null,
-        landingUrl: body.landingUrl ?? null,
+        pdfUrl: getSafeHttpUrl(body.pdfUrl),
+        landingUrl: getSafeHttpUrl(body.landingUrl),
         doi: body.doi ?? null,
         citations: body.citations ?? null,
         projectId: body.projectId ?? null,
@@ -159,7 +183,8 @@ export async function POST(request: NextRequest) {
     return attachSessionCookie(
       NextResponse.json({ bookmark: created, existed: false }, { status: 201 }),
       sessionId,
-      isNew
+      isNew,
+      clearStaleAuth
     );
   } catch (err) {
     console.error("POST /api/bookmarks error:", err);

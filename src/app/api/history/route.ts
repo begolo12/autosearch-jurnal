@@ -3,10 +3,12 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { searchHistory } from "@/db/schema";
 import { isAllowedAuthOrigin } from "@/lib/auth-security";
-import { attachSessionCookie, getSessionContext } from "@/lib/session";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { attachSessionCookie, resolveSessionContext } from "@/lib/session";
 
 export async function GET(request: NextRequest) {
-  const { sessionId, isNew } = getSessionContext(request);
+  const { sessionId, isNew, clearStaleAuth } =
+    await resolveSessionContext(request);
   const filterQ = (request.nextUrl.searchParams.get("q") || "")
     .trim()
     .toLowerCase();
@@ -39,15 +41,19 @@ export async function GET(request: NextRequest) {
     }
 
     return attachSessionCookie(
-      NextResponse.json({ history: unique }),
+      NextResponse.json(
+        { history: unique },
+        { headers: { "Cache-Control": "no-store" } }
+      ),
       sessionId,
-      isNew
+      isNew,
+      clearStaleAuth
     );
   } catch (err) {
     console.error("GET /api/history error:", err);
     return NextResponse.json(
       { error: "Gagal memuat riwayat pencarian." },
-      { status: 500 }
+      { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }
@@ -59,13 +65,28 @@ export async function DELETE(request: NextRequest) {
       { status: 403 }
     );
   }
-  const { sessionId, isNew } = getSessionContext(request);
+
+  const rl = await checkRateLimit(request, "history_mutate", 60, 60);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Terlalu banyak permintaan. Tunggu ${rl.retryAfterSeconds} detik.` },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } }
+    );
+  }
+
+  const { sessionId, isNew, clearStaleAuth } =
+    await resolveSessionContext(request);
   try {
     const db = getDb();
     await db
       .delete(searchHistory)
       .where(eq(searchHistory.sessionId, sessionId));
-    return attachSessionCookie(NextResponse.json({ ok: true }), sessionId, isNew);
+    return attachSessionCookie(
+      NextResponse.json({ ok: true }),
+      sessionId,
+      isNew,
+      clearStaleAuth
+    );
   } catch (err) {
     console.error("DELETE /api/history error:", err);
     return NextResponse.json(

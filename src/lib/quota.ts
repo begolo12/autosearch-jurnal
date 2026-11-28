@@ -1,17 +1,17 @@
-import { lt, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { getDb } from "@/db";
-import {
-  emailOtpChallenges,
-  passwordResetOtps,
-  rateLimits,
-  searchCache,
-} from "@/db/schema";
-import { getAuthClientIpHash } from "@/lib/auth-security";
-import { getSessionContext } from "@/lib/session";
+import { rateLimits } from "@/db/schema";
+import { getClientIpHash } from "@/lib/auth-security";
+import { pruneExpiredRows } from "@/lib/rate-limit";
+import { resolveSessionContext, type SessionContext } from "@/lib/session";
 
 export type DailyQuotaResult =
-  | { allowed: true }
+  | {
+      allowed: true;
+      session: SessionContext;
+      refund: () => Promise<void>;
+    }
   | {
       allowed: false;
       status: 429 | 503;
@@ -22,7 +22,6 @@ export type DailyQuotaResult =
 
 async function incrementDailyCounter(
   key: string,
-  limit: number,
   now: Date,
   nextMidnight: Date
 ): Promise<{ count: number; retryAfterSeconds: number }> {
@@ -51,23 +50,21 @@ async function incrementDailyCounter(
   return { count, retryAfterSeconds };
 }
 
-async function pruneExpiredRows(): Promise<void> {
+async function decrementCounter(key: string): Promise<void> {
   try {
     const db = getDb();
-    const now = new Date();
-    await Promise.all([
-      db.delete(rateLimits).where(lt(rateLimits.resetAt, now)),
-      db.delete(searchCache).where(lt(searchCache.expiresAt, now)),
-      db.delete(emailOtpChallenges).where(lt(emailOtpChallenges.expiresAt, now)),
-      db.delete(passwordResetOtps).where(lt(passwordResetOtps.expiresAt, now)),
-    ]);
+    await db
+      .update(rateLimits)
+      .set({ count: sql`GREATEST(${rateLimits.count} - 1, 0)` })
+      .where(eq(rateLimits.key, key));
   } catch (err) {
-    console.warn("[SmartSari] Opportunistic TTL cleanup warning:", err);
+    console.warn("[SmartSari] Quota refund warning:", err);
   }
 }
 
 export async function checkDailyAiQuota(
-  request: NextRequest
+  request: NextRequest,
+  existingSession?: SessionContext
 ): Promise<DailyQuotaResult> {
   const now = new Date();
   const dayKey = now.toISOString().slice(0, 10);
@@ -101,50 +98,17 @@ export async function checkDailyAiQuota(
   }
 
   try {
-    const { userId } = getSessionContext(request);
+    const session = existingSession ?? (await resolveSessionContext(request));
 
-    if (userId) {
-      const userCheck = await incrementDailyCounter(
-        `daily_user_ai:${dayKey}:${userId}`,
-        userLimit,
-        now,
-        nextMidnight
-      );
-      if (userCheck.count > userLimit) {
-        return {
-          allowed: false,
-          status: 429,
-          error: `Kuota harian akun Anda (${userLimit} pemrosesan/hari) telah tercapai. Kuota akan diperbarui besok.`,
-          requireLogin: false,
-          retryAfterSeconds: userCheck.retryAfterSeconds,
-        };
-      }
-    } else {
-      const ipHash = getAuthClientIpHash(request);
-      const guestCheck = await incrementDailyCounter(
-        `daily_guest_ai:${dayKey}:${ipHash}`,
-        guestLimit,
-        now,
-        nextMidnight
-      );
-      if (guestCheck.count > guestLimit) {
-        return {
-          allowed: false,
-          status: 429,
-          error: `Kuota tamu harian Anda (${guestLimit}x/hari) telah habis. Masuk atau daftar akun gratis untuk mendapatkan kuota hingga ${userLimit}x/hari.`,
-          requireLogin: true,
-          retryAfterSeconds: guestCheck.retryAfterSeconds,
-        };
-      }
-    }
-
+    // Check global capacity first so personal quota is never burned during global saturation
+    const globalKey = `daily_global_ai:${dayKey}`;
     const globalCheck = await incrementDailyCounter(
-      `daily_global_ai:${dayKey}`,
-      globalLimit,
+      globalKey,
       now,
       nextMidnight
     );
     if (globalCheck.count > globalLimit) {
+      await decrementCounter(globalKey);
       return {
         allowed: false,
         status: 503,
@@ -155,7 +119,85 @@ export async function checkDailyAiQuota(
       };
     }
 
-    return { allowed: true };
+    if (session.userId) {
+      const userKey = `daily_user_ai:${dayKey}:${session.userId}`;
+      const userCheck = await incrementDailyCounter(userKey, now, nextMidnight);
+      if (userCheck.count > userLimit) {
+        await Promise.all([
+          decrementCounter(globalKey),
+          decrementCounter(userKey),
+        ]);
+        return {
+          allowed: false,
+          status: 429,
+          error: `Kuota harian akun Anda (${userLimit} pemrosesan/hari) telah tercapai. Kuota akan diperbarui besok.`,
+          requireLogin: false,
+          retryAfterSeconds: userCheck.retryAfterSeconds,
+        };
+      }
+
+      return {
+        allowed: true,
+        session,
+        refund: async () => {
+          await Promise.all([
+            decrementCounter(globalKey),
+            decrementCounter(userKey),
+          ]);
+        },
+      };
+    }
+
+    // Guest quota: enforce across both trusted IP hash and signed guest session ID
+    const ipHash = getClientIpHash(request, "quota");
+    const ipKey = `daily_guest_ai_ip:${dayKey}:${ipHash}`;
+    const sidKey = session.guestSessionId
+      ? `daily_guest_ai_sid:${dayKey}:${session.guestSessionId}`
+      : null;
+
+    const ipCheck = await incrementDailyCounter(ipKey, now, nextMidnight);
+    const sidCheck = sidKey
+      ? await incrementDailyCounter(sidKey, now, nextMidnight)
+      : null;
+
+    if (
+      ipCheck.count > guestLimit ||
+      (sidCheck && sidCheck.count > guestLimit)
+    ) {
+      const rollback: Promise<void>[] = [decrementCounter(globalKey)];
+      if (ipCheck.count <= guestLimit) {
+        rollback.push(decrementCounter(ipKey));
+      } else {
+        rollback.push(decrementCounter(ipKey));
+      }
+      if (sidCheck && sidKey) {
+        rollback.push(decrementCounter(sidKey));
+      }
+      await Promise.all(rollback);
+
+      const retryAfterSeconds = Math.max(
+        ipCheck.retryAfterSeconds,
+        sidCheck?.retryAfterSeconds ?? 0
+      );
+
+      return {
+        allowed: false,
+        status: 429,
+        error: `Kuota tamu harian Anda (${guestLimit}x/hari) telah habis. Masuk atau daftar akun gratis untuk mendapatkan kuota hingga ${userLimit}x/hari.`,
+        requireLogin: true,
+        retryAfterSeconds,
+      };
+    }
+
+    return {
+      allowed: true,
+      session,
+      refund: async () => {
+        const tasks = [decrementCounter(globalKey), decrementCounter(ipKey)];
+        if (sidKey) tasks.push(decrementCounter(sidKey));
+        await Promise.all(tasks);
+      },
+    };
   } catch (err) {
     console.error("[SmartSari] Daily AI quota check error:", err);
     return {

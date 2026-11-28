@@ -87,12 +87,12 @@ export default function PrivasiPage() {
               data akun maupun riwayat riset Anda. Anda dapat menghapus riwayat
               pencarian, jurnal tersimpan, proyek, serta arsip Word secara
               langsung di aplikasi, atau menghubungi kami melalui{" "}
-              <a
-                href="mailto:hello@smartsari.my.id"
-                className="font-medium text-[#F472B6] hover:underline"
+              <Link
+                href="/kontak"
+                className="font-medium text-[#F472B6] underline-offset-2 hover:underline"
               >
-                hello@smartsari.my.id
-              </a>{" "}
+                Formulir Kontak SmartSari
+              </Link>{" "}
               untuk permintaan penghapusan akun permanen.
             </p>
           </section>
