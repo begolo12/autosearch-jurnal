@@ -56,7 +56,7 @@ function renderInlineMarkdown(text: string) {
   return parts.map((part, idx) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
-        <strong key={idx} className="font-semibold text-white">
+        <strong key={idx} className="font-semibold text-heading">
           {part.slice(2, -2)}
         </strong>
       );
@@ -87,7 +87,7 @@ function MarkdownView({
         ? "text-[17px] leading-[1.8]"
         : "text-[15px] leading-[1.75]";
   return (
-    <div className={`space-y-4 text-[#E4E4E7] ${sizeClass}`}>
+    <div className={`space-y-4 text-ink-strong ${sizeClass}`}>
       {blocks.map((block, i) => {
         const trimmed = block.trim();
         if (!trimmed) return null;
@@ -96,7 +96,7 @@ function MarkdownView({
           return (
             <h2
               key={i}
-              className="text-xl font-bold leading-snug tracking-[-0.015em] text-white"
+              className="text-xl font-bold leading-snug tracking-[-0.015em] text-heading"
             >
               {trimmed.slice(2).trim()}
             </h2>
@@ -106,7 +106,7 @@ function MarkdownView({
           return (
             <h3
               key={i}
-              className="border-b border-[#232429]/80 pb-1.5 pt-3 text-lg font-semibold text-[#F472B6]"
+              className="border-b border-line/80 pb-1.5 pt-3 text-lg font-semibold text-accent-soft"
             >
               {trimmed.slice(3).trim()}
             </h3>
@@ -116,7 +116,7 @@ function MarkdownView({
           return (
             <h4
               key={i}
-              className="pt-1.5 text-base font-semibold text-[#F4F4F5]"
+              className="pt-1.5 text-base font-semibold text-ink"
             >
               {trimmed.slice(4).trim()}
             </h4>
@@ -126,7 +126,7 @@ function MarkdownView({
           return (
             <blockquote
               key={i}
-              className="rounded-r-xl border-l-2 border-[#DB2777] bg-[#0E0F12]/70 px-4 py-2.5 text-sm italic text-[#D4D4D8]"
+              className="rounded-r-xl border-l-2 border-accent bg-canvas/70 px-4 py-2.5 text-sm italic text-ink-body"
             >
               {renderInlineMarkdown(
                 trimmed
@@ -513,23 +513,23 @@ export function PdfReaderModal({
       role="dialog"
       aria-modal="true"
       aria-label={`Pembaca Jurnal: ${paper.title}`}
-      className="animate-modal-in fixed inset-0 z-50 flex flex-col bg-[#0E0F12]"
+      className="animate-modal-in fixed inset-0 z-50 flex flex-col bg-canvas"
     >
       {/* Top Reader Toolbar */}
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#232429] bg-[#151619]/95 px-3 py-2.5 shadow-sm backdrop-blur-md sm:px-5">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface/95 px-3 py-2.5 shadow-sm backdrop-blur-md sm:px-5">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           {paper.journalMetrics && (
-            <span className="shrink-0 rounded-md bg-[#DB2777] px-2 py-0.5 font-mono text-xs font-semibold text-white shadow-[0_0_10px_rgba(219,39,119,0.28)]">
+            <span className="shrink-0 rounded-md bg-accent px-2 py-0.5 font-mono text-xs font-semibold text-white shadow-[0_0_10px_rgba(var(--accent-rgb),0.28)]">
               {paper.journalMetrics.tierLabel} · IF{" "}
               {paper.journalMetrics.impactFactor}
             </span>
           )}
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-sm font-semibold text-[#F4F4F5] sm:text-base">
+            <h2 className="truncate text-sm font-semibold text-ink sm:text-base">
               {paper.title}
             </h2>
             {(paper.authors.length > 0 || paper.venue || paper.year) && (
-              <p className="truncate text-[11px] text-[#A1A1AA]">
+              <p className="truncate text-[11px] text-ink-secondary">
                 {[
                   paper.authors.length > 0
                     ? paper.authors.slice(0, 2).join(", ") +
@@ -546,7 +546,7 @@ export function PdfReaderModal({
         </div>
 
         {/* Desktop view mode switch */}
-        <div className="hidden items-center gap-1 rounded-lg border border-[#2C2E35] bg-[#0E0F12] p-0.5 lg:flex">
+        <div className="hidden items-center gap-1 rounded-lg border border-line-strong bg-canvas p-0.5 lg:flex">
           {hasPdf && (
             <>
               <button
@@ -554,8 +554,8 @@ export function PdfReaderModal({
                 onClick={() => setDesktopView("split")}
                 className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
                   desktopView === "split"
-                    ? "bg-[#DB2777] text-white"
-                    : "text-[#A1A1AA] hover:text-white"
+                    ? "bg-accent text-white"
+                    : "text-ink-secondary hover:text-heading"
                 }`}
               >
                 <Columns2 className="h-3.5 w-3.5" />
@@ -566,8 +566,8 @@ export function PdfReaderModal({
                 onClick={() => setDesktopView("pdf")}
                 className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
                   desktopView === "pdf"
-                    ? "bg-[#DB2777] text-white"
-                    : "text-[#A1A1AA] hover:text-white"
+                    ? "bg-accent text-white"
+                    : "text-ink-secondary hover:text-heading"
                 }`}
               >
                 <Maximize2 className="h-3.5 w-3.5" />
@@ -580,8 +580,8 @@ export function PdfReaderModal({
             onClick={() => setDesktopView("translate")}
             className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
               desktopView === "translate"
-                ? "bg-[#DB2777] text-white"
-                : "text-[#A1A1AA] hover:text-white"
+                ? "bg-accent text-white"
+                : "text-ink-secondary hover:text-heading"
             }`}
           >
             <Languages className="h-3.5 w-3.5" />
@@ -592,8 +592,8 @@ export function PdfReaderModal({
             onClick={() => setDesktopView("chat")}
             className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
               desktopView === "chat"
-                ? "bg-[#DB2777] text-white"
-                : "text-[#A1A1AA] hover:text-white"
+                ? "bg-accent text-white"
+                : "text-ink-secondary hover:text-heading"
             }`}
           >
             <MessageSquare className="h-3.5 w-3.5" />
@@ -607,10 +607,10 @@ export function PdfReaderModal({
               type="button"
               disabled={downloadingPdf}
               onClick={() => void handlePdfClick()}
-              className="btn-tactile inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#DB2777] disabled:opacity-60"
+              className="btn-tactile inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-line-strong bg-elevated px-3 py-1.5 text-xs font-medium text-ink-strong hover:border-accent disabled:opacity-60"
             >
               {downloadingPdf ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F472B6]" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-soft" />
               ) : (
                 <FileDown className="h-3.5 w-3.5" />
               )}
@@ -622,7 +622,7 @@ export function PdfReaderModal({
             type="button"
             disabled={downloadingDocx}
             onClick={() => void handleDocxClick()}
-            className="btn-tactile inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-[#DB2777] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
+            className="btn-tactile inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
           >
             {downloadingDocx ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -637,7 +637,7 @@ export function PdfReaderModal({
             type="button"
             aria-label="Tutup pembaca"
             onClick={onClose}
-            className="btn-tactile inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full border border-[#2C2E35] text-[#A1A1AA] hover:border-[#3F414A] hover:text-white"
+            className="btn-tactile inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full border border-line-strong text-ink-secondary hover:border-line-hover hover:text-heading"
           >
             <X className="h-4 w-4" />
           </button>
@@ -646,7 +646,7 @@ export function PdfReaderModal({
 
       {/* Mobile Tab Switcher */}
       <div
-        className={`grid border-b border-[#232429] bg-[#151619] lg:hidden ${
+        className={`grid border-b border-line bg-surface lg:hidden ${
           hasPdf ? "grid-cols-3" : "grid-cols-2"
         }`}
       >
@@ -656,8 +656,8 @@ export function PdfReaderModal({
             onClick={() => setMobileTab("pdf")}
             className={`min-h-[42px] border-b-2 text-xs font-semibold ${
               mobileTab === "pdf"
-                ? "border-[#DB2777] text-[#F472B6]"
-                : "border-transparent text-[#A1A1AA]"
+                ? "border-accent text-accent-soft"
+                : "border-transparent text-ink-secondary"
             }`}
           >
             PDF Asli
@@ -673,8 +673,8 @@ export function PdfReaderModal({
           }}
           className={`min-h-[42px] border-b-2 text-xs font-semibold ${
             mobileTab === "translate"
-              ? "border-[#DB2777] text-[#F472B6]"
-              : "border-transparent text-[#A1A1AA]"
+              ? "border-accent text-accent-soft"
+              : "border-transparent text-ink-secondary"
           }`}
         >
           Terjemahan
@@ -684,8 +684,8 @@ export function PdfReaderModal({
           onClick={() => setMobileTab("chat")}
           className={`min-h-[42px] border-b-2 text-xs font-semibold ${
             mobileTab === "chat"
-              ? "border-[#DB2777] text-[#F472B6]"
-              : "border-transparent text-[#A1A1AA]"
+              ? "border-accent text-accent-soft"
+              : "border-transparent text-ink-secondary"
           }`}
         >
           Tanya Jurnal
@@ -696,21 +696,21 @@ export function PdfReaderModal({
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* PDF Viewer Pane */}
         <section
-          className={`min-h-0 flex-1 flex-col border-[#232429] bg-[#151619] lg:border-r ${
+          className={`min-h-0 flex-1 flex-col border-line bg-surface lg:border-r ${
             mobileTab === "pdf" ? "flex" : "hidden lg:flex"
           } ${desktopView === "translate" || desktopView === "chat" ? "lg:hidden" : ""}`}
         >
           {(pdfProxyUrl || paper.localPdfUrl) ? (
             <div className="relative flex h-full w-full flex-col">
-              <div className="flex items-center justify-between border-b border-[#232429] bg-[#151619] px-3 py-1.5 text-[11px] text-[#A1A1AA]">
+              <div className="flex items-center justify-between border-b border-line bg-surface px-3 py-1.5 text-[11px] text-ink-secondary">
                 <span className="inline-flex items-center gap-1.5">
                   <span
                     className={`h-1.5 w-1.5 rounded-full ${
                       pdfBlobUrl
-                        ? "bg-[#4ADE80]"
+                        ? "bg-ok"
                         : pdfLoading
-                          ? "animate-pulse bg-amber-400"
-                          : "bg-[#F87171]"
+                          ? "animate-pulse bg-warn"
+                          : "bg-danger"
                     }`}
                   />
                   {paper.localPdfUrl ? "PDF Unggahan Pribadi" : "Pratinjau PDF Langsung"}
@@ -720,26 +720,26 @@ export function PdfReaderModal({
                     href={getSafeHttpUrl(paper.pdfUrl)!}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 font-medium text-[#F472B6] hover:underline"
+                    className="inline-flex items-center gap-1 font-medium text-accent-soft hover:underline"
                   >
                     Buka Sumber Asli <ExternalLink className="h-3 w-3" />
                   </a>
                 )}
               </div>
               {pdfLoading ? (
-                <div className="flex flex-1 flex-col items-center justify-center bg-[#0E0F12] p-6">
-                  <div className="w-full max-w-md space-y-4 rounded-xl border border-[#232429] bg-[#151619] p-6 shadow-xl">
-                    <div className="flex items-center gap-2 text-xs font-medium text-[#F472B6]">
+                <div className="flex flex-1 flex-col items-center justify-center bg-canvas p-6">
+                  <div className="w-full max-w-md space-y-4 rounded-xl border border-line bg-surface p-6 shadow-xl">
+                    <div className="flex items-center gap-2 text-xs font-medium text-accent-soft">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       <span>Memuat dokumen PDF dari penerbit...</span>
                     </div>
-                    <div className="space-y-2.5 border-t border-[#232429] pt-4">
-                      <div className="h-4 w-4/5 animate-pulse rounded bg-[#232429]" />
-                      <div className="h-3 w-1/2 animate-pulse rounded bg-[#1E1F23]" />
-                      <div className="mt-4 h-24 w-full animate-pulse rounded-lg bg-[#1E1F23]" />
-                      <div className="h-3 w-full animate-pulse rounded bg-[#232429]" />
-                      <div className="h-3 w-11/12 animate-pulse rounded bg-[#232429]" />
-                      <div className="h-3 w-3/4 animate-pulse rounded bg-[#1E1F23]" />
+                    <div className="space-y-2.5 border-t border-line pt-4">
+                      <div className="h-4 w-4/5 animate-pulse rounded bg-line" />
+                      <div className="h-3 w-1/2 animate-pulse rounded bg-elevated" />
+                      <div className="mt-4 h-24 w-full animate-pulse rounded-lg bg-elevated" />
+                      <div className="h-3 w-full animate-pulse rounded bg-line" />
+                      <div className="h-3 w-11/12 animate-pulse rounded bg-line" />
+                      <div className="h-3 w-3/4 animate-pulse rounded bg-elevated" />
                     </div>
                   </div>
                 </div>
@@ -750,13 +750,13 @@ export function PdfReaderModal({
                   className="h-full w-full flex-1 bg-white"
                 />
               ) : (
-                <div className="flex flex-1 flex-col items-center justify-center bg-[#0E0F12] p-6 text-center">
-                  <div className="max-w-md rounded-xl border border-[#2C2E35] bg-[#151619] p-6">
-                    <AlertCircle className="mx-auto h-6 w-6 text-[#F87171]" />
-                    <h3 className="mt-3 text-base font-semibold text-white">
+                <div className="flex flex-1 flex-col items-center justify-center bg-canvas p-6 text-center">
+                  <div className="max-w-md rounded-xl border border-line-strong bg-surface p-6">
+                    <AlertCircle className="mx-auto h-6 w-6 text-danger" />
+                    <h3 className="mt-3 text-base font-semibold text-heading">
                       Pratinjau PDF Dibatasi Penerbit
                     </h3>
-                    <p className="mt-1.5 text-xs leading-relaxed text-[#A1A1AA]">
+                    <p className="mt-1.5 text-xs leading-relaxed text-ink-secondary">
                       {pdfLoadError}
                     </p>
                     <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
@@ -765,7 +765,7 @@ export function PdfReaderModal({
                           href={getSafeHttpUrl(paper.pdfUrl)!}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="btn-tactile inline-flex min-h-[38px] items-center gap-1.5 rounded-full bg-[#DB2777] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D]"
+                          className="btn-tactile inline-flex min-h-[38px] items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover"
                         >
                           Buka PDF di Tab Baru{" "}
                           <ExternalLink className="h-3.5 w-3.5" />
@@ -776,7 +776,7 @@ export function PdfReaderModal({
                           href={getSafeHttpUrl(paper.landingUrl)!}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="btn-tactile inline-flex min-h-[38px] items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3.5 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#DB2777]"
+                          className="btn-tactile inline-flex min-h-[38px] items-center gap-1.5 rounded-full border border-line-strong bg-elevated px-3.5 py-1.5 text-xs font-medium text-ink-strong hover:border-accent"
                         >
                           Halaman Penerbit
                         </a>
@@ -790,7 +790,7 @@ export function PdfReaderModal({
                             void runTranslate();
                           }
                         }}
-                        className="btn-tactile inline-flex min-h-[38px] items-center gap-1.5 rounded-full border border-[#DB2777]/35 bg-[#DB2777]/15 px-3.5 py-1.5 text-xs font-medium text-[#F9A8D4] hover:border-[#F472B6]"
+                        className="btn-tactile inline-flex min-h-[38px] items-center gap-1.5 rounded-full border border-accent/35 bg-accent/15 px-3.5 py-1.5 text-xs font-medium text-accent-tint hover:border-accent-soft"
                       >
                         <Languages className="h-3.5 w-3.5" />
                         Baca Terjemahan ID
@@ -802,10 +802,10 @@ export function PdfReaderModal({
             </div>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
-              <p className="text-base font-semibold text-white">
+              <p className="text-base font-semibold text-heading">
                 PDF langsung tidak tersedia dari penerbit
               </p>
-              <p className="mt-1 max-w-md text-xs text-[#A1A1AA]">
+              <p className="mt-1 max-w-md text-xs text-ink-secondary">
                 Anda tetap dapat membaca terjemahan Bahasa Indonesia di panel
                 sebelah, atau membuka halaman penerbit.
               </p>
@@ -814,7 +814,7 @@ export function PdfReaderModal({
                   href={getSafeHttpUrl(paper.landingUrl)!}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="btn-tactile mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#DB2777] px-4 py-2 text-xs font-semibold text-white"
+                  className="btn-tactile mt-4 inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-xs font-semibold text-white hover:bg-accent-hover"
                 >
                   Buka Halaman Penerbit <ExternalLink className="h-3.5 w-3.5" />
                 </a>
@@ -825,18 +825,18 @@ export function PdfReaderModal({
 
         {/* Auto-Translate Pane */}
         <section
-          className={`min-h-0 flex-1 flex-col overflow-y-auto bg-[#0E0F12] ${
+          className={`min-h-0 flex-1 flex-col overflow-y-auto bg-canvas ${
             mobileTab === "translate" ? "flex" : "hidden lg:flex"
           } ${desktopView === "pdf" || desktopView === "chat" ? "lg:hidden" : ""}`}
         >
           <div className="mx-auto w-full max-w-[70ch] p-4 sm:p-6">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-[#232429] pb-4">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
               <div>
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
-                  <Languages className="h-4 w-4 text-[#F472B6]" />
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-heading">
+                  <Languages className="h-4 w-4 text-accent-soft" />
                   Terjemahan Otomatis ke Bahasa Indonesia
                 </div>
-                <p className="mt-0.5 text-[11px] text-[#A1A1AA]">
+                <p className="mt-0.5 text-[11px] text-ink-secondary">
                   Deteksi otomatis bahasa sumber (Inggris, Mandarin, Jepang,
                   Jerman, Arab, dll.)
                 </p>
@@ -844,7 +844,7 @@ export function PdfReaderModal({
 
               <div className="flex items-center gap-2">
                 <div
-                  className="inline-flex items-center rounded-full border border-[#2C2E35] bg-[#151619] p-0.5 text-[11px]"
+                  className="inline-flex items-center rounded-full border border-line-strong bg-surface p-0.5 text-[11px]"
                   role="group"
                   aria-label="Ukuran huruf bacaan"
                 >
@@ -861,8 +861,8 @@ export function PdfReaderModal({
                       onClick={() => changeFontSize(opt.id)}
                       className={`rounded-full px-2 py-0.5 font-medium transition-colors ${
                         readerFontSize === opt.id
-                          ? "bg-[#DB2777] text-white"
-                          : "text-[#A1A1AA] hover:text-white"
+                          ? "bg-accent text-white"
+                          : "text-ink-secondary hover:text-heading"
                       }`}
                     >
                       {opt.label}
@@ -873,7 +873,7 @@ export function PdfReaderModal({
                   type="button"
                   disabled={translating}
                   onClick={() => void runTranslate()}
-                  className="btn-tactile inline-flex min-h-[38px] items-center gap-1.5 rounded-full bg-[#DB2777] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
+                  className="btn-tactile inline-flex min-h-[38px] items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
                 >
                 {translating ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -890,21 +890,21 @@ export function PdfReaderModal({
             </div>
 
             {translateError && (
-              <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#EF4444]/30 bg-[#EF4444]/10 p-4 text-sm text-[#FCA5A5]">
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-danger/35 bg-danger/10 p-4 text-sm text-danger-soft">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{translateError}</span>
               </div>
             )}
 
             {translating && (
-              <div className="space-y-3 rounded-xl border border-[#232429] bg-[#151619] p-5">
-                <div className="flex items-center gap-2 text-xs font-medium text-[#F472B6]">
+              <div className="space-y-3 rounded-xl border border-line bg-surface p-5">
+                <div className="flex items-center gap-2 text-xs font-medium text-accent-soft">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Mengekstrak teks &amp; menerjemahkan dengan SmartSari...
                 </div>
-                <div className="h-4 w-3/4 animate-pulse rounded bg-[#232429]" />
-                <div className="h-4 w-full animate-pulse rounded bg-[#232429]" />
-                <div className="h-4 w-5/6 animate-pulse rounded bg-[#232429]" />
+                <div className="h-4 w-3/4 animate-pulse rounded bg-line" />
+                <div className="h-4 w-full animate-pulse rounded bg-line" />
+                <div className="h-4 w-5/6 animate-pulse rounded bg-line" />
               </div>
             )}
 
@@ -915,13 +915,13 @@ export function PdfReaderModal({
                 .filter(Boolean).length;
               const readMinutes = Math.max(1, Math.round(wordCount / 200));
               return (
-              <article className="rounded-xl border border-[#232429] bg-[#151619] p-5 sm:p-7">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-[#232429] pb-3 text-[11px] text-[#71717A]">
+              <article className="rounded-xl border border-line bg-surface p-5 sm:p-7">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3 text-[11px] text-ink-muted">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-[#A1A1AA]">
-                      SmartSari
+                    <span className="font-medium text-ink-secondary">
+                      SmartSari by AirEvo
                     </span>
-                    <span className="text-[#52525B]">·</span>
+                    <span className="text-ink-faint">·</span>
                     <span>
                       ~{readMinutes} mnt baca ·{" "}
                       {wordCount.toLocaleString("id-ID")} kata
@@ -929,7 +929,7 @@ export function PdfReaderModal({
                   </div>
                   <div className="flex items-center gap-2">
                     {translateCached && (
-                      <span className="rounded bg-[#DB2777]/15 px-2 py-0.5 font-medium text-[#F472B6]">
+                      <span className="rounded bg-accent/15 px-2 py-0.5 font-medium text-accent-soft">
                         Arsip Cache
                       </span>
                     )}
@@ -947,12 +947,12 @@ export function PdfReaderModal({
                           })
                           .catch(() => {});
                       }}
-                      className="inline-flex items-center gap-1 rounded border border-[#2C2E35] bg-[#1E1F23] px-2 py-0.5 font-medium text-[#D4D4D8] transition-colors hover:border-[#F472B6]/45 hover:text-white"
+                      className="inline-flex items-center gap-1 rounded border border-line-strong bg-elevated px-2 py-0.5 font-medium text-ink-body transition-colors hover:border-accent-soft/45 hover:text-heading"
                     >
                       {copiedFullTranslation ? (
                         <>
-                          <Check className="h-3 w-3 text-[#4ADE80]" />
-                          <span className="text-[#4ADE80]">Tersalin</span>
+                          <Check className="h-3 w-3 text-ok" />
+                          <span className="text-ok">Tersalin</span>
                         </>
                       ) : (
                         <>
@@ -972,11 +972,11 @@ export function PdfReaderModal({
             })()}
 
             {!translating && !translatedMarkdown && !translateError && (
-              <div className="rounded-xl border border-[#232429] bg-[#151619] p-6 text-center">
-                <p className="text-base font-semibold text-white">
+              <div className="rounded-xl border border-line bg-surface p-6 text-center">
+                <p className="text-base font-semibold text-heading">
                   Siap Menerjemahkan Jurnal Ini
                 </p>
-                <p className="mt-1 text-xs text-[#A1A1AA]">
+                <p className="mt-1 text-xs text-ink-secondary">
                   Klik tombol &ldquo;Terjemahkan Sekarang&rdquo; di atas untuk
                   membaca isi jurnal dalam Bahasa Indonesia yang rapi.
                 </p>
@@ -987,7 +987,7 @@ export function PdfReaderModal({
 
         {/* Tanya AI (Chat with PDF / Paper) Pane */}
         <section
-          className={`min-h-0 flex-1 flex-col bg-[#0E0F12] ${
+          className={`min-h-0 flex-1 flex-col bg-canvas ${
             mobileTab === "chat"
               ? "flex"
               : desktopView === "chat"
@@ -996,16 +996,16 @@ export function PdfReaderModal({
           }`}
         >
           <div className="mx-auto flex h-full w-full max-w-[74ch] flex-col p-4 sm:p-6">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-[#232429] pb-3">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
               <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#DB2777]/15 text-[#F472B6]">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/15 text-accent-soft">
                   <Sparkles className="h-3.5 w-3.5" />
                 </span>
                 <div>
-                  <h3 className="text-sm font-semibold text-white">
+                  <h3 className="text-sm font-semibold text-heading">
                     Tanya Jurnal Ini
                   </h3>
-                  <p className="text-[11px] text-[#71717A]">
+                  <p className="text-[11px] text-ink-muted">
                     {chatUsedFullText === true
                       ? "Konteks: teks lengkap PDF"
                       : paper.pdfUrl
@@ -1025,7 +1025,7 @@ export function PdfReaderModal({
                       usedFullText: chatUsedFullText,
                     });
                   }}
-                  className="rounded-lg border border-[#2C2E35] bg-[#151619] px-2.5 py-1 text-[11px] font-medium text-[#A1A1AA] transition-colors hover:border-[#F472B6]/45 hover:text-white"
+                  className="rounded-lg border border-line-strong bg-surface px-2.5 py-1 text-[11px] font-medium text-ink-secondary transition-colors hover:border-accent-soft/45 hover:text-heading"
                 >
                   Reset chat
                 </button>
@@ -1034,8 +1034,8 @@ export function PdfReaderModal({
 
             <div className="flex-1 space-y-3 overflow-y-auto pr-1">
               {chatMessages.length === 0 && (
-                <div className="rounded-xl border border-[#232429] bg-[#151619] p-5">
-                  <p className="text-xs font-medium text-[#D4D4D8]">
+                <div className="rounded-xl border border-line bg-surface p-5">
+                  <p className="text-xs font-medium text-ink-body">
                     Ajukan pertanyaan apa saja tentang metode, temuan, sampel,
                     atau keterbatasan jurnal ini:
                   </p>
@@ -1045,7 +1045,7 @@ export function PdfReaderModal({
                         key={prompt}
                         type="button"
                         onClick={() => void sendChatMessage(prompt)}
-                        className="btn-tactile rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3 py-1.5 text-left text-xs text-[#E4E4E7] hover:border-[#F472B6]/45 hover:text-white"
+                        className="btn-tactile rounded-full border border-line-strong bg-elevated px-3 py-1.5 text-left text-xs text-ink-strong hover:border-accent-soft/45 hover:text-heading"
                       >
                         {prompt}
                       </button>
@@ -1064,15 +1064,15 @@ export function PdfReaderModal({
                   <div
                     className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                       msg.role === "user"
-                        ? "bg-[#DB2777] text-white shadow-sm"
-                        : "border border-[#232429] bg-[#151619] text-[#E4E4E7]"
+                        ? "bg-accent text-white shadow-sm"
+                        : "border border-line bg-surface text-ink-strong"
                     }`}
                   >
                     <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider opacity-75">
                       {msg.role === "assistant" ? (
                         <>
-                          <Sparkles className="h-3 w-3 text-[#F472B6]" />
-                          <span className="text-[#F9A8D4]">SmartSari</span>
+                          <Sparkles className="h-3 w-3 text-accent-soft" />
+                          <span className="text-accent-tint">SmartSari</span>
                         </>
                       ) : (
                         <span>Anda</span>
@@ -1091,11 +1091,11 @@ export function PdfReaderModal({
                           setCopiedChatIdx(idx);
                           setTimeout(() => setCopiedChatIdx(null), 1500);
                         }}
-                        className="mt-2 inline-flex items-center gap-1 text-[11px] text-[#A1A1AA] hover:text-[#F472B6]"
+                        className="mt-2 inline-flex items-center gap-1 text-[11px] text-ink-secondary hover:text-accent-soft"
                       >
                         {copiedChatIdx === idx ? (
                           <>
-                            <Check className="h-3 w-3 text-[#4ADE80]" />
+                            <Check className="h-3 w-3 text-ok" />
                             Tersalin
                           </>
                         ) : (
@@ -1111,14 +1111,14 @@ export function PdfReaderModal({
               ))}
 
               {chatLoading && (
-                <div className="flex items-center gap-2 rounded-xl border border-[#232429] bg-[#151619] px-4 py-3 text-xs text-[#F472B6]">
+                <div className="flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-3 text-xs text-accent-soft">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   Membaca isi jurnal &amp; menyusun jawaban...
                 </div>
               )}
 
               {chatError && (
-                <div className="flex items-center gap-2 rounded-xl border border-[#EF4444]/30 bg-[#EF4444]/10 px-4 py-3 text-xs text-[#FCA5A5]">
+                <div className="flex items-center gap-2 rounded-xl border border-danger/35 bg-danger/10 px-4 py-3 text-xs text-danger-soft">
                   <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                   <span>{chatError}</span>
                 </div>
@@ -1131,19 +1131,19 @@ export function PdfReaderModal({
                 e.preventDefault();
                 void sendChatMessage(chatInput);
               }}
-              className="mt-3 flex items-center gap-2 rounded-full border border-[#2C2E35] bg-[#151619] p-1.5 pl-4 focus-within:border-[#F472B6]"
+              className="mt-3 flex items-center gap-2 rounded-full border border-line-strong bg-surface p-1.5 pl-4 focus-within:border-accent-soft"
             >
               <input
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 placeholder="Tanyakan metode, hasil, atau rincian isi jurnal..."
-                className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
+                className="min-w-0 flex-1 bg-transparent text-sm text-heading placeholder:text-ink-muted focus:outline-none"
               />
               <button
                 type="submit"
                 disabled={chatLoading || !chatInput.trim()}
-                className="btn-tactile inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#DB2777] text-white hover:bg-[#BE185D] disabled:opacity-50"
+                className="btn-tactile inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white hover:bg-accent-hover disabled:opacity-50"
                 aria-label="Kirim pertanyaan"
               >
                 <Send className="h-4 w-4" />

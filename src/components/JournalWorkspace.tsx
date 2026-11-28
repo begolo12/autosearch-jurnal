@@ -35,13 +35,18 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { AccountModal } from "@/components/AccountModal";
 import { AuthModal } from "@/components/AuthModal";
 import { CitationNetworkModal } from "@/components/CitationNetworkModal";
 import { LiteratureMatrixModal } from "@/components/LiteratureMatrixModal";
 import { PaperCard } from "@/components/PaperCard";
 import { PdfReaderModal } from "@/components/PdfReaderModal";
 import { PwaRegistrar } from "@/components/PwaRegistrar";
+import { SettingsModal, type SettingsTabId } from "@/components/SettingsModal";
+import {
+  DEFAULT_SEARCH_PREFS,
+  getStoredSearchPrefs,
+  type SearchDefaultPrefs,
+} from "@/lib/appearance";
 import {
   exportCitationsBib,
   exportCitationsRis,
@@ -201,7 +206,9 @@ export function JournalWorkspace() {
 
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTabId | null>(null);
+  const [searchPrefs, setSearchPrefs] =
+    useState<SearchDefaultPrefs>(DEFAULT_SEARCH_PREFS);
   const [quotaStatus, setQuotaStatus] = useState<DailyQuotaStatus | null>(null);
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const pdfUploadInputRef = useRef<HTMLInputElement>(null);
@@ -293,7 +300,7 @@ export function JournalWorkspace() {
     } else if (activeTab === "history") {
       document.title = "Riwayat — SmartSari";
     } else {
-      document.title = "SmartSari — Pencarian Jurnal Terfilter & Akurat";
+      document.title = "SmartSari by AirEvo — Pencarian Jurnal Terfilter & Akurat";
     }
   }, [activeTab, searchResult?.query, bookmarks.length, conversions.length]);
 
@@ -322,6 +329,16 @@ export function JournalWorkspace() {
     setSearchSyncBadge(null);
     setSearchError(null);
     setQuery("");
+    setSort(searchPrefs.defaultSort);
+    setPdfOnly(searchPrefs.defaultPdfOnly);
+    setTierPreset(searchPrefs.defaultTierPreset);
+  }, [searchPrefs]);
+
+  const handleSearchPrefsChange = useCallback((next: SearchDefaultPrefs) => {
+    setSearchPrefs(next);
+    setSort(next.defaultSort);
+    setPdfOnly(next.defaultPdfOnly);
+    setTierPreset(next.defaultTierPreset);
   }, []);
 
   const handleReaderViewChange = useCallback(
@@ -441,6 +458,9 @@ export function JournalWorkspace() {
 
   useEffect(() => {
     queueMicrotask(() => {
+      const storedPrefs = getStoredSearchPrefs();
+      setSearchPrefs(storedPrefs);
+
       const snap = getWorkspaceSnapshot();
       if (snap) {
         setAuthUser(snap.authUser);
@@ -540,25 +560,28 @@ export function JournalWorkspace() {
           const targetY = saved.scrollY;
           requestAnimationFrame(() => window.scrollTo(0, targetY));
         }
-      } else if (urlTab || urlQuery || urlProject) {
-        if (
-          urlTab &&
-          ["search", "bookmarks", "conversions", "history"].includes(urlTab)
-        ) {
-          setActiveTab(urlTab);
-        }
-        if (urlProject) setSelectedProjectId(urlProject);
-        if (urlTier) setTierPreset(urlTier);
-        if (urlPdf === "1") setPdfOnly(true);
-        if (urlYear) setYearFrom(urlYear);
-        if (urlSort) setSort(urlSort);
-        if (urlQuery && urlQuery.trim().length >= 2) {
-          setQuery(urlQuery);
-          pendingRestoreSearchRef.current = {
-            query: urlQuery.trim(),
-            pdfOnly: urlPdf === "1",
-            tierPreset: urlTier ?? "all",
-          };
+      } else {
+        setTierPreset(urlTier ?? storedPrefs.defaultTierPreset);
+        setPdfOnly(urlPdf === "1" ? true : storedPrefs.defaultPdfOnly);
+        setSort(urlSort ?? storedPrefs.defaultSort);
+
+        if (urlTab || urlQuery || urlProject) {
+          if (
+            urlTab &&
+            ["search", "bookmarks", "conversions", "history"].includes(urlTab)
+          ) {
+            setActiveTab(urlTab);
+          }
+          if (urlProject) setSelectedProjectId(urlProject);
+          if (urlYear) setYearFrom(urlYear);
+          if (urlQuery && urlQuery.trim().length >= 2) {
+            setQuery(urlQuery);
+            pendingRestoreSearchRef.current = {
+              query: urlQuery.trim(),
+              pdfOnly: urlPdf === "1" ? true : storedPrefs.defaultPdfOnly,
+              tierPreset: urlTier ?? storedPrefs.defaultTierPreset,
+            };
+          }
         }
       }
 
@@ -1533,7 +1556,7 @@ export function JournalWorkspace() {
           e.preventDefault();
           void runSearch();
         }}
-        className={`flex items-center gap-2 rounded-full border border-[#2C2E35] bg-[#1A1B20] px-2.5 transition-all duration-150 focus-within:border-[#F472B6]/45 focus-within:bg-[#202228] focus-within:shadow-[0_0_0_3px_rgba(219,39,119,0.14)] ${
+        className={`flex items-center gap-2 rounded-full border border-line-strong bg-input px-2.5 transition-all duration-150 focus-within:border-accent-soft/45 focus-within:bg-input-focus focus-within:shadow-[0_0_0_3px_rgba(var(--accent-rgb),0.14)] ${
           compact ? "min-h-[46px] py-1" : "min-h-[54px] py-1.5"
         }`}
       >
@@ -1545,13 +1568,13 @@ export function JournalWorkspace() {
             showFilterMenu ||
             yearFrom ||
             selectedSources.length < ALL_SOURCES.length
-              ? "bg-[#DB2777]/20 text-[#F472B6]"
-              : "text-[#A1A1AA] hover:bg-[#2C2E35] hover:text-white"
+              ? "bg-accent/20 text-accent-soft"
+              : "text-ink-secondary hover:bg-line-strong hover:text-heading"
           }`}
         >
           <SlidersHorizontal className="h-4 w-4" />
           {(yearFrom || selectedSources.length < ALL_SOURCES.length) && (
-            <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#F472B6]" />
+            <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent-soft" />
           )}
         </button>
 
@@ -1560,14 +1583,14 @@ export function JournalWorkspace() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Cari jurnal Q1–Q4, SINTA 1–6, atau DOI..."
-          className="min-w-0 flex-1 bg-transparent text-base text-[#F4F4F5] caret-[#F472B6] placeholder:text-[#71717A] focus:outline-none sm:text-sm"
+          placeholder="Cari jurnal Q1–Q4, SINTA, atau DOI..."
+          className="min-w-0 flex-1 bg-transparent text-base text-ink caret-accent-soft placeholder:text-ink-muted focus:outline-none sm:text-sm"
         />
 
         {/^((https?:\/\/)?(dx\.)?doi\.org\/)?10\.\d{4,9}\/\S+/i.test(
           query.trim()
         ) && (
-          <span className="shrink-0 rounded-full border border-[#DB2777]/45 bg-[#DB2777]/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-[#F9A8D4]">
+          <span className="shrink-0 rounded-full border border-accent/45 bg-accent/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-accent-tint">
             DOI
           </span>
         )}
@@ -1580,55 +1603,57 @@ export function JournalWorkspace() {
               setQuery("");
               searchInputRef.current?.focus();
             }}
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#71717A] transition-colors hover:bg-[#2C2E35] hover:text-white"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-line-strong hover:text-heading"
           >
             <X className="h-3.5 w-3.5" />
           </button>
         ) : (
-          <kbd className="hidden shrink-0 rounded border border-[#2C2E35] bg-[#151619] px-1.5 py-0.5 font-mono text-[10px] text-[#71717A] sm:inline-block">
+          <kbd className="hidden shrink-0 rounded border border-line-strong bg-surface px-1.5 py-0.5 font-mono text-[10px] text-ink-muted sm:inline-block">
             Ctrl+K
           </kbd>
         )}
 
-        <select
-          aria-label="Urutkan hasil"
-          value={sort}
-          onChange={(e) => {
-            const nextSort = e.target.value as SortOption;
-            setSort(nextSort);
-            if (searchResult && activeTab === "search") {
-              void runSearch(
-                searchResult.query,
-                undefined,
-                undefined,
-                1,
-                false,
-                false,
-                nextSort
-              );
-            }
-          }}
-          className="hidden cursor-pointer border-l border-[#2C2E35] bg-transparent pl-2.5 pr-1 py-1 text-xs font-medium text-[#A1A1AA] hover:text-white focus:outline-none sm:block"
-        >
-          <option value="relevance" className="bg-[#151619] text-[#F4F4F5]">
-            Relevansi
-          </option>
-          <option value="impact" className="bg-[#151619] text-[#F4F4F5]">
-            Impact Factor
-          </option>
-          <option value="newest" className="bg-[#151619] text-[#F4F4F5]">
-            Terbaru
-          </option>
-          <option value="citations" className="bg-[#151619] text-[#F4F4F5]">
-            Sitasi
-          </option>
-        </select>
+        <div className="hidden shrink-0 items-center border-l border-line-strong sm:flex">
+          <select
+            aria-label="Urutkan hasil"
+            value={sort}
+            onChange={(e) => {
+              const nextSort = e.target.value as SortOption;
+              setSort(nextSort);
+              if (searchResult && activeTab === "search") {
+                void runSearch(
+                  searchResult.query,
+                  undefined,
+                  undefined,
+                  1,
+                  false,
+                  false,
+                  nextSort
+                );
+              }
+            }}
+            className="cursor-pointer whitespace-nowrap bg-transparent py-1 pl-2.5 pr-1.5 text-xs font-medium text-ink-secondary hover:text-heading focus:outline-none"
+          >
+            <option value="relevance" className="bg-surface text-ink">
+              Relevansi
+            </option>
+            <option value="impact" className="bg-surface text-ink">
+              Impact Factor
+            </option>
+            <option value="newest" className="bg-surface text-ink">
+              Terbaru
+            </option>
+            <option value="citations" className="bg-surface text-ink">
+              Sitasi
+            </option>
+          </select>
+        </div>
 
         <button
           type="submit"
           disabled={searching}
           aria-label="Cari jurnal"
-          className="btn-tactile inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#DB2777] text-white hover:bg-[#BE185D] disabled:opacity-60"
+          className="btn-tactile inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white hover:bg-accent-hover disabled:opacity-60"
         >
           {searching ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -1640,15 +1665,15 @@ export function JournalWorkspace() {
 
       {/* Filter Popover */}
       {showFilterMenu && (
-        <div className="animate-panel-open absolute left-0 right-0 top-full z-30 mt-2 rounded-2xl border border-[#2C2E35] bg-[#151619] p-4 shadow-2xl sm:right-auto sm:w-80">
+        <div className="animate-panel-open absolute left-0 right-0 top-full z-30 mt-2 rounded-2xl border border-line-strong bg-surface p-4 shadow-2xl sm:right-auto sm:w-80">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#F4F4F5]">
+            <span className="text-xs font-semibold text-ink">
               Filter Pencarian
             </span>
             <button
               type="button"
               onClick={() => setShowFilterMenu(false)}
-              className="text-[#71717A] hover:text-white"
+              className="text-ink-muted hover:text-heading"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -1656,7 +1681,7 @@ export function JournalWorkspace() {
 
           <div className="space-y-3 text-xs">
             <div>
-              <span className="mb-1.5 block text-[11px] text-[#A1A1AA]">
+              <span className="mb-1.5 block text-[11px] text-ink-secondary">
                 Sumber Indeks
               </span>
               <div className="flex flex-wrap gap-1.5">
@@ -1669,8 +1694,8 @@ export function JournalWorkspace() {
                       onClick={() => toggleSource(src.id)}
                       className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                         active
-                          ? "border-[#DB2777] bg-[#DB2777]/15 text-[#F472B6]"
-                          : "border-[#2C2E35] bg-[#1E1F23] text-[#A1A1AA] hover:text-white"
+                          ? "border-accent bg-accent/15 text-accent-soft"
+                          : "border-line-strong bg-elevated text-ink-secondary hover:text-heading"
                       }`}
                     >
                       {src.label}
@@ -1682,7 +1707,7 @@ export function JournalWorkspace() {
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <span className="mb-1 block text-[11px] text-[#A1A1AA]">
+                <span className="mb-1 block text-[11px] text-ink-secondary">
                   Tahun Minimal
                 </span>
                 <select
@@ -1704,7 +1729,7 @@ export function JournalWorkspace() {
                       );
                     }
                   }}
-                  className="w-full rounded-lg border border-[#2C2E35] bg-[#1E1F23] px-2.5 py-1.5 text-xs text-[#F4F4F5]"
+                  className="w-full rounded-lg border border-line-strong bg-elevated px-2.5 py-1.5 text-xs text-ink"
                 >
                   <option value="">Semua Tahun</option>
                   <option value="2024">Sejak 2024</option>
@@ -1715,7 +1740,7 @@ export function JournalWorkspace() {
               </div>
 
               <div className="sm:hidden">
-                <span className="mb-1 block text-[11px] text-[#A1A1AA]">
+                <span className="mb-1 block text-[11px] text-ink-secondary">
                   Urutkan
                 </span>
                 <select
@@ -1736,7 +1761,7 @@ export function JournalWorkspace() {
                       );
                     }
                   }}
-                  className="w-full rounded-lg border border-[#2C2E35] bg-[#1E1F23] px-2.5 py-1.5 text-xs text-[#F4F4F5]"
+                  className="w-full rounded-lg border border-line-strong bg-elevated px-2.5 py-1.5 text-xs text-ink"
                 >
                   <option value="relevance">Relevansi</option>
                   <option value="impact">Impact Factor</option>
@@ -1752,10 +1777,10 @@ export function JournalWorkspace() {
   );
 
   return (
-    <div className="flex min-h-screen bg-[#0E0F12] text-[#F4F4F5] pb-16 md:pb-0">
-      {/* Collapsible Left Sidebar (Reference-Faithful) */}
+    <div className="flex min-h-screen bg-canvas text-ink pb-16 md:pb-0">
+      {/* Collapsible Left Sidebar */}
       <aside
-        className={`hidden shrink-0 flex-col border-r border-[#232429] bg-[#151619] transition-[width] duration-200 md:sticky md:top-0 md:flex md:h-screen ${
+        className={`hidden shrink-0 flex-col border-r border-line bg-surface transition-[width] duration-200 md:sticky md:top-0 md:flex md:h-screen ${
           sidebarOpen ? "w-[264px]" : "w-0 overflow-hidden border-r-0"
         }`}
       >
@@ -1770,10 +1795,10 @@ export function JournalWorkspace() {
             <img
               src="/logo-mark.png?v=2"
               alt="SmartSari"
-              className="h-6 w-6 object-contain drop-shadow-[0_0_8px_rgba(244,114,182,0.35)]"
+              className="h-6 w-6 object-contain drop-shadow-[0_0_8px_rgba(var(--accent-soft-rgb),0.35)]"
             />
-            <span className="text-sm font-semibold tracking-[-0.01em] text-[#F4F4F5]">
-              Smart<span className="text-[#F472B6]">Sari</span>
+            <span className="text-sm font-semibold tracking-[-0.01em] text-ink">
+              Smart<span className="text-accent-soft">Sari</span>
             </span>
           </button>
 
@@ -1785,7 +1810,7 @@ export function JournalWorkspace() {
                 setShowSidebarSearch((v) => !v);
                 setTimeout(() => sidebarSearchRef.current?.focus(), 20);
               }}
-              className="rounded-lg p-1.5 text-[#A1A1AA] transition-colors hover:bg-[#232429] hover:text-white"
+              className="rounded-lg p-1.5 text-ink-secondary transition-colors hover:bg-chip-active hover:text-heading"
             >
               <Search className="h-4 w-4" />
             </button>
@@ -1793,7 +1818,7 @@ export function JournalWorkspace() {
               type="button"
               aria-label="Tutup sidebar"
               onClick={() => setSidebarOpen(false)}
-              className="rounded-lg p-1.5 text-[#A1A1AA] transition-colors hover:bg-[#232429] hover:text-white"
+              className="rounded-lg p-1.5 text-ink-secondary transition-colors hover:bg-chip-active hover:text-heading"
             >
               <PanelLeftClose className="h-4 w-4" />
             </button>
@@ -1807,11 +1832,11 @@ export function JournalWorkspace() {
             onClick={resetToHome}
             className={`flex w-full items-center gap-2.5 rounded-full px-3 py-2 text-xs font-medium transition-colors ${
               activeTab === "search" && !searchResult
-                ? "bg-[#232429] text-white"
-                : "text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white"
+                ? "bg-chip-active text-heading"
+                : "text-ink-secondary hover:bg-elevated hover:text-heading"
             }`}
           >
-            <SquarePen className="h-4 w-4 text-[#F472B6]" />
+            <SquarePen className="h-4 w-4 text-accent-soft" />
             <span>Pencarian Baru</span>
           </button>
 
@@ -1820,15 +1845,15 @@ export function JournalWorkspace() {
             onClick={() => setActiveTab("bookmarks")}
             className={`flex w-full items-center justify-between rounded-full px-3 py-2 text-xs font-medium transition-colors ${
               activeTab === "bookmarks"
-                ? "bg-[#232429] text-white"
-                : "text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white"
+                ? "bg-chip-active text-heading"
+                : "text-ink-secondary hover:bg-elevated hover:text-heading"
             }`}
           >
             <span className="flex items-center gap-2.5">
               <Bookmark className="h-4 w-4" />
               Tersimpan
             </span>
-            <span className="font-mono text-[11px] tabular-nums text-[#71717A]">
+            <span className="font-mono text-[11px] tabular-nums text-ink-muted">
               {bookmarks.length}
             </span>
           </button>
@@ -1838,17 +1863,37 @@ export function JournalWorkspace() {
             onClick={() => setActiveTab("conversions")}
             className={`flex w-full items-center justify-between rounded-full px-3 py-2 text-xs font-medium transition-colors ${
               activeTab === "conversions"
-                ? "bg-[#232429] text-white"
-                : "text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white"
+                ? "bg-chip-active text-heading"
+                : "text-ink-secondary hover:bg-elevated hover:text-heading"
             }`}
           >
             <span className="flex items-center gap-2.5">
               <FileText className="h-4 w-4" />
               Arsip Word
             </span>
-            <span className="font-mono text-[11px] tabular-nums text-[#71717A]">
+            <span className="font-mono text-[11px] tabular-nums text-ink-muted">
               {conversions.length}
             </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSettingsTab("general")}
+            className={`flex w-full items-center justify-between rounded-full px-3 py-2 text-xs font-medium transition-colors ${
+              settingsTab !== null
+                ? "bg-chip-active text-heading"
+                : "text-ink-secondary hover:bg-elevated hover:text-heading"
+            }`}
+          >
+            <span className="flex items-center gap-2.5">
+              <Settings className="h-4 w-4 text-accent-soft" />
+              Pengaturan
+            </span>
+            {quotaStatus && (
+              <span className="font-mono text-[10px] tabular-nums text-ink-muted">
+                {quotaStatus.remaining}/{quotaStatus.limit}
+              </span>
+            )}
           </button>
         </nav>
 
@@ -1856,13 +1901,13 @@ export function JournalWorkspace() {
         <div className="mt-4 flex-1 space-y-5 overflow-y-auto px-3 pb-4">
           <section>
             <div className="mb-1.5 flex items-center justify-between px-1">
-              <span className="text-[11px] font-medium text-[#71717A]">
+              <span className="text-[11px] font-medium text-ink-muted">
                 Proyek Riset
               </span>
               <button
                 type="button"
                 onClick={() => setShowNewProjectInput((v) => !v)}
-                className="inline-flex items-center gap-0.5 text-[11px] font-medium text-[#F472B6] hover:text-[#F9A8D4]"
+                className="inline-flex items-center gap-0.5 text-[11px] font-medium text-accent-soft hover:text-accent-tint"
               >
                 <Plus className="h-3 w-3" />
                 Baru
@@ -1879,12 +1924,12 @@ export function JournalWorkspace() {
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
                   placeholder="Nama proyek..."
-                  className="min-w-0 flex-1 rounded-lg border border-[#2C2E35] bg-[#0E0F12] px-2.5 py-1 text-xs text-white placeholder:text-[#71717A] focus:border-[#F472B6] focus:outline-none"
+                  className="min-w-0 flex-1 rounded-lg border border-line-strong bg-canvas px-2.5 py-1 text-xs text-heading placeholder:text-ink-muted focus:border-accent-soft focus:outline-none"
                 />
                 <button
                   type="submit"
                   disabled={creatingProject || !newProjectName.trim()}
-                  className="rounded-lg bg-[#DB2777] px-2 py-1 text-[11px] font-semibold text-white hover:bg-[#BE185D] disabled:opacity-50"
+                  className="rounded-lg bg-accent px-2 py-1 text-[11px] font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
                 >
                   Simpan
                 </button>
@@ -1892,7 +1937,7 @@ export function JournalWorkspace() {
             )}
 
             {projects.length === 0 ? (
-              <p className="px-1 text-[11px] text-[#71717A]">
+              <p className="px-1 text-[11px] text-ink-muted">
                 Belum ada proyek riset.
               </p>
             ) : (
@@ -1900,7 +1945,7 @@ export function JournalWorkspace() {
                 {projects.map((proj) => (
                   <li
                     key={proj.id}
-                    className="group flex items-center gap-1 rounded-lg px-2 py-1.5 transition-colors hover:bg-[#1E1F23]"
+                    className="group flex items-center gap-1 rounded-lg px-2 py-1.5 transition-colors hover:bg-elevated"
                   >
                     <button
                       type="button"
@@ -1911,15 +1956,15 @@ export function JournalWorkspace() {
                       className={`flex min-w-0 flex-1 items-center justify-between gap-2 text-left text-xs ${
                         activeTab === "bookmarks" &&
                         selectedProjectId === proj.id
-                          ? "font-semibold text-[#F472B6]"
-                          : "text-[#D4D4D8] group-hover:text-white"
+                          ? "font-semibold text-accent-soft"
+                          : "text-ink-body group-hover:text-heading"
                       }`}
                     >
                       <span className="flex min-w-0 items-center gap-2">
-                        <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[#F472B6]" />
+                        <FolderOpen className="h-3.5 w-3.5 shrink-0 text-accent-soft" />
                         <span className="truncate">{proj.name}</span>
                       </span>
-                      <span className="shrink-0 font-mono text-[10px] text-[#71717A]">
+                      <span className="shrink-0 font-mono text-[10px] text-ink-muted">
                         {proj.bookmarkCount}
                       </span>
                     </button>
@@ -1927,7 +1972,7 @@ export function JournalWorkspace() {
                       type="button"
                       aria-label={`Hapus proyek ${proj.name}`}
                       onClick={() => void handleDeleteProject(proj.id)}
-                      className="shrink-0 rounded p-0.5 text-[#71717A] opacity-0 transition-opacity hover:text-[#F87171] group-hover:opacity-100 focus:opacity-100"
+                      className="shrink-0 rounded p-0.5 text-ink-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100 focus:opacity-100"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -1939,7 +1984,7 @@ export function JournalWorkspace() {
 
           <section>
             <div className="mb-1.5 flex items-center justify-between px-1">
-              <span className="text-[11px] font-medium text-[#71717A]">
+              <span className="text-[11px] font-medium text-ink-muted">
                 Riwayat
               </span>
               {history.length > 0 && (
@@ -1955,8 +2000,8 @@ export function JournalWorkspace() {
                   }}
                   className={`text-[11px] transition-colors ${
                     confirmClearHistory
-                      ? "font-semibold text-[#F87171]"
-                      : "text-[#71717A] hover:text-[#F87171]"
+                      ? "font-semibold text-danger"
+                      : "text-ink-muted hover:text-danger"
                   }`}
                 >
                   {confirmClearHistory ? "Yakin hapus?" : "Hapus"}
@@ -1966,29 +2011,29 @@ export function JournalWorkspace() {
 
             {(showSidebarSearch || history.length > 3) && (
               <div className="relative mb-2">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-[#71717A]" />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-ink-muted" />
                 <input
                   ref={sidebarSearchRef}
                   type="search"
                   value={historyFilter}
                   onChange={(e) => setHistoryFilter(e.target.value)}
                   placeholder="Cari riwayat..."
-                  className="w-full rounded-lg border border-[#232429] bg-[#0E0F12] py-1.5 pl-7 pr-2 text-xs text-[#F4F4F5] placeholder:text-[#71717A] focus:border-[#DB2777] focus:outline-none"
+                  className="w-full rounded-lg border border-line bg-canvas py-1.5 pl-7 pr-2 text-xs text-ink placeholder:text-ink-muted focus:border-accent focus:outline-none"
                 />
               </div>
             )}
 
             {loadingSidebar ? (
               <div className="space-y-1.5 px-1">
-                <div className="h-5 rounded bg-[#1E1F23]" />
-                <div className="h-5 rounded bg-[#1E1F23]" />
+                <div className="h-5 rounded bg-elevated" />
+                <div className="h-5 rounded bg-elevated" />
               </div>
             ) : history.length === 0 ? (
-              <p className="px-1 text-xs text-[#71717A]">
+              <p className="px-1 text-xs text-ink-muted">
                 Belum ada riwayat.
               </p>
             ) : filteredHistory.length === 0 ? (
-              <p className="px-1 text-[11px] text-[#71717A]">
+              <p className="px-1 text-[11px] text-ink-muted">
                 Tidak cocok dengan &ldquo;{historyFilter}&rdquo;.
               </p>
             ) : (
@@ -1996,15 +2041,15 @@ export function JournalWorkspace() {
                 {filteredHistory.slice(0, 14).map((item) => (
                   <li
                     key={item.id}
-                    className="group flex items-center gap-1 rounded-lg px-2 py-1.5 transition-colors hover:bg-[#1E1F23]"
+                    className="group flex items-center gap-1 rounded-lg px-2 py-1.5 transition-colors hover:bg-elevated"
                   >
                     <button
                       type="button"
                       onClick={() => void runSearch(item.query)}
-                      className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left text-xs text-[#D4D4D8] group-hover:text-white"
+                      className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left text-xs text-ink-body group-hover:text-heading"
                     >
                       <span className="truncate">{item.query}</span>
-                      <span className="shrink-0 font-mono text-[10px] text-[#71717A]">
+                      <span className="shrink-0 font-mono text-[10px] text-ink-muted">
                         {formatRelativeTimeId(item.createdAt)}
                       </span>
                     </button>
@@ -2012,7 +2057,7 @@ export function JournalWorkspace() {
                       type="button"
                       aria-label={`Hapus riwayat ${item.query}`}
                       onClick={() => void handleDeleteHistoryItem(item.id)}
-                      className="shrink-0 rounded p-0.5 text-[#71717A] opacity-0 transition-opacity hover:text-[#F87171] group-hover:opacity-100 focus:opacity-100"
+                      className="shrink-0 rounded p-0.5 text-ink-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100 focus:opacity-100"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -2024,34 +2069,34 @@ export function JournalWorkspace() {
         </div>
 
         {/* Account & Cross-Device Sync Footer */}
-        <div className="space-y-2 border-t border-[#232429] p-3">
+        <div className="space-y-2 border-t border-line p-3">
           {quotaStatus && (
-            <div className="rounded-xl border border-[#232429] bg-[#0E0F12] px-3 py-2">
+            <div className="rounded-xl border border-line bg-canvas px-3 py-2">
               <div className="mb-1.5 flex items-center justify-between text-[11px]">
-                <span className="inline-flex items-center gap-1 font-medium text-[#D4D4D8]">
-                  <Zap className="h-3 w-3 text-[#F472B6]" />
+                <span className="inline-flex items-center gap-1 font-medium text-ink-body">
+                  <Zap className="h-3 w-3 text-accent-soft" />
                   Kuota AI Harian
                 </span>
                 <span
                   className={`font-mono font-semibold ${
                     quotaStatus.remaining === 0
-                      ? "text-[#F87171]"
+                      ? "text-danger"
                       : quotaStatus.remaining <= 2
-                        ? "text-amber-300"
-                        : "text-[#4ADE80]"
+                        ? "text-warn"
+                        : "text-ok"
                   }`}
                 >
                   {quotaStatus.remaining}/{quotaStatus.limit}
                 </span>
               </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#1E1F23]">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-elevated">
                 <div
                   className={`h-full rounded-full transition-all ${
                     quotaStatus.remaining === 0
-                      ? "bg-[#EF4444]"
+                      ? "bg-danger"
                       : quotaStatus.remaining <= 2
-                        ? "bg-amber-400"
-                        : "bg-[#DB2777]"
+                        ? "bg-warn"
+                        : "bg-accent"
                   }`}
                   style={{
                     width: `${Math.min(
@@ -2065,7 +2110,7 @@ export function JournalWorkspace() {
                 <button
                   type="button"
                   onClick={() => setShowAuthModal(true)}
-                  className="mt-1.5 text-[10px] font-medium text-[#F472B6] hover:underline"
+                  className="mt-1.5 text-[10px] font-medium text-accent-soft hover:underline"
                 >
                   Daftar gratis untuk kuota 100×/hari →
                 </button>
@@ -2074,16 +2119,16 @@ export function JournalWorkspace() {
           )}
 
           {authUser ? (
-            <div className="flex items-center justify-between gap-2 rounded-xl bg-[#1E1F23] px-3 py-2">
+            <div className="flex items-center justify-between gap-2 rounded-xl bg-elevated px-3 py-2">
               <div className="flex min-w-0 items-center gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#DB2777]/20 text-[#F472B6]">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/20 text-accent-soft">
                   <User className="h-3.5 w-3.5" />
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-white">
+                  <p className="truncate text-xs font-semibold text-heading">
                     {authUser.name}
                   </p>
-                  <p className="truncate text-[10px] text-[#A1A1AA]">
+                  <p className="truncate text-[10px] text-ink-secondary">
                     Tersinkronisasi
                   </p>
                 </div>
@@ -2091,10 +2136,10 @@ export function JournalWorkspace() {
               <div className="flex items-center gap-0.5">
                 <button
                   type="button"
-                  onClick={() => setShowAccountModal(true)}
-                  aria-label="Pengaturan akun"
-                  title="Pengaturan akun"
-                  className="rounded-lg p-1.5 text-[#A1A1AA] hover:bg-[#232429] hover:text-white"
+                  onClick={() => setSettingsTab("account")}
+                  aria-label="Pengaturan akun dan sandi"
+                  title="Pengaturan akun & sandi"
+                  className="rounded-lg p-1.5 text-ink-secondary hover:bg-chip-active hover:text-heading"
                 >
                   <Settings className="h-3.5 w-3.5" />
                 </button>
@@ -2103,7 +2148,7 @@ export function JournalWorkspace() {
                   onClick={() => void handleLogout()}
                   aria-label="Keluar dari akun"
                   title="Keluar"
-                  className="rounded-lg p-1.5 text-[#A1A1AA] hover:bg-[#232429] hover:text-[#F87171]"
+                  className="rounded-lg p-1.5 text-ink-secondary hover:bg-chip-active hover:text-danger"
                 >
                   <LogOut className="h-3.5 w-3.5" />
                 </button>
@@ -2113,9 +2158,9 @@ export function JournalWorkspace() {
             <button
               type="button"
               onClick={() => setShowAuthModal(true)}
-              className="btn-tactile flex w-full items-center justify-center gap-2 rounded-xl border border-[#2C2E35] bg-[#1E1F23] px-3 py-2 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/45 hover:text-white"
+              className="btn-tactile flex w-full items-center justify-center gap-2 rounded-xl border border-line-strong bg-elevated px-3 py-2 text-xs font-medium text-ink-strong hover:border-accent-soft/45 hover:text-heading"
             >
-              <Cloud className="h-3.5 w-3.5 text-[#F472B6]" />
+              <Cloud className="h-3.5 w-3.5 text-accent-soft" />
               <span>Masuk &amp; Sinkronkan</span>
             </button>
           )}
@@ -2131,7 +2176,7 @@ export function JournalWorkspace() {
                   "Cache lokal dibersihkan. Pencarian berikutnya akan mengambil data segar.",
               });
             }}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg px-2 py-1 text-[11px] text-[#71717A] transition-colors hover:bg-[#1E1F23] hover:text-[#D4D4D8]"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg px-2 py-1 text-[11px] text-ink-muted transition-colors hover:bg-elevated hover:text-ink-body"
           >
             <Trash2 className="h-3 w-3" />
             <span>Bersihkan Cache Lokal</span>
@@ -2146,14 +2191,14 @@ export function JournalWorkspace() {
         }`}
       >
         {/* Top Utility Bar */}
-        <header className="flex items-center justify-between px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-2">
+        <header className="flex items-center justify-between gap-2 px-3.5 py-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2">
             {!sidebarOpen && (
               <button
                 type="button"
                 aria-label="Buka sidebar"
                 onClick={() => setSidebarOpen(true)}
-                className="hidden rounded-lg p-1.5 text-[#A1A1AA] transition-colors hover:bg-[#1E1F23] hover:text-white md:inline-flex"
+                className="hidden rounded-lg p-1.5 text-ink-secondary transition-colors hover:bg-elevated hover:text-heading md:inline-flex"
               >
                 <PanelLeftOpen className="h-4 w-4" />
               </button>
@@ -2162,21 +2207,21 @@ export function JournalWorkspace() {
             <button
               type="button"
               onClick={resetToHome}
-              className="flex items-center gap-2 md:hidden"
+              className="flex min-h-[40px] shrink-0 items-center gap-1.5 whitespace-nowrap md:hidden"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/logo-mark.png?v=2"
                 alt="SmartSari"
-                className="h-6 w-6 object-contain drop-shadow-[0_0_8px_rgba(244,114,182,0.35)]"
+                className="h-6 w-6 shrink-0 object-contain drop-shadow-[0_0_8px_rgba(var(--accent-soft-rgb),0.35)]"
               />
-              <span className="text-sm font-semibold text-white">
-                Smart<span className="text-[#F472B6]">Sari</span>
+              <span className="text-sm font-semibold text-heading">
+                Smart<span className="text-accent-soft">Sari</span>
               </span>
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <input
               ref={pdfUploadInputRef}
               type="file"
@@ -2193,73 +2238,70 @@ export function JournalWorkspace() {
               disabled={uploadingPdf}
               onClick={() => pdfUploadInputRef.current?.click()}
               title="Unggah PDF pribadi (maks. 4 MB) untuk baca, terjemahan ID, tanya AI, dan ekspor Word"
-              className="btn-tactile inline-flex h-8 items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#151619] px-3 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/45 hover:text-white disabled:opacity-60"
+              className="btn-tactile inline-flex min-h-[40px] items-center gap-1.5 rounded-full border border-line-strong bg-surface px-2.5 text-xs font-medium text-ink-strong hover:border-accent-soft/45 hover:text-heading disabled:opacity-60 sm:min-h-[34px] sm:px-3"
             >
               {uploadingPdf ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F472B6]" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-soft" />
               ) : (
-                <Upload className="h-3.5 w-3.5 text-[#F472B6]" />
+                <Upload className="h-3.5 w-3.5 text-accent-soft" />
               )}
               <span className="hidden sm:inline">Upload PDF</span>
               <span className="sm:hidden">PDF</span>
             </button>
             {quotaStatus && (
-              <span
-                title={`Sisa kuota AI harian: ${quotaStatus.remaining} dari ${quotaStatus.limit}`}
-                className={`inline-flex h-8 items-center gap-1 rounded-full border border-[#2C2E35] bg-[#151619] px-2.5 font-mono text-[11px] font-semibold ${
-                  !sidebarOpen ? "inline-flex" : "md:hidden"
+              <button
+                type="button"
+                onClick={() => setSettingsTab("general")}
+                title={`Sisa kuota AI harian: ${quotaStatus.remaining} dari ${quotaStatus.limit} (klik untuk detail)`}
+                className={`hidden h-8 items-center gap-1 rounded-full border border-line-strong bg-surface px-2.5 font-mono text-[11px] font-semibold transition-colors hover:border-accent-soft/45 ${
+                  !sidebarOpen ? "sm:inline-flex" : "sm:inline-flex md:hidden"
                 } ${
                   quotaStatus.remaining === 0
-                    ? "text-[#F87171]"
+                    ? "text-danger"
                     : quotaStatus.remaining <= 2
-                      ? "text-amber-300"
-                      : "text-[#4ADE80]"
+                      ? "text-warn"
+                      : "text-ok"
                 }`}
               >
-                <Zap className="h-3 w-3 text-[#F472B6]" />
+                <Zap className="h-3 w-3 text-accent-soft" />
                 {quotaStatus.remaining}/{quotaStatus.limit}
-              </span>
+              </button>
             )}
             <button
               type="button"
               onClick={() => setShowShortcutsModal(true)}
               aria-label="Pintasan keyboard dan tips"
               title="Pintasan & Tips (?)"
-              className="btn-tactile inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#2C2E35] bg-[#151619] text-[#A1A1AA] hover:border-[#F472B6]/45 hover:text-white"
+              className="btn-tactile hidden h-8 w-8 items-center justify-center rounded-full border border-line-strong bg-surface text-ink-secondary hover:border-accent-soft/45 hover:text-heading sm:inline-flex"
             >
               <HelpCircle className="h-4 w-4" />
             </button>
+            <button
+              type="button"
+              onClick={() => setSettingsTab("general")}
+              aria-label="Pengaturan tema, kuota, dan akun"
+              title="Pengaturan & Tema"
+              className="btn-tactile inline-flex h-10 w-10 items-center justify-center rounded-full border border-line-strong bg-surface text-ink-secondary hover:border-accent-soft/45 hover:text-heading sm:h-8 sm:w-8"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
             <PwaRegistrar />
             {authUser ? (
-              <div className="flex items-center gap-1 rounded-full border border-[#2C2E35] bg-[#151619] py-1 pl-2.5 pr-1.5 text-xs md:hidden">
-                <User className="h-3.5 w-3.5 text-[#F472B6]" />
-                <span className="max-w-[90px] truncate font-medium text-white">
-                  {authUser.name}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowAccountModal(true)}
-                  aria-label="Pengaturan akun"
-                  className="rounded-full p-1 text-[#A1A1AA] hover:bg-[#232429] hover:text-white"
-                >
-                  <Settings className="h-3 w-3" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleLogout()}
-                  aria-label="Keluar dari akun"
-                  className="rounded-full p-1 text-[#A1A1AA] hover:bg-[#232429] hover:text-[#F87171]"
-                >
-                  <LogOut className="h-3 w-3" />
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setSettingsTab("account")}
+                className="btn-tactile inline-flex min-h-[40px] items-center gap-1.5 rounded-full border border-line-strong bg-surface px-3 text-xs font-medium text-heading hover:border-accent-soft/45 md:hidden"
+              >
+                <User className="h-3.5 w-3.5 shrink-0 text-accent-soft" />
+                <span className="max-w-[68px] truncate">{authUser.name}</span>
+              </button>
             ) : (
               <button
                 type="button"
                 onClick={() => setShowAuthModal(true)}
-                className="btn-tactile inline-flex items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/45 hover:text-white md:hidden"
+                className="btn-tactile inline-flex min-h-[40px] items-center gap-1.5 rounded-full border border-line-strong bg-surface px-3 text-xs font-medium text-ink-strong hover:border-accent-soft/45 hover:text-heading md:hidden"
               >
-                <Cloud className="h-3.5 w-3.5 text-[#F472B6]" />
+                <Cloud className="h-3.5 w-3.5 text-accent-soft" />
                 <span>Masuk</span>
               </button>
             )}
@@ -2268,14 +2310,14 @@ export function JournalWorkspace() {
 
         {/* Sticky Search Header When Showing Results */}
         {activeTab === "search" && !isLanding && (
-          <div className="sticky top-0 z-20 border-b border-[#232429] bg-[#0E0F12]/90 px-4 py-3 backdrop-blur-md sm:px-6">
+          <div className="sticky top-0 z-20 border-b border-line bg-canvas/90 px-4 py-3 backdrop-blur-md sm:px-6">
             {renderPillSearchBar(true)}
           </div>
         )}
 
         <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5 sm:px-8">
           {isOffline && (
-            <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2 text-xs text-amber-200">
+            <div className="mb-4 flex items-center gap-2 rounded-xl border border-warn/35 bg-warn/10 px-4 py-2 text-xs text-warn-soft">
               <WifiOff className="h-3.5 w-3.5 shrink-0" />
               <span>
                 Anda sedang offline — menampilkan data tersimpan dari cache
@@ -2289,14 +2331,14 @@ export function JournalWorkspace() {
               role="status"
               className={`mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-2.5 text-sm ${
                 notice.type === "error"
-                  ? "border-[#EF4444]/30 bg-[#EF4444]/10 text-[#FCA5A5]"
+                  ? "border-danger/35 bg-danger/10 text-danger-soft"
                   : notice.type === "success"
-                    ? "border-[#DB2777]/30 bg-[#DB2777]/12 text-[#F9A8D4]"
-                    : "border-[#2C2E35] bg-[#151619] text-[#E4E4E7]"
+                    ? "border-accent/35 bg-accent/12 text-ink-strong"
+                    : "border-line-strong bg-surface text-ink-strong"
               }`}
             >
               <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0" />
+                <AlertCircle className="h-4 w-4 shrink-0 text-accent-soft" />
                 <span>{notice.message}</span>
               </div>
               <div className="flex items-center gap-2">
@@ -2314,7 +2356,7 @@ export function JournalWorkspace() {
                   type="button"
                   aria-label="Tutup pemberitahuan"
                   onClick={() => setNotice(null)}
-                  className="rounded p-1 hover:bg-white/10"
+                  className="rounded p-1 hover:bg-line-strong/40"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -2329,56 +2371,53 @@ export function JournalWorkspace() {
                 <img
                   src="/logo-mark.png?v=2"
                   alt="SmartSari"
-                  className="h-14 w-14 object-contain drop-shadow-[0_0_22px_rgba(244,114,182,0.32)] sm:h-16 sm:w-16"
+                  className="h-20 w-20 object-contain drop-shadow-[0_0_22px_rgba(var(--accent-rgb),0.28)] sm:h-24 sm:w-24"
                 />
-                <div className="flex flex-col items-center">
-                  <span className="text-lg font-semibold tracking-[-0.02em] text-[#F4F4F5]">
-                    Smart
-                    <span className="bg-gradient-to-r from-[#F9A8D4] via-[#F472B6] to-[#DB2777] bg-clip-text text-transparent">
-                      Sari
-                    </span>
-                  </span>
-                </div>
+                <span className="rounded-full border border-line bg-surface/80 px-2.5 py-0.5 text-[11px] font-medium tracking-wide text-ink-muted">
+                  by <strong className="font-semibold text-ink-body">AirEvo</strong>
+                </span>
               </div>
 
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#DB2777]/30 bg-[#DB2777]/10 px-3 py-1 text-[11px] font-medium text-[#F9A8D4]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#F472B6]" />
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[11px] font-medium text-accent-tint">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent-soft" />
                 Q1–Q4 Internasional · SINTA 1–6 · Open Access
               </div>
 
-              <h1 className="mb-6 text-center text-[26px] font-semibold tracking-[-0.025em] text-[#F4F4F5] sm:text-[36px]">
+              <h1 className="mb-6 text-center text-[26px] font-semibold tracking-[-0.025em] text-ink sm:text-[36px]">
                 Mau cari jurnal apa hari ini?
               </h1>
 
               {renderPillSearchBar(false)}
 
               {/* 2-Pill Mode Toggle */}
-              <div className="mt-4 inline-flex items-center gap-1 rounded-full bg-[#151619] p-1 border border-[#232429]">
+              <div className="mt-4 inline-flex items-center gap-1 rounded-full border border-line bg-surface p-1">
                 <button
                   type="button"
+                  title="Tampilkan seluruh jurnal relevan, termasuk abstrak & DOI"
                   onClick={() => setPdfOnly(false)}
-                  className={`rounded-full px-3.5 py-1 text-xs font-medium transition-colors ${
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors sm:py-1 ${
                     !pdfOnly
-                      ? "bg-[#2C2E35] text-white"
-                      : "text-[#A1A1AA] hover:text-white"
+                      ? "bg-chip-active text-heading"
+                      : "text-ink-secondary hover:text-heading"
                   }`}
                 >
-                  Semua Jurnal
+                  Semua Referensi
                 </button>
                 <button
                   type="button"
+                  title="Khusus artikel yang memiliki berkas PDF terbuka siap baca"
                   onClick={() => setPdfOnly(true)}
-                  className={`rounded-full px-3.5 py-1 text-xs font-medium transition-colors ${
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors sm:py-1 ${
                     pdfOnly
-                      ? "bg-[#DB2777] text-white"
-                      : "text-[#A1A1AA] hover:text-white"
+                      ? "bg-accent text-white"
+                      : "text-ink-secondary hover:text-heading"
                   }`}
                 >
-                  Ada PDF Gratis
+                  Akses PDF Penuh
                 </button>
               </div>
 
-              {/* Minimal Vertical Starter List (Reference-Faithful) */}
+              {/* Minimal Vertical Starter List */}
               <div className="mt-7 w-full max-w-md space-y-1.5">
                 {STARTER_SUGGESTIONS.map((item) => {
                   const Icon = item.icon;
@@ -2387,9 +2426,9 @@ export function JournalWorkspace() {
                       key={item.query}
                       type="button"
                       onClick={() => void runSearch(item.query)}
-                      className="btn-tactile flex w-full items-center gap-3 rounded-xl border border-[#232429]/80 bg-[#151619]/60 px-3.5 py-2.5 text-left text-xs text-[#D4D4D8] transition-colors hover:border-[#2C2E35] hover:bg-[#1E1F23] hover:text-white"
+                      className="btn-tactile flex w-full items-center gap-3 rounded-xl border border-line/80 bg-surface/75 px-3.5 py-2.5 text-left text-xs text-ink-body transition-colors hover:border-line-strong hover:bg-elevated hover:text-heading"
                     >
-                      <Icon className="h-4 w-4 shrink-0 text-[#F472B6]" />
+                      <Icon className="h-4 w-4 shrink-0 text-accent-soft" />
                       <span>{item.label}</span>
                     </button>
                   );
@@ -2398,7 +2437,7 @@ export function JournalWorkspace() {
 
               {history.length > 0 && (
                 <div className="mt-6 flex w-full max-w-xl flex-wrap items-center justify-center gap-1.5">
-                  <span className="mr-1 text-[11px] text-[#71717A]">
+                  <span className="mr-1 text-[11px] text-ink-muted">
                     Terakhir dicari:
                   </span>
                   {history.slice(0, 5).map((h) => (
@@ -2406,7 +2445,7 @@ export function JournalWorkspace() {
                       key={h.id}
                       type="button"
                       onClick={() => void runSearch(h.query)}
-                      className="btn-tactile max-w-[180px] truncate rounded-full border border-[#2C2E35] bg-[#151619] px-3 py-1 text-[11px] text-[#D4D4D8] hover:border-[#F472B6]/45 hover:text-white"
+                      className="btn-tactile max-w-[180px] truncate rounded-full border border-line-strong bg-surface px-3 py-1 text-[11px] text-ink-body hover:border-accent-soft/45 hover:text-heading"
                     >
                       {h.query}
                     </button>
@@ -2419,30 +2458,30 @@ export function JournalWorkspace() {
           {activeTab === "search" && !isLanding && (
             <div>
               {searchError && (
-                <div className="mb-4 rounded-xl border border-[#EF4444]/30 bg-[#EF4444]/10 p-3.5 text-sm text-[#FCA5A5]">
+                <div className="mb-4 rounded-xl border border-danger/35 bg-danger/10 p-3.5 text-sm text-danger-soft">
                   {searchError}
                 </div>
               )}
 
               {searching && (
-                <div className="divide-y divide-[#232429]">
+                <div className="divide-y divide-line">
                   {[1, 2, 3, 4].map((n) => (
                     <div
                       key={n}
                       className="animate-pulse py-5 sm:grid sm:grid-cols-[88px_1fr] sm:gap-5"
                     >
                       <div className="mb-2 flex gap-2 sm:mb-0 sm:block sm:space-y-1.5">
-                        <div className="h-5 w-14 rounded-md bg-[#1E1F23]" />
-                        <div className="h-4 w-12 rounded bg-[#151619]" />
+                        <div className="h-5 w-14 rounded-md bg-elevated" />
+                        <div className="h-4 w-12 rounded bg-surface" />
                       </div>
                       <div>
-                        <div className="h-5 w-4/5 rounded bg-[#1E1F23]" />
-                        <div className="mt-2 h-3.5 w-1/2 rounded bg-[#151619]" />
-                        <div className="mt-3 h-12 w-full rounded-lg bg-[#151619]" />
+                        <div className="h-5 w-4/5 rounded bg-elevated" />
+                        <div className="mt-2 h-3.5 w-1/2 rounded bg-surface" />
+                        <div className="mt-3 h-12 w-full rounded-lg bg-surface" />
                         <div className="mt-3 flex gap-2">
-                          <div className="h-7 w-24 rounded-full bg-[#1E1F23]" />
-                          <div className="h-7 w-28 rounded-full bg-[#151619]" />
-                          <div className="h-7 w-20 rounded-full bg-[#151619]" />
+                          <div className="h-7 w-24 rounded-full bg-elevated" />
+                          <div className="h-7 w-28 rounded-full bg-surface" />
+                          <div className="h-7 w-20 rounded-full bg-surface" />
                         </div>
                       </div>
                     </div>
@@ -2452,17 +2491,17 @@ export function JournalWorkspace() {
 
               {!searching && searchResult && (
                 <div>
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[#A1A1AA]">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-ink-secondary">
                     <div className="flex flex-wrap items-center gap-2">
                       <span>
                         Menampilkan{" "}
-                        <strong className="font-mono tabular-nums text-white">
+                        <strong className="font-mono tabular-nums text-heading">
                           {searchResult.total}
                         </strong>{" "}
                         artikel untuk &ldquo;{searchResult.query}&rdquo;
                       </span>
                       {searchSyncBadge && (
-                        <span className="rounded-full border border-[#DB2777]/35 bg-[#DB2777]/12 px-2 py-0.5 text-[10px] font-medium text-[#F9A8D4]">
+                        <span className="rounded-full border border-accent/35 bg-accent/12 px-2 py-0.5 text-[10px] font-medium text-accent-tint">
                           {searchSyncBadge}
                         </span>
                       )}
@@ -2478,7 +2517,7 @@ export function JournalWorkspace() {
                             true
                           )
                         }
-                        className="inline-flex items-center gap-1 rounded-full border border-[#2C2E35] bg-[#151619] px-2 py-0.5 text-[10px] font-medium text-[#A1A1AA] hover:border-[#F472B6]/45 hover:text-white"
+                        className="inline-flex items-center gap-1 rounded-full border border-line-strong bg-surface px-2 py-0.5 text-[10px] font-medium text-ink-secondary hover:border-accent-soft/45 hover:text-heading"
                       >
                         <RefreshCw className="h-2.5 w-2.5" />
                         Cek Baru
@@ -2494,12 +2533,12 @@ export function JournalWorkspace() {
                             })
                             .catch(() => {});
                         }}
-                        className="inline-flex items-center gap-1 rounded-full border border-[#2C2E35] bg-[#151619] px-2 py-0.5 text-[10px] font-medium text-[#A1A1AA] hover:border-[#F472B6]/45 hover:text-white"
+                        className="inline-flex items-center gap-1 rounded-full border border-line-strong bg-surface px-2 py-0.5 text-[10px] font-medium text-ink-secondary hover:border-accent-soft/45 hover:text-heading"
                       >
                         {copiedShareLink ? (
                           <>
-                            <Check className="h-2.5 w-2.5 text-[#4ADE80]" />
-                            <span className="text-[#4ADE80]">Tautan tersalin</span>
+                            <Check className="h-2.5 w-2.5 text-ok" />
+                            <span className="text-ok">Tautan tersalin</span>
                           </>
                         ) : (
                           <>
@@ -2513,7 +2552,7 @@ export function JournalWorkspace() {
                       title={searchResult.sourceStats
                         .map((st) => `${st.source}: ${st.ok ? st.count : "err"}`)
                         .join(" · ")}
-                      className="cursor-help text-[11px] text-[#71717A]"
+                      className="cursor-help text-[11px] text-ink-muted"
                     >
                       {
                         searchResult.sourceStats.filter((st) => st.ok).length
@@ -2522,139 +2561,175 @@ export function JournalWorkspace() {
                     </span>
                   </div>
 
-                  {/* Unified Tier + PDF Filter Chips */}
-                  <div className="mb-3 flex flex-wrap items-center gap-1.5">
-                    {TIER_PRESETS.map((preset) => {
-                      const active = tierPreset === preset.id;
-                      return (
+                  {/* Unified Tier + PDF Filter Chips & Quick Sort/Filter Row */}
+                  <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {TIER_PRESETS.map((preset) => {
+                        const active = tierPreset === preset.id;
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => {
+                              setTierPreset(preset.id);
+                              void runSearch(
+                                searchResult.query,
+                                undefined,
+                                preset.id,
+                                1,
+                                false
+                              );
+                            }}
+                            className={`btn-tactile rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                              active
+                                ? "bg-accent text-white"
+                                : "border border-line-strong bg-surface text-ink-secondary hover:border-accent-soft/40 hover:text-heading"
+                            }`}
+                          >
+                            {preset.label}
+                          </button>
+                        );
+                      })}
+
+                      <span
+                        aria-hidden="true"
+                        className="mx-0.5 hidden h-4 w-px bg-line-strong sm:inline-block"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextPdfOnly = !pdfOnly;
+                          setPdfOnly(nextPdfOnly);
+                          void runSearch(
+                            searchResult.query,
+                            nextPdfOnly,
+                            undefined,
+                            1,
+                            false
+                          );
+                        }}
+                        className={`btn-tactile inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                          pdfOnly
+                            ? "border border-ok/40 bg-ok/15 text-ok-soft"
+                            : "border border-line-strong bg-surface text-ink-secondary hover:border-ok/40 hover:text-heading"
+                        }`}
+                      >
+                        <FileText className="h-3 w-3" />
+                        <span>Akses PDF Penuh</span>
+                      </button>
+
+                      {(yearFrom || selectedSources.length < ALL_SOURCES.length) && (
                         <button
-                          key={preset.id}
                           type="button"
                           onClick={() => {
-                            setTierPreset(preset.id);
+                            const allSrc: SearchSource[] = [
+                              "openalex",
+                              "europepmc",
+                              "crossref",
+                            ];
+                            setYearFrom("");
+                            setSelectedSources(allSrc);
                             void runSearch(
                               searchResult.query,
                               undefined,
-                              preset.id,
+                              undefined,
                               1,
-                              false
+                              false,
+                              false,
+                              undefined,
+                              "",
+                              allSrc
                             );
                           }}
-                          className={`btn-tactile rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                            active
-                              ? "bg-[#DB2777] text-white"
-                              : "border border-[#2C2E35] bg-[#151619] text-[#A1A1AA] hover:border-[#F472B6]/40 hover:text-white"
-                          }`}
+                          className="btn-tactile inline-flex items-center gap-1 rounded-full border border-line-strong bg-surface px-2.5 py-1 text-xs font-medium text-ink-secondary hover:border-accent-soft/45 hover:text-heading"
                         >
-                          {preset.label}
+                          <X className="h-3 w-3" />
+                          <span>Reset</span>
                         </button>
-                      );
-                    })}
+                      )}
 
-                    <span
-                      aria-hidden="true"
-                      className="mx-1 hidden h-4 w-px bg-[#2C2E35] sm:inline-block"
-                    />
+                      {searchResult.papers.length >= 2 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const topFive = groupedResults
+                              .flatMap((g) => g.papers)
+                              .slice(0, 5);
+                            const nextMap: Record<string, JournalPaper> = {};
+                            for (const p of topFive) {
+                              nextMap[p.paperKey] = p;
+                            }
+                            setSelectedPapersMap(nextMap);
+                          }}
+                          className="btn-tactile inline-flex items-center gap-1 rounded-full border border-accent/35 bg-accent/12 px-2.5 py-1 text-xs font-medium text-accent-tint hover:border-accent-soft hover:bg-accent/20"
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          <span>Pilih Top 5</span>
+                        </button>
+                      )}
+                    </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextPdfOnly = !pdfOnly;
-                        setPdfOnly(nextPdfOnly);
-                        void runSearch(
-                          searchResult.query,
-                          nextPdfOnly,
-                          undefined,
-                          1,
-                          false
-                        );
-                      }}
-                      className={`btn-tactile inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                        pdfOnly
-                          ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300"
-                          : "border border-[#2C2E35] bg-[#151619] text-[#A1A1AA] hover:border-emerald-500/40 hover:text-white"
-                      }`}
+                    <div
+                      className={
+                        searchResult.papers.length > 3
+                          ? "flex shrink-0 items-center gap-2 sm:w-auto"
+                          : "flex items-center sm:hidden"
+                      }
                     >
-                      <FileText className="h-3 w-3" />
-                      <span>Ada PDF Gratis</span>
-                    </button>
-
-                    {(yearFrom || selectedSources.length < ALL_SOURCES.length) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const allSrc: SearchSource[] = [
-                            "openalex",
-                            "europepmc",
-                            "crossref",
-                          ];
-                          setYearFrom("");
-                          setSelectedSources(allSrc);
-                          void runSearch(
-                            searchResult.query,
-                            undefined,
-                            undefined,
-                            1,
-                            false,
-                            false,
-                            undefined,
-                            "",
-                            allSrc
-                          );
-                        }}
-                        className="btn-tactile inline-flex items-center gap-1 rounded-full border border-[#2C2E35] bg-[#151619] px-2.5 py-1 text-xs font-medium text-[#A1A1AA] hover:border-[#F472B6]/45 hover:text-white"
-                      >
-                        <X className="h-3 w-3" />
-                        <span>Reset filter</span>
-                      </button>
-                    )}
-
-                    {searchResult.papers.length >= 2 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const topFive = groupedResults
-                            .flatMap((g) => g.papers)
-                            .slice(0, 5);
-                          const nextMap: Record<string, JournalPaper> = {};
-                          for (const p of topFive) {
-                            nextMap[p.paperKey] = p;
+                      <select
+                        aria-label="Urutkan hasil di seluler"
+                        value={sort}
+                        onChange={(e) => {
+                          const nextSort = e.target.value as SortOption;
+                          setSort(nextSort);
+                          if (searchResult && activeTab === "search") {
+                            void runSearch(
+                              searchResult.query,
+                              undefined,
+                              undefined,
+                              1,
+                              false,
+                              false,
+                              nextSort
+                            );
                           }
-                          setSelectedPapersMap(nextMap);
                         }}
-                        className="btn-tactile inline-flex items-center gap-1 rounded-full border border-[#DB2777]/35 bg-[#DB2777]/12 px-2.5 py-1 text-xs font-medium text-[#F9A8D4] hover:border-[#F472B6] hover:bg-[#DB2777]/20"
+                        className="min-h-[36px] shrink-0 cursor-pointer rounded-full border border-line-strong bg-surface px-3 text-xs font-medium text-ink-strong focus:border-accent-soft focus:outline-none sm:hidden"
                       >
-                        <Sparkles className="h-3 w-3" />
-                        <span>Pilih Top 5</span>
-                      </button>
-                    )}
+                        <option value="relevance">Relevansi</option>
+                        <option value="impact">Impact</option>
+                        <option value="newest">Terbaru</option>
+                        <option value="citations">Sitasi</option>
+                      </select>
 
-                    {searchResult.papers.length > 3 && (
-                      <div className="relative ml-auto w-full sm:w-52">
-                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-[#71717A]" />
-                        <input
-                          type="search"
-                          value={resultFilter}
-                          onChange={(e) => setResultFilter(e.target.value)}
-                          placeholder="Saring hasil..."
-                          className="w-full rounded-full border border-[#2C2E35] bg-[#151619] py-1 pl-7 pr-3 text-xs text-[#F4F4F5] placeholder:text-[#71717A] focus:border-[#F472B6] focus:outline-none"
-                        />
-                      </div>
-                    )}
+                      {searchResult.papers.length > 3 && (
+                        <div className="relative min-w-0 flex-1 sm:w-36 lg:w-40">
+                          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
+                          <input
+                            type="search"
+                            value={resultFilter}
+                            onChange={(e) => setResultFilter(e.target.value)}
+                            placeholder="Saring hasil..."
+                            className="min-h-[36px] w-full rounded-full border border-line-strong bg-surface py-1 pl-8 pr-3 text-xs text-ink placeholder:text-ink-muted focus:border-accent-soft focus:outline-none sm:min-h-[30px]"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Compact AI Research Brief & Query Optimizer */}
                   {searchResult.papers.length > 0 && (
                     <div
-                      className={`mb-4 rounded-xl border border-[#2C2E35] bg-[#151619] ${
+                      className={`mb-4 rounded-xl border border-line-strong bg-surface ${
                         searchBrief ? "p-4" : "px-3.5 py-2.5"
                       }`}
                     >
                       {!searchBrief ? (
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2 text-xs">
-                            <Sparkles className="h-3.5 w-3.5 shrink-0 text-[#F472B6]" />
-                            <span className="font-medium text-[#E4E4E7]">
+                            <Sparkles className="h-3.5 w-3.5 shrink-0 text-accent-soft" />
+                            <span className="font-medium text-ink-strong">
                               Ringkasan AI &amp; saran kata kunci dari hasil
                               teratas
                             </span>
@@ -2663,7 +2738,7 @@ export function JournalWorkspace() {
                             type="button"
                             disabled={loadingBrief}
                             onClick={() => void handleGenerateBrief()}
-                            className="btn-tactile inline-flex items-center gap-1.5 rounded-full bg-[#DB2777] px-3.5 py-1 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
+                            className="btn-tactile inline-flex items-center gap-1.5 rounded-full bg-accent px-3.5 py-1 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
                           >
                             {loadingBrief ? (
                               <Loader2 className="h-3 w-3 animate-spin" />
@@ -2675,32 +2750,32 @@ export function JournalWorkspace() {
                         </div>
                       ) : (
                         <div className="animate-panel-open space-y-3">
-                          <div className="flex items-center justify-between gap-2 border-b border-[#232429] pb-2.5">
+                          <div className="flex items-center justify-between gap-2 border-b border-line pb-2.5">
                             <div className="flex items-center gap-2">
-                              <Sparkles className="h-4 w-4 text-[#F472B6]" />
-                              <span className="text-xs font-semibold text-white">
+                              <Sparkles className="h-4 w-4 text-accent-soft" />
+                              <span className="text-xs font-semibold text-heading">
                                 Intisari Riset AI
                               </span>
-                              <span className="text-[11px] font-medium text-[#A1A1AA]">
-                                · SmartSari
+                              <span className="text-[11px] font-medium text-ink-secondary">
+                                · SmartSari by AirEvo
                               </span>
                             </div>
                             <button
                               type="button"
                               onClick={() => setSearchBrief(null)}
                               aria-label="Tutup ringkasan AI"
-                              className="rounded-lg p-1 text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white"
+                              className="rounded-lg p-1 text-ink-secondary hover:bg-elevated hover:text-heading"
                             >
                               <X className="h-3.5 w-3.5" />
                             </button>
                           </div>
 
-                          <p className="text-sm leading-relaxed text-[#E4E4E7]">
+                          <p className="text-sm leading-relaxed text-ink-strong">
                             {searchBrief.overview}
                           </p>
 
                           {searchBrief.keyFindings.length > 0 && (
-                            <ul className="list-disc space-y-1 pl-5 text-xs leading-relaxed text-[#D4D4D8]">
+                            <ul className="list-disc space-y-1 pl-5 text-xs leading-relaxed text-ink-body">
                               {searchBrief.keyFindings.map((item, idx) => (
                                 <li key={idx}>{item}</li>
                               ))}
@@ -2708,19 +2783,19 @@ export function JournalWorkspace() {
                           )}
 
                           <div className="grid gap-2.5 pt-1 text-xs sm:grid-cols-2">
-                            <div className="rounded-xl border border-[#232429] bg-[#0E0F12] p-3">
-                              <span className="block text-[11px] font-semibold text-[#F472B6]">
+                            <div className="rounded-xl border border-line bg-canvas p-3">
+                              <span className="block text-[11px] font-semibold text-accent-soft">
                                 Tren Metode
                               </span>
-                              <p className="mt-1 text-[#D4D4D8]">
+                              <p className="mt-1 text-ink-body">
                                 {searchBrief.dominantMethods}
                               </p>
                             </div>
-                            <div className="rounded-xl border border-[#232429] bg-[#0E0F12] p-3">
-                              <span className="block text-[11px] font-semibold text-[#F472B6]">
+                            <div className="rounded-xl border border-line bg-canvas p-3">
+                              <span className="block text-[11px] font-semibold text-accent-soft">
                                 Rekomendasi Baca Pertama
                               </span>
-                              <p className="mt-1 text-[#D4D4D8]">
+                              <p className="mt-1 text-ink-body">
                                 {searchBrief.topRecommendation}
                               </p>
                             </div>
@@ -2728,7 +2803,7 @@ export function JournalWorkspace() {
 
                           {searchBrief.suggestedQueries.length > 0 && (
                             <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                              <span className="text-[11px] font-medium text-[#A1A1AA]">
+                              <span className="text-[11px] font-medium text-ink-secondary">
                                 Saran pencarian lebih tajam:
                               </span>
                               {searchBrief.suggestedQueries.map((sq, idx) => (
@@ -2736,7 +2811,7 @@ export function JournalWorkspace() {
                                   key={idx}
                                   type="button"
                                   onClick={() => void runSearch(sq.query)}
-                                  className="btn-tactile rounded-full border border-[#DB2777]/35 bg-[#DB2777]/12 px-3 py-1 text-[11px] font-medium text-[#F9A8D4] hover:border-[#F472B6] hover:bg-[#DB2777]/20"
+                                  className="btn-tactile rounded-full border border-accent/35 bg-accent/12 px-3 py-1 text-[11px] font-medium text-accent-tint hover:border-accent-soft hover:bg-accent/20"
                                 >
                                   {sq.label}: &ldquo;{sq.query}&rdquo;
                                 </button>
@@ -2749,12 +2824,13 @@ export function JournalWorkspace() {
                   )}
 
                   {searchResult.papers.length === 0 ? (
-                    <div className="rounded-xl border border-[#232429] bg-[#151619] p-8 text-center">
-                      <p className="text-base font-semibold text-white">
+                    <div className="rounded-xl border border-line bg-surface p-8 text-center">
+                      <p className="text-base font-semibold text-heading">
                         Tidak ada artikel yang cocok
                       </p>
-                      <p className="mt-1 text-sm text-[#A1A1AA]">
-                        Coba kata kunci lebih umum atau matikan mode Khusus PDF.
+                      <p className="mt-1 text-sm text-ink-secondary">
+                        Coba kata kunci lebih umum atau nonaktifkan filter Akses
+                        PDF Penuh.
                       </p>
                     </div>
                   ) : (
@@ -2762,9 +2838,9 @@ export function JournalWorkspace() {
                       {groupedResults.length > 1 && (
                         <nav
                           aria-label="Lompat ke peringkat"
-                          className="sticky top-[71px] z-10 -mx-1 mb-5 flex items-center gap-1.5 overflow-x-auto border-b border-[#232429] bg-[#0E0F12]/95 px-1 py-2 backdrop-blur-sm"
+                          className="sticky top-[71px] z-10 -mx-1 mb-5 flex items-center gap-1.5 overflow-x-auto border-b border-line bg-canvas/95 px-1 py-2 backdrop-blur-sm"
                         >
-                          <span className="shrink-0 text-[11px] font-medium text-[#71717A]">
+                          <span className="shrink-0 text-[11px] font-medium text-ink-muted">
                             Lompat:
                           </span>
                           {groupedResults.map((group) => (
@@ -2773,8 +2849,8 @@ export function JournalWorkspace() {
                               href={`#rank-${group.tier}`}
                               className={`shrink-0 rounded-full px-2.5 py-1 font-mono text-[11px] font-semibold transition-colors ${
                                 group.meta.priority
-                                  ? "bg-[#DB2777] text-white hover:bg-[#BE185D]"
-                                  : "border border-[#2C2E35] bg-[#151619] text-[#A1A1AA] hover:border-[#DB2777] hover:text-white"
+                                  ? "bg-accent text-white hover:bg-accent-hover"
+                                  : "border border-line-strong bg-surface text-ink-secondary hover:border-accent hover:text-heading"
                               }`}
                             >
                               {group.meta.badge} ({group.papers.length})
@@ -2797,30 +2873,30 @@ export function JournalWorkspace() {
                             <div
                               className={`flex items-baseline justify-between gap-3 pb-2 ${
                                 group.meta.priority
-                                  ? "border-b-2 border-[#DB2777]"
-                                  : "border-b border-[#2C2E35]"
+                                  ? "border-b-2 border-accent"
+                                  : "border-b border-line-strong"
                               }`}
                             >
                               <div className="flex items-baseline gap-2.5">
                                 <span
-                                  className={`font-mono text-xs font-bold ${
+                                  className={`shrink-0 font-mono text-xs font-bold ${
                                     group.meta.priority
-                                      ? "text-[#F472B6]"
-                                      : "text-[#F4F4F5]"
+                                      ? "text-accent-soft"
+                                      : "text-ink"
                                   }`}
                                 >
                                   {group.meta.badge}
                                 </span>
-                                <h2 className="text-sm font-semibold text-[#F4F4F5]">
+                                <h2 className="text-sm font-semibold text-ink">
                                   {group.meta.title}
                                 </h2>
                               </div>
-                              <span className="font-mono text-xs tabular-nums text-[#71717A]">
+                              <span className="shrink-0 whitespace-nowrap font-mono text-xs tabular-nums text-ink-muted">
                                 {group.papers.length} artikel
                               </span>
                             </div>
 
-                            <div className="divide-y divide-[#232429]">
+                            <div className="divide-y divide-line">
                               {group.papers.map((paper) => (
                                 <PaperCard
                                   key={paper.paperKey}
@@ -2870,10 +2946,10 @@ export function JournalWorkspace() {
                                 true
                               )
                             }
-                            className="btn-tactile inline-flex items-center gap-2 rounded-full border border-[#2C2E35] bg-[#151619] px-6 py-2.5 text-xs font-semibold text-[#F4F4F5] hover:border-[#F472B6] hover:text-white disabled:opacity-60"
+                            className="btn-tactile inline-flex items-center gap-2 rounded-full border border-line-strong bg-surface px-6 py-2.5 text-xs font-semibold text-ink hover:border-accent-soft hover:text-heading disabled:opacity-60"
                           >
                             {loadingMore && (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F472B6]" />
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-soft" />
                             )}
                             {loadingMore
                               ? "Memuat jurnal berikutnya..."
@@ -2890,9 +2966,9 @@ export function JournalWorkspace() {
 
           {activeTab === "bookmarks" && (
             <section>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-[#232429] pb-3">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-semibold text-white">
+                  <h2 className="text-lg font-semibold text-heading">
                     {selectedProjectId
                       ? projects.find((p) => p.id === selectedProjectId)
                           ?.name || "Proyek Riset"
@@ -2903,7 +2979,7 @@ export function JournalWorkspace() {
                     <button
                       type="button"
                       onClick={() => setSelectedProjectId(null)}
-                      className="rounded-full border border-[#2C2E35] bg-[#1E1F23] px-2.5 py-0.5 text-[11px] text-[#A1A1AA] hover:text-white"
+                      className="rounded-full border border-line-strong bg-elevated px-2.5 py-0.5 text-[11px] text-ink-secondary hover:text-heading"
                     >
                       Lihat Semua
                     </button>
@@ -2911,13 +2987,13 @@ export function JournalWorkspace() {
                 </div>
                 {bookmarks.length > 0 && (
                   <div className="relative w-full sm:w-64">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#71717A]" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
                     <input
                       type="search"
                       value={bookmarksFilter}
                       onChange={(e) => setBookmarksFilter(e.target.value)}
                       placeholder="Cari di jurnal tersimpan..."
-                      className="min-h-[38px] w-full rounded-full border border-[#2C2E35] bg-[#151619] py-1.5 pl-8 pr-3 text-sm text-[#F4F4F5] placeholder:text-[#71717A] focus:border-[#DB2777] focus:outline-none sm:text-xs"
+                      className="min-h-[38px] w-full rounded-full border border-line-strong bg-surface py-1.5 pl-8 pr-3 text-sm text-ink placeholder:text-ink-muted focus:border-accent focus:outline-none sm:text-xs"
                     />
                   </div>
                 )}
@@ -2929,8 +3005,8 @@ export function JournalWorkspace() {
                   onClick={() => setSelectedProjectId(null)}
                   className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                     !selectedProjectId
-                      ? "bg-[#DB2777] text-white"
-                      : "border border-[#2C2E35] bg-[#151619] text-[#A1A1AA] hover:text-white"
+                      ? "bg-accent text-white"
+                      : "border border-line-strong bg-surface text-ink-secondary hover:text-heading"
                   }`}
                 >
                   Semua ({bookmarks.length})
@@ -2942,8 +3018,8 @@ export function JournalWorkspace() {
                     onClick={() => setSelectedProjectId(proj.id)}
                     className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                       selectedProjectId === proj.id
-                        ? "bg-[#DB2777] text-white"
-                        : "border border-[#2C2E35] bg-[#151619] text-[#A1A1AA] hover:text-white"
+                        ? "bg-accent text-white"
+                        : "border border-line-strong bg-surface text-ink-secondary hover:text-heading"
                     }`}
                   >
                     <FolderOpen className="h-3 w-3" />
@@ -2956,7 +3032,7 @@ export function JournalWorkspace() {
                 <button
                   type="button"
                   onClick={() => setShowNewProjectInput((v) => !v)}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-[#2C2E35] px-2.5 py-1 text-xs font-medium text-[#F472B6] hover:border-[#F472B6]"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-line-strong px-2.5 py-1 text-xs font-medium text-accent-soft hover:border-accent-soft"
                 >
                   <Plus className="h-3 w-3" />
                   <span>Proyek</span>
@@ -2973,12 +3049,12 @@ export function JournalWorkspace() {
                     value={newProjectName}
                     onChange={(e) => setNewProjectName(e.target.value)}
                     placeholder="Nama proyek baru..."
-                    className="min-w-0 flex-1 rounded-lg border border-[#2C2E35] bg-[#151619] px-2.5 py-1.5 text-xs text-white placeholder:text-[#71717A] focus:border-[#F472B6] focus:outline-none"
+                    className="min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-xs text-heading placeholder:text-ink-muted focus:border-accent-soft focus:outline-none"
                   />
                   <button
                     type="submit"
                     disabled={creatingProject || !newProjectName.trim()}
-                    className="rounded-lg bg-[#DB2777] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-50"
+                    className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
                   >
                     Simpan
                   </button>
@@ -2990,29 +3066,29 @@ export function JournalWorkspace() {
                   <button
                     type="button"
                     onClick={() => void handleBulkExport("bib")}
-                    className="btn-tactile inline-flex items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/40 hover:text-white"
+                    className="btn-tactile inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-surface px-3 py-1.5 text-xs font-medium text-ink-strong hover:border-accent-soft/40 hover:text-heading"
                   >
-                    <FileDown className="h-3.5 w-3.5 text-[#F472B6]" />
+                    <FileDown className="h-3.5 w-3.5 text-accent-soft" />
                     Ekspor .bib
                   </button>
                   <button
                     type="button"
                     onClick={() => void handleBulkExport("ris")}
-                    className="btn-tactile inline-flex items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/40 hover:text-white"
+                    className="btn-tactile inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-surface px-3 py-1.5 text-xs font-medium text-ink-strong hover:border-accent-soft/40 hover:text-heading"
                   >
-                    <FileDown className="h-3.5 w-3.5 text-[#F472B6]" />
+                    <FileDown className="h-3.5 w-3.5 text-accent-soft" />
                     Ekspor .ris
                   </button>
                   <button
                     type="button"
                     disabled={exportingBibDocx}
                     onClick={() => void handleBulkExport("docx")}
-                    className="btn-tactile inline-flex items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/40 hover:text-white disabled:opacity-60"
+                    className="btn-tactile inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-surface px-3 py-1.5 text-xs font-medium text-ink-strong hover:border-accent-soft/40 hover:text-heading disabled:opacity-60"
                   >
                     {exportingBibDocx ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F472B6]" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-soft" />
                     ) : (
-                      <FileText className="h-3.5 w-3.5 text-[#F472B6]" />
+                      <FileText className="h-3.5 w-3.5 text-accent-soft" />
                     )}
                     Daftar Pustaka .docx
                   </button>
@@ -3046,16 +3122,16 @@ export function JournalWorkspace() {
                         })
                         .catch(() => {});
                     }}
-                    className="btn-tactile inline-flex items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/40 hover:text-white"
+                    className="btn-tactile inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-surface px-3 py-1.5 text-xs font-medium text-ink-strong hover:border-accent-soft/40 hover:text-heading"
                   >
                     {copiedAllApa ? (
                       <>
-                        <Check className="h-3.5 w-3.5 text-[#4ADE80]" />
-                        <span className="text-[#4ADE80]">Semua APA tersalin</span>
+                        <Check className="h-3.5 w-3.5 text-ok" />
+                        <span className="text-ok">Semua APA tersalin</span>
                       </>
                     ) : (
                       <>
-                        <Copy className="h-3.5 w-3.5 text-[#F472B6]" />
+                        <Copy className="h-3.5 w-3.5 text-accent-soft" />
                         <span>Salin Semua (APA)</span>
                       </>
                     )}
@@ -3082,7 +3158,7 @@ export function JournalWorkspace() {
                           }))
                         )
                       }
-                      className="btn-tactile inline-flex items-center gap-1.5 rounded-full bg-[#DB2777] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60 sm:ml-auto"
+                      className="btn-tactile inline-flex items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-60 sm:ml-auto"
                     >
                       {buildingMatrix ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -3096,21 +3172,21 @@ export function JournalWorkspace() {
               )}
 
               {bookmarks.length === 0 ? (
-                <div className="rounded-xl border border-[#232429] bg-[#151619] p-8 text-center">
-                  <p className="text-base font-semibold text-white">
+                <div className="rounded-xl border border-line bg-surface p-8 text-center">
+                  <p className="text-base font-semibold text-heading">
                     Belum ada jurnal tersimpan
                   </p>
-                  <p className="mt-1 text-sm text-[#A1A1AA]">
+                  <p className="mt-1 text-sm text-ink-secondary">
                     Klik &ldquo;Simpan&rdquo; pada artikel hasil pencarian untuk
                     menyimpannya ke koleksi Anda.
                   </p>
                 </div>
               ) : filteredBookmarks.length === 0 ? (
-                <div className="rounded-xl border border-[#232429] bg-[#151619] p-6 text-center text-sm text-[#A1A1AA]">
+                <div className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-ink-secondary">
                   Tidak ada jurnal tersimpan yang cocok dengan filter saat ini.
                 </div>
               ) : (
-                <div className="divide-y divide-[#232429]">
+                <div className="divide-y divide-line">
                   {filteredBookmarks.map((b) => {
                     const normalizedTier = b.tierLabel
                       ? (b.tierLabel
@@ -3184,53 +3260,53 @@ export function JournalWorkspace() {
 
           {activeTab === "conversions" && (
             <section>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-[#232429] pb-3">
-                <h2 className="text-lg font-semibold text-white">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+                <h2 className="text-lg font-semibold text-heading">
                   Arsip Konversi Word ({conversions.length})
                 </h2>
                 {conversions.length > 0 && (
                   <div className="relative w-full sm:w-64">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#71717A]" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
                     <input
                       type="search"
                       value={conversionsFilter}
                       onChange={(e) => setConversionsFilter(e.target.value)}
                       placeholder="Cari di arsip Word..."
-                      className="min-h-[38px] w-full rounded-full border border-[#2C2E35] bg-[#151619] py-1.5 pl-8 pr-3 text-sm text-[#F4F4F5] placeholder:text-[#71717A] focus:border-[#DB2777] focus:outline-none sm:text-xs"
+                      className="min-h-[38px] w-full rounded-full border border-line-strong bg-surface py-1.5 pl-8 pr-3 text-sm text-ink placeholder:text-ink-muted focus:border-accent focus:outline-none sm:text-xs"
                     />
                   </div>
                 )}
               </div>
 
               {conversions.length === 0 ? (
-                <div className="rounded-xl border border-[#232429] bg-[#151619] p-8 text-center">
-                  <p className="text-base font-semibold text-white">
+                <div className="rounded-xl border border-line bg-surface p-8 text-center">
+                  <p className="text-base font-semibold text-heading">
                     Belum ada arsip konversi Word
                   </p>
-                  <p className="mt-1 text-sm text-[#A1A1AA]">
+                  <p className="mt-1 text-sm text-ink-secondary">
                     Pilih salah satu artikel lalu klik &ldquo;Ekspor Word&rdquo;
                     atau &ldquo;Terjemahkan ID&rdquo;.
                   </p>
                 </div>
               ) : filteredConversions.length === 0 ? (
-                <div className="rounded-xl border border-[#232429] bg-[#151619] p-6 text-center text-sm text-[#A1A1AA]">
+                <div className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-ink-secondary">
                   Tidak ada arsip Word yang cocok dengan &ldquo;
                   {conversionsFilter}&rdquo;.
                 </div>
               ) : (
-                <div className="divide-y divide-[#232429]">
+                <div className="divide-y divide-line">
                   {filteredConversions.map((conv) => (
                     <div
                       key={conv.id}
                       className="flex flex-wrap items-center justify-between gap-4 py-4"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-[#A1A1AA]">
-                          <span className="rounded-md bg-[#DB2777]/15 px-2 py-0.5 font-medium text-[#F472B6]">
+                        <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-ink-secondary">
+                          <span className="rounded-md bg-accent/15 px-2 py-0.5 font-medium text-accent-soft">
                             {MODE_BADGE[conv.mode] || conv.mode}
                           </span>
-                          <span className="text-[11px] font-medium text-[#A1A1AA]">
-                            SmartSari
+                          <span className="text-[11px] font-medium text-ink-secondary">
+                            SmartSari by AirEvo
                           </span>
                           {conv.year && (
                             <span className="font-mono tabular-nums">
@@ -3238,7 +3314,7 @@ export function JournalWorkspace() {
                             </span>
                           )}
                         </div>
-                        <h3 className="text-sm font-semibold text-[#F4F4F5] sm:text-base">
+                        <h3 className="text-sm font-semibold text-ink sm:text-base">
                           {conv.title}
                         </h3>
                       </div>
@@ -3246,7 +3322,7 @@ export function JournalWorkspace() {
                       <div className="flex items-center gap-2">
                         <a
                           href={`/api/conversions/${conv.id}/download`}
-                          className="btn-tactile inline-flex min-h-[38px] items-center gap-1.5 rounded-full bg-[#DB2777] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D]"
+                          className="btn-tactile inline-flex min-h-[38px] items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover"
                         >
                           <FileDown className="h-3.5 w-3.5" />
                           Unduh .docx
@@ -3255,7 +3331,7 @@ export function JournalWorkspace() {
                           type="button"
                           aria-label="Hapus arsip konversi"
                           onClick={() => void handleDeleteConversion(conv.id)}
-                          className="min-h-[38px] rounded-full border border-[#2C2E35] p-2 text-[#71717A] hover:border-[#EF4444]/40 hover:text-[#F87171]"
+                          className="min-h-[38px] rounded-full border border-line-strong p-2 text-ink-muted hover:border-danger/40 hover:text-danger"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -3269,8 +3345,8 @@ export function JournalWorkspace() {
 
           {activeTab === "history" && (
             <section>
-              <div className="mb-4 flex items-center justify-between border-b border-[#232429] pb-3">
-                <h2 className="text-lg font-semibold text-white">
+              <div className="mb-4 flex items-center justify-between border-b border-line pb-3">
+                <h2 className="text-lg font-semibold text-heading">
                   Riwayat Pencarian ({history.length})
                 </h2>
                 {history.length > 0 && (
@@ -3284,7 +3360,7 @@ export function JournalWorkspace() {
                       setConfirmClearHistory(false);
                       void handleClearHistory();
                     }}
-                    className="text-xs font-medium text-[#F87171] hover:underline"
+                    className="text-xs font-medium text-danger hover:underline"
                   >
                     {confirmClearHistory ? "Klik lagi untuk hapus semua" : "Hapus Semua"}
                   </button>
@@ -3292,29 +3368,29 @@ export function JournalWorkspace() {
               </div>
               {history.length > 0 && (
                 <div className="relative mb-3">
-                  <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71717A]" />
+                  <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
                   <input
                     type="search"
                     value={historyFilter}
                     onChange={(e) => setHistoryFilter(e.target.value)}
                     placeholder="Cari riwayat pencarian..."
-                    className="min-h-[42px] w-full rounded-full border border-[#2C2E35] bg-[#151619] py-2 pl-10 pr-3 text-base text-[#F4F4F5] placeholder:text-[#71717A] focus:border-[#DB2777] focus:outline-none sm:text-sm"
+                    className="min-h-[42px] w-full rounded-full border border-line-strong bg-surface py-2 pl-10 pr-3 text-base text-ink placeholder:text-ink-muted focus:border-accent focus:outline-none sm:text-sm"
                   />
                 </div>
               )}
               {history.length === 0 ? (
-                <div className="rounded-xl border border-[#232429] bg-[#151619] p-8 text-center">
-                  <p className="text-sm text-[#A1A1AA]">
+                <div className="rounded-xl border border-line bg-surface p-8 text-center">
+                  <p className="text-sm text-ink-secondary">
                     Belum ada riwayat pencarian.
                   </p>
                 </div>
               ) : filteredHistory.length === 0 ? (
-                <div className="rounded-xl border border-[#232429] bg-[#151619] p-6 text-center text-sm text-[#A1A1AA]">
+                <div className="rounded-xl border border-line bg-surface p-6 text-center text-sm text-ink-secondary">
                   Tidak ada riwayat yang cocok dengan &ldquo;{historyFilter}
                   &rdquo;.
                 </div>
               ) : (
-                <ul className="divide-y divide-[#232429]">
+                <ul className="divide-y divide-line">
                   {filteredHistory.map((item) => (
                     <li
                       key={item.id}
@@ -3325,10 +3401,10 @@ export function JournalWorkspace() {
                         onClick={() => void runSearch(item.query)}
                         className="flex min-h-[40px] min-w-0 flex-1 items-center justify-between gap-2 text-left text-sm"
                       >
-                        <span className="truncate font-medium text-[#F4F4F5]">
+                        <span className="truncate font-medium text-ink">
                           {item.query}
                         </span>
-                        <span className="shrink-0 font-mono text-xs text-[#71717A]">
+                        <span className="shrink-0 font-mono text-xs text-ink-muted">
                           {formatRelativeTimeId(item.createdAt)} ·{" "}
                           {item.resultCount}
                         </span>
@@ -3337,7 +3413,7 @@ export function JournalWorkspace() {
                         type="button"
                         aria-label={`Hapus riwayat ${item.query}`}
                         onClick={() => void handleDeleteHistoryItem(item.id)}
-                        className="min-h-[38px] min-w-[38px] rounded-full p-2 text-[#71717A] hover:text-[#F87171]"
+                        className="min-h-[38px] min-w-[38px] rounded-full p-2 text-ink-muted hover:text-danger"
                       >
                         <X className="h-4 w-4" />
                       </button>
@@ -3349,17 +3425,41 @@ export function JournalWorkspace() {
           )}
         </main>
 
-        <footer className="mx-auto mt-auto flex w-full max-w-4xl flex-wrap items-center justify-between gap-3 border-t border-[#232429]/70 px-4 py-4 text-[11px] text-[#71717A] sm:px-8">
-          <span>&copy; 2026 SmartSari. Seluruh hak cipta dilindungi.</span>
-          <nav aria-label="Tautan hukum" className="flex flex-wrap items-center gap-4">
-            <Link href="/ketentuan" className="transition-colors hover:text-[#F472B6]">
+        <footer className="mx-auto mt-auto flex w-full max-w-4xl flex-wrap items-center justify-between gap-3 border-t border-line/70 px-4 py-4 text-[11px] text-ink-muted sm:px-8">
+          <span>
+            &copy; 2026{" "}
+            <strong className="font-semibold text-ink-secondary">
+              SmartSari by AirEvo
+            </strong>
+            . Seluruh hak cipta dilindungi.
+          </span>
+          <nav
+            aria-label="Tautan hukum dan kontak"
+            className="flex flex-wrap items-center gap-4"
+          >
+            <Link
+              href="/ketentuan"
+              className="transition-colors hover:text-accent-soft"
+            >
               Ketentuan
             </Link>
-            <Link href="/privasi" className="transition-colors hover:text-[#F472B6]">
+            <Link
+              href="/privasi"
+              className="transition-colors hover:text-accent-soft"
+            >
               Privasi
             </Link>
-            <Link href="/lisensi" className="transition-colors hover:text-[#F472B6]">
+            <Link
+              href="/lisensi"
+              className="transition-colors hover:text-accent-soft"
+            >
               Lisensi &amp; Atribusi
+            </Link>
+            <Link
+              href="/kontak"
+              className="transition-colors hover:text-accent-soft"
+            >
+              Kontak &amp; Bantuan
             </Link>
           </nav>
         </footer>
@@ -3371,7 +3471,7 @@ export function JournalWorkspace() {
           type="button"
           aria-label="Kembali ke atas"
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          className="btn-tactile fixed bottom-20 right-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#2C2E35] bg-[#1E1F23] text-[#F472B6] shadow-lg hover:border-[#DB2777] md:bottom-6 md:right-6"
+          className="btn-tactile fixed bottom-20 right-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-line-strong bg-elevated text-accent-soft shadow-lg hover:border-accent md:bottom-6 md:right-6"
         >
           <ArrowUp className="h-4 w-4" />
         </button>
@@ -3380,63 +3480,89 @@ export function JournalWorkspace() {
       {/* Mobile Sticky Bottom Navigation */}
       <nav
         aria-label="Navigasi seluler"
-        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-[#232429] bg-[#151619] pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         <button
           type="button"
           onClick={() => setActiveTab("search")}
-          className={`flex min-h-[54px] flex-col items-center justify-center gap-0.5 border-t-2 text-[11px] font-semibold ${
-            activeTab === "search"
-              ? "border-[#DB2777] text-[#F472B6]"
-              : "border-transparent text-[#A1A1AA]"
+          className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 border-t-2 text-[10px] font-semibold ${
+            activeTab === "search" && settingsTab === null
+              ? "border-accent text-accent-soft"
+              : "border-transparent text-ink-secondary"
           }`}
         >
           <Search className="h-4 w-4" />
-          Cari
+          <span>Cari</span>
         </button>
         <button
           type="button"
           onClick={() => setActiveTab("bookmarks")}
-          className={`flex min-h-[54px] flex-col items-center justify-center gap-0.5 border-t-2 text-[11px] font-semibold ${
-            activeTab === "bookmarks"
-              ? "border-[#DB2777] text-[#F472B6]"
-              : "border-transparent text-[#A1A1AA]"
+          className={`relative flex min-h-[56px] flex-col items-center justify-center gap-0.5 border-t-2 text-[10px] font-semibold ${
+            activeTab === "bookmarks" && settingsTab === null
+              ? "border-accent text-accent-soft"
+              : "border-transparent text-ink-secondary"
           }`}
         >
-          <Bookmark className="h-4 w-4" />
-          Simpan ({bookmarks.length})
+          <span className="relative">
+            <Bookmark className="h-4 w-4" />
+            {bookmarks.length > 0 && (
+              <span className="absolute -right-2.5 -top-1 rounded-full bg-accent px-1 font-mono text-[9px] leading-tight text-white">
+                {bookmarks.length}
+              </span>
+            )}
+          </span>
+          <span>Simpan</span>
         </button>
         <button
           type="button"
           onClick={() => setActiveTab("conversions")}
-          className={`flex min-h-[54px] flex-col items-center justify-center gap-0.5 border-t-2 text-[11px] font-semibold ${
-            activeTab === "conversions"
-              ? "border-[#DB2777] text-[#F472B6]"
-              : "border-transparent text-[#A1A1AA]"
+          className={`relative flex min-h-[56px] flex-col items-center justify-center gap-0.5 border-t-2 text-[10px] font-semibold ${
+            activeTab === "conversions" && settingsTab === null
+              ? "border-accent text-accent-soft"
+              : "border-transparent text-ink-secondary"
           }`}
         >
-          <FileText className="h-4 w-4" />
-          Word ({conversions.length})
+          <span className="relative">
+            <FileText className="h-4 w-4" />
+            {conversions.length > 0 && (
+              <span className="absolute -right-2.5 -top-1 rounded-full bg-accent px-1 font-mono text-[9px] leading-tight text-white">
+                {conversions.length}
+              </span>
+            )}
+          </span>
+          <span>Word</span>
         </button>
         <button
           type="button"
           onClick={() => setActiveTab("history")}
-          className={`flex min-h-[54px] flex-col items-center justify-center gap-0.5 border-t-2 text-[11px] font-semibold ${
-            activeTab === "history"
-              ? "border-[#DB2777] text-[#F472B6]"
-              : "border-transparent text-[#A1A1AA]"
+          className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 border-t-2 text-[10px] font-semibold ${
+            activeTab === "history" && settingsTab === null
+              ? "border-accent text-accent-soft"
+              : "border-transparent text-ink-secondary"
           }`}
         >
           <History className="h-4 w-4" />
-          Riwayat
+          <span>Riwayat</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setSettingsTab("general")}
+          className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 border-t-2 text-[10px] font-semibold ${
+            settingsTab !== null
+              ? "border-accent text-accent-soft"
+              : "border-transparent text-ink-secondary"
+          }`}
+        >
+          <Settings className="h-4 w-4" />
+          <span>Setelan</span>
         </button>
       </nav>
 
       {/* Floating Literature Matrix Selection Bar */}
       {selectedMatrixList.length > 0 && (
-        <div className="animate-panel-open fixed bottom-16 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[#DB2777]/45 bg-[#151619]/95 px-4 py-2 text-xs text-[#F4F4F5] shadow-2xl backdrop-blur-md md:bottom-6">
+        <div className="animate-panel-open fixed bottom-16 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full border border-accent/45 bg-surface/95 px-4 py-2 text-xs text-ink shadow-2xl backdrop-blur-md md:bottom-6">
           <span className="font-medium">
-            <strong className="font-mono text-[#F472B6]">
+            <strong className="font-mono text-accent-soft">
               {selectedMatrixList.length}
             </strong>{" "}
             jurnal dipilih
@@ -3445,7 +3571,7 @@ export function JournalWorkspace() {
             type="button"
             disabled={selectedMatrixList.length < 2 || buildingMatrix}
             onClick={() => void handleBuildMatrix()}
-            className="btn-tactile inline-flex items-center gap-1.5 rounded-full bg-[#DB2777] px-3.5 py-1.5 font-semibold text-white hover:bg-[#BE185D] disabled:opacity-50"
+            className="btn-tactile inline-flex items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
           >
             {buildingMatrix ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -3462,7 +3588,7 @@ export function JournalWorkspace() {
             type="button"
             onClick={() => setSelectedPapersMap({})}
             aria-label="Bersihkan pilihan matriks"
-            className="rounded-full p-1 text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white"
+            className="rounded-full p-1 text-ink-secondary hover:bg-elevated hover:text-heading"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -3533,11 +3659,27 @@ export function JournalWorkspace() {
         />
       )}
 
-      {/* Self-Service Account Management Modal */}
-      {showAccountModal && authUser && (
-        <AccountModal
+      {/* Unified Settings, Theme, Quota & Account Modal */}
+      {settingsTab !== null && (
+        <SettingsModal
           user={authUser}
-          onClose={() => setShowAccountModal(false)}
+          initialTab={settingsTab}
+          quotaStatus={quotaStatus}
+          onRefreshQuota={refreshQuota}
+          searchPrefs={searchPrefs}
+          onSearchPrefsChange={handleSearchPrefsChange}
+          onOpenAuth={() => setShowAuthModal(true)}
+          onOpenShortcuts={() => setShowShortcutsModal(true)}
+          onClearLocalCache={() => {
+            clearAllLocalCache();
+            setSearchSyncBadge(null);
+            setNotice({
+              type: "info",
+              message:
+                "Cache lokal dibersihkan. Pencarian berikutnya akan mengambil data segar.",
+            });
+          }}
+          onClose={() => setSettingsTab(null)}
           onProfileUpdated={(updated) => {
             setAuthUser(updated);
             setNotice({
@@ -3545,8 +3687,9 @@ export function JournalWorkspace() {
               message: `Profil diperbarui (${updated.name}).`,
             });
           }}
+          onLogout={handleLogout}
           onLoggedOutAll={() => {
-            setShowAccountModal(false);
+            setSettingsTab(null);
             clearAllLocalCache();
             setAuthUser(null);
             setSelectedProjectId(null);
@@ -3561,7 +3704,7 @@ export function JournalWorkspace() {
             void reloadWorkspaceData();
           }}
           onAccountDeleted={() => {
-            setShowAccountModal(false);
+            setSettingsTab(null);
             clearAllLocalCache();
             setAuthUser(null);
             setSelectedProjectId(null);
@@ -3595,11 +3738,11 @@ export function JournalWorkspace() {
           aria-modal="true"
           aria-label="Pintasan Keyboard & Tips SmartSari"
         >
-          <div className="animate-modal-in w-full max-w-md rounded-2xl border border-[#2C2E35] bg-[#151619] p-6 text-[#F4F4F5] shadow-2xl">
-            <div className="mb-4 flex items-center justify-between gap-2 border-b border-[#232429] pb-3">
+          <div className="animate-modal-in w-full max-w-md rounded-2xl border border-line-strong bg-surface p-6 text-ink shadow-2xl">
+            <div className="mb-4 flex items-center justify-between gap-2 border-b border-line pb-3">
               <div className="flex items-center gap-2">
-                <HelpCircle className="h-4 w-4 text-[#F472B6]" />
-                <h2 className="text-base font-semibold text-white">
+                <HelpCircle className="h-4 w-4 text-accent-soft" />
+                <h2 className="text-base font-semibold text-heading">
                   Pintasan &amp; Tips Riset
                 </h2>
               </div>
@@ -3607,7 +3750,7 @@ export function JournalWorkspace() {
                 type="button"
                 onClick={() => setShowShortcutsModal(false)}
                 aria-label="Tutup bantuan"
-                className="rounded-lg p-1 text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white"
+                className="rounded-lg p-1 text-ink-secondary hover:bg-elevated hover:text-heading"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -3622,18 +3765,18 @@ export function JournalWorkspace() {
               ].map((item) => (
                 <div
                   key={item.key}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-[#232429] bg-[#0E0F12] px-3 py-2"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-line bg-canvas px-3 py-2"
                 >
-                  <span className="text-[#D4D4D8]">{item.desc}</span>
-                  <kbd className="shrink-0 rounded border border-[#2C2E35] bg-[#1E1F23] px-2 py-0.5 font-mono text-[11px] font-semibold text-[#F9A8D4]">
+                  <span className="text-ink-body">{item.desc}</span>
+                  <kbd className="shrink-0 rounded border border-line-strong bg-elevated px-2 py-0.5 font-mono text-[11px] font-semibold text-accent-tint">
                     {item.key}
                   </kbd>
                 </div>
               ))}
             </div>
 
-            <div className="mt-4 rounded-xl border border-[#DB2777]/30 bg-[#DB2777]/10 p-3 text-xs leading-relaxed text-[#FBCFE8]">
-              <strong className="text-white">Tips:</strong> Tempel langsung
+            <div className="mt-4 rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs leading-relaxed text-ink-strong">
+              <strong className="text-heading">Tips:</strong> Tempel langsung
               nomor <strong>DOI</strong> di pencarian, gunakan tombol{" "}
               <strong>Pilih Top 5</strong> untuk membandingkan jurnal secara
               instan, atau pakai <strong>Jejaring</strong> untuk menelusuri

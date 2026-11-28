@@ -129,19 +129,19 @@ export function LiteratureMatrixModal({
       aria-modal="true"
       aria-label="Matriks Literatur AI"
     >
-      <div className="animate-modal-in flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-[#2C2E35] bg-[#151619] text-[#F4F4F5] shadow-2xl">
+      <div className="animate-modal-in flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-line-strong bg-surface text-ink shadow-2xl">
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#232429] px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#DB2777]/15 text-[#F472B6]">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15 text-accent-soft">
               <Sparkles className="h-4 w-4" />
             </span>
             <div>
-              <h2 className="text-base font-semibold text-white">
+              <h2 className="text-base font-semibold text-heading">
                 Matriks Literatur &amp; Sintesis
               </h2>
-              <p className="text-xs text-[#A1A1AA]">
-                {matrix.rows.length} jurnal dibandingkan · SmartSari
+              <p className="text-xs text-ink-secondary">
+                {matrix.rows.length} jurnal dibandingkan · SmartSari by AirEvo
               </p>
             </div>
           </div>
@@ -150,16 +150,16 @@ export function LiteratureMatrixModal({
             <button
               type="button"
               onClick={handleCopyMarkdown}
-              className="btn-tactile inline-flex items-center gap-1.5 rounded-lg border border-[#2C2E35] bg-[#1E1F23] px-3 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/40 hover:text-white"
+              className="btn-tactile inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-elevated px-3 py-1.5 text-xs font-medium text-ink-strong hover:border-accent-soft/40 hover:text-heading"
             >
               {copiedSection === "markdown" ? (
                 <>
-                  <Check className="h-3.5 w-3.5 text-[#4ADE80]" />
-                  <span className="text-[#4ADE80]">Tersalin</span>
+                  <Check className="h-3.5 w-3.5 text-ok" />
+                  <span className="text-ok">Tersalin</span>
                 </>
               ) : (
                 <>
-                  <Copy className="h-3.5 w-3.5 text-[#F472B6]" />
+                  <Copy className="h-3.5 w-3.5 text-accent-soft" />
                   <span>Salin Markdown</span>
                 </>
               )}
@@ -167,16 +167,16 @@ export function LiteratureMatrixModal({
             <button
               type="button"
               onClick={handleDownloadCsv}
-              className="btn-tactile inline-flex items-center gap-1.5 rounded-lg border border-[#2C2E35] bg-[#1E1F23] px-3 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#F472B6]/40 hover:text-white"
+              className="btn-tactile inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-elevated px-3 py-1.5 text-xs font-medium text-ink-strong hover:border-accent-soft/40 hover:text-heading"
             >
-              <FileSpreadsheet className="h-3.5 w-3.5 text-[#F472B6]" />
+              <FileSpreadsheet className="h-3.5 w-3.5 text-accent-soft" />
               Unduh CSV
             </button>
             <button
               type="button"
               onClick={() => void handleDownloadDocx()}
               disabled={downloadingDocx}
-              className="btn-tactile inline-flex items-center gap-1.5 rounded-lg bg-[#DB2777] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
+              className="btn-tactile inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
             >
               {downloadingDocx ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -189,7 +189,7 @@ export function LiteratureMatrixModal({
               type="button"
               onClick={onClose}
               aria-label="Tutup Matriks Literatur"
-              className="rounded-lg p-1.5 text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white"
+              className="rounded-lg p-1.5 text-ink-secondary hover:bg-elevated hover:text-heading"
             >
               <X className="h-4 w-4" />
             </button>
@@ -199,9 +199,9 @@ export function LiteratureMatrixModal({
         {/* Body */}
         <div className="flex-1 space-y-5 overflow-y-auto p-5">
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-xl border border-[#DB2777]/30 bg-gradient-to-br from-[#DB2777]/10 via-[#0E0F12] to-[#0E0F12] p-4">
+            <div className="rounded-xl border border-accent/30 bg-gradient-to-br from-accent/10 via-canvas to-canvas p-4">
               <div className="mb-1.5 flex items-center justify-between gap-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#F472B6]">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-accent-soft">
                   Sintesis Lintas Jurnal
                 </h3>
                 <button
@@ -209,12 +209,12 @@ export function LiteratureMatrixModal({
                   onClick={() =>
                     void handleCopyText("synthesis", matrix.synthesis)
                   }
-                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[#A1A1AA] transition-colors hover:bg-[#1E1F23] hover:text-white"
+                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-ink-secondary transition-colors hover:bg-elevated hover:text-heading"
                 >
                   {copiedSection === "synthesis" ? (
                     <>
-                      <Check className="h-3 w-3 text-[#4ADE80]" />
-                      <span className="text-[#4ADE80]">Tersalin</span>
+                      <Check className="h-3 w-3 text-ok" />
+                      <span className="text-ok">Tersalin</span>
                     </>
                   ) : (
                     <>
@@ -224,24 +224,24 @@ export function LiteratureMatrixModal({
                   )}
                 </button>
               </div>
-              <p className="text-sm leading-relaxed text-[#E4E4E7]">
+              <p className="text-sm leading-relaxed text-ink-strong">
                 {matrix.synthesis}
               </p>
             </div>
-            <div className="rounded-xl border border-[#3F414A] bg-gradient-to-br from-[#27272A]/40 via-[#0E0F12] to-[#0E0F12] p-4">
+            <div className="rounded-xl border border-line-hover bg-gradient-to-br from-elevated/60 via-canvas to-canvas p-4">
               <div className="mb-1.5 flex items-center justify-between gap-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#F472B6]">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-accent-soft">
                   Celah Penelitian (Research Gaps)
                 </h3>
                 <button
                   type="button"
                   onClick={() => void handleCopyText("gaps", matrix.researchGaps)}
-                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[#A1A1AA] transition-colors hover:bg-[#1E1F23] hover:text-white"
+                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-ink-secondary transition-colors hover:bg-elevated hover:text-heading"
                 >
                   {copiedSection === "gaps" ? (
                     <>
-                      <Check className="h-3 w-3 text-[#4ADE80]" />
-                      <span className="text-[#4ADE80]">Tersalin</span>
+                      <Check className="h-3 w-3 text-ok" />
+                      <span className="text-ok">Tersalin</span>
                     </>
                   ) : (
                     <>
@@ -251,16 +251,16 @@ export function LiteratureMatrixModal({
                   )}
                 </button>
               </div>
-              <p className="text-sm leading-relaxed text-[#E4E4E7]">
+              <p className="text-sm leading-relaxed text-ink-strong">
                 {matrix.researchGaps}
               </p>
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-[#232429] bg-[#0E0F12]">
+          <div className="overflow-x-auto rounded-xl border border-line bg-canvas">
             <table className="w-full min-w-[920px] border-collapse text-left text-xs">
-              <thead className="sticky top-0 z-10 bg-[#1E1F23]/95 backdrop-blur-sm">
-                <tr className="border-b border-[#232429] text-[#F9A8D4]">
+              <thead className="sticky top-0 z-10 bg-elevated/95 backdrop-blur-sm">
+                <tr className="border-b border-line text-accent-tint">
                   <th className="px-3.5 py-2.5 font-semibold">Jurnal</th>
                   <th className="px-3.5 py-2.5 font-semibold">Tier</th>
                   <th className="px-3.5 py-2.5 font-semibold">Tujuan</th>
@@ -270,38 +270,38 @@ export function LiteratureMatrixModal({
                   <th className="px-3.5 py-2.5 font-semibold">Keterbatasan</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#232429]">
+              <tbody className="divide-y divide-line">
                 {matrix.rows.map((row, idx) => (
                   <tr
                     key={idx}
-                    className="align-top transition-colors even:bg-[#121318] hover:bg-[#191A20]"
+                    className="align-top transition-colors even:bg-surface/60 hover:bg-elevated/70"
                   >
                     <td className="max-w-[200px] px-3.5 py-3">
-                      <p className="font-medium leading-snug text-white">
+                      <p className="font-medium leading-snug text-heading">
                         {row.title}
                       </p>
-                      <p className="mt-1 text-[11px] text-[#A1A1AA]">
+                      <p className="mt-1 text-[11px] text-ink-secondary">
                         {row.authorsYear}
                       </p>
                     </td>
                     <td className="whitespace-nowrap px-3.5 py-3">
-                      <span className="rounded-md bg-[#DB2777]/15 px-2 py-0.5 text-[11px] font-medium text-[#F472B6]">
+                      <span className="rounded-md bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-accent-soft">
                         {row.tier}
                       </span>
                     </td>
-                    <td className="px-3.5 py-3 leading-relaxed text-[#D4D4D8]">
+                    <td className="px-3.5 py-3 leading-relaxed text-ink-body">
                       {row.objective}
                     </td>
-                    <td className="px-3.5 py-3 leading-relaxed text-[#D4D4D8]">
+                    <td className="px-3.5 py-3 leading-relaxed text-ink-body">
                       {row.method}
                     </td>
-                    <td className="px-3.5 py-3 leading-relaxed text-[#D4D4D8]">
+                    <td className="px-3.5 py-3 leading-relaxed text-ink-body">
                       {row.sample}
                     </td>
-                    <td className="px-3.5 py-3 leading-relaxed text-[#D4D4D8]">
+                    <td className="px-3.5 py-3 leading-relaxed text-ink-body">
                       {row.findings}
                     </td>
-                    <td className="px-3.5 py-3 leading-relaxed text-[#D4D4D8]">
+                    <td className="px-3.5 py-3 leading-relaxed text-ink-body">
                       {row.limitations}
                     </td>
                   </tr>

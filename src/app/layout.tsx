@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { ThemeSync } from "@/components/ThemeSync";
+import { APPEARANCE_INIT_SCRIPT } from "@/lib/appearance";
 import "./globals.css";
 
 const inter = Inter({
@@ -16,9 +18,11 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://smartsari.my.id"),
-  title: "SmartSari — Pencarian Jurnal Terfilter & Akurat",
+  title: "SmartSari by AirEvo — Pencarian Jurnal Terfilter & Akurat",
   description:
-    "SmartSari: pencarian jurnal ilmiah Q1–Q4 & SINTA 1–6, matriks literatur AI, tanya-jawab PDF, terjemahan Indonesia, dan ekspor Word (.docx).",
+    "SmartSari by AirEvo: platform pencarian jurnal ilmiah Q1–Q4 & SINTA 1–6, matriks literatur AI, pembacaan PDF, terjemahan Indonesia, dan ekspor Word (.docx).",
+  creator: "AirEvo",
+  publisher: "AirEvo",
   manifest: "/manifest.webmanifest",
   openGraph: {
     title: "SmartSari — Pencarian Jurnal Terfilter & Akurat",
@@ -70,9 +74,18 @@ export default function RootLayout({
   return (
     <html
       lang="id"
+      data-theme="dark"
+      data-palette="rose"
+      suppressHydrationWarning
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-[#0E0F12] text-[#F4F4F5] font-sans">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{ __html: APPEARANCE_INIT_SCRIPT }}
+        />
+      </head>
+      <body className="min-h-full bg-canvas text-ink font-sans">
+        <ThemeSync />
         {children}
       </body>
     </html>

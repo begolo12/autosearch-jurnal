@@ -288,10 +288,10 @@ export function PaperCard({
 
   const tierBadgeClass =
     tier === "Q1" || tier === "SINTA1"
-      ? "bg-[#DB2777] text-white shadow-[0_0_12px_rgba(219,39,119,0.28)]"
+      ? "bg-accent text-white shadow-[0_0_12px_rgba(var(--accent-rgb),0.28)]"
       : tier === "Q2" || tier === "SINTA2"
-        ? "bg-[#DB2777]/15 text-[#F472B6] border border-[#DB2777]/35"
-        : "border border-[#2C2E35] bg-[#1E1F23] text-[#D4D4D8]";
+        ? "bg-accent/15 text-accent-soft border border-accent/35"
+        : "border border-line-strong bg-elevated text-ink-body";
 
   const metaItems: string[] = [];
   if (paper.authors.length > 0) {
@@ -309,7 +309,7 @@ export function PaperCard({
   if (paper.language) metaItems.push(paper.language);
 
   return (
-    <article className="-mx-3 rounded-2xl border border-transparent px-3.5 py-5 transition-all duration-150 hover:border-[#232429] hover:bg-[#151619]/85 sm:grid sm:grid-cols-[88px_1fr] sm:gap-5">
+    <article className="-mx-3 rounded-2xl border border-transparent px-3.5 py-5 transition-all duration-150 hover:border-line hover:bg-surface/85 sm:grid sm:grid-cols-[88px_1fr] sm:gap-5">
       {/* Left Rank Indicator */}
       <div className="mb-2 flex items-baseline gap-2.5 sm:mb-0 sm:block sm:pt-0.5">
         {tierLabel ? (
@@ -329,16 +329,16 @@ export function PaperCard({
             )}
           </span>
         ) : (
-          <span className="inline-block rounded-md border border-[#2C2E35] bg-[#1E1F23] px-2 py-0.5 font-mono text-[11px] font-medium text-[#A1A1AA]">
+          <span className="inline-block rounded-md border border-line-strong bg-elevated px-2 py-0.5 font-mono text-[11px] font-medium text-ink-secondary">
             Jurnal
           </span>
         )}
         {hasImpactMetrics && paper.journalMetrics && (
-          <div className="flex items-center gap-1.5 font-mono text-[10px] tabular-nums text-[#A1A1AA] sm:mt-2 sm:flex-col sm:items-start sm:gap-1">
-            <span className="rounded border border-[#232429] bg-[#0E0F12] px-1.5 py-0.5">
+          <div className="flex items-center gap-1.5 font-mono text-[10px] tabular-nums text-ink-secondary sm:mt-2 sm:flex-col sm:items-start sm:gap-1">
+            <span className="rounded border border-line bg-canvas px-1.5 py-0.5">
               IF {paper.journalMetrics.impactFactor}
             </span>
-            <span className="rounded border border-[#232429] bg-[#0E0F12] px-1.5 py-0.5">
+            <span className="rounded border border-line bg-canvas px-1.5 py-0.5">
               H-{paper.journalMetrics.hIndex}
             </span>
           </div>
@@ -348,7 +348,7 @@ export function PaperCard({
       {/* Main Content */}
       <div className="min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="text-[16px] font-semibold leading-snug tracking-[-0.015em] text-[#F4F4F5] sm:text-[17px]">
+          <h3 className="text-[16px] font-semibold leading-snug tracking-[-0.015em] text-ink sm:text-[17px]">
             {translatedAbstract ? translatedAbstract.title : paper.title}
           </h3>
           <button
@@ -367,100 +367,102 @@ export function PaperCard({
                 })
                 .catch(() => {});
             }}
-            className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-md border border-transparent px-1.5 py-0.5 text-[11px] text-[#71717A] transition-colors hover:border-[#2C2E35] hover:bg-[#1E1F23] hover:text-white"
+            className="mt-0.5 inline-flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center gap-1 rounded-md border border-transparent px-2 py-1 text-[11px] text-ink-muted transition-colors hover:border-line-strong hover:bg-elevated hover:text-heading sm:min-h-0 sm:min-w-0 sm:px-1.5 sm:py-0.5"
           >
             {copiedTitle ? (
-              <Check className="h-3.5 w-3.5 text-[#4ADE80]" />
+              <Check className="h-3.5 w-3.5 text-ok" />
             ) : (
               <Copy className="h-3.5 w-3.5" />
             )}
           </button>
         </div>
 
-        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[13px] leading-relaxed text-[#A1A1AA]">
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[13px] leading-relaxed text-ink-secondary">
           {paper.pdfUrl ? (
-            <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
-              PDF Gratis
+            <span className="inline-flex items-center rounded-full border border-ok/30 bg-ok/10 px-2.5 py-0.5 text-[11px] font-medium text-ok-soft">
+              PDF Akses Terbuka
             </span>
           ) : (
-            <span className="inline-flex items-center rounded-full border border-[#2C2E35] bg-[#1E1F23] px-2 py-0.5 text-[11px] font-medium text-[#A1A1AA]">
-              Abstrak / DOI
+            <span className="inline-flex items-center rounded-full border border-line-strong bg-elevated px-2.5 py-0.5 text-[11px] font-medium text-ink-secondary">
+              Abstrak &amp; DOI
             </span>
           )}
-          <span>{metaItems.join(" · ")}</span>
-          {paper.doi && (
-            <button
-              type="button"
-              onClick={() => {
-                void navigator.clipboard
-                  .writeText(paper.doi!)
-                  .then(() => {
-                    setCopiedDoi(true);
-                    setTimeout(() => setCopiedDoi(false), 1800);
-                  })
-                  .catch(() => {});
-              }}
-              className="inline-flex items-center gap-1 rounded border border-[#2C2E35] bg-[#1E1F23] px-1.5 py-0.5 font-mono text-[10px] text-[#A1A1AA] transition-colors hover:border-[#F472B6]/45 hover:text-white"
-            >
-              {copiedDoi ? (
-                <>
-                  <Check className="h-2.5 w-2.5 text-[#4ADE80]" />
-                  <span className="text-[#4ADE80]">DOI tersalin</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="h-2.5 w-2.5" />
-                  <span>DOI</span>
-                </>
-              )}
-            </button>
-          )}
+          <span className="min-w-0">{metaItems.join(" · ")}</span>
           {(paper.doi || getSafeHttpUrl(paper.landingUrl)) && (
-            <button
-              type="button"
-              onClick={() => {
-                const link = paper.doi
-                  ? `https://doi.org/${paper.doi}`
-                  : getSafeHttpUrl(paper.landingUrl);
-                if (!link) return;
-                void navigator.clipboard
-                  .writeText(link)
-                  .then(() => {
-                    setCopiedLink(true);
-                    setTimeout(() => setCopiedLink(false), 1800);
-                  })
-                  .catch(() => {});
-              }}
-              className="inline-flex items-center gap-1 rounded border border-[#2C2E35] bg-[#1E1F23] px-1.5 py-0.5 text-[10px] text-[#A1A1AA] transition-colors hover:border-[#F472B6]/45 hover:text-white"
-            >
-              {copiedLink ? (
-                <>
-                  <Check className="h-2.5 w-2.5 text-[#4ADE80]" />
-                  <span className="text-[#4ADE80]">Tersalin</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="h-2.5 w-2.5" />
-                  <span>Salin tautan</span>
-                </>
+            <div className="inline-flex flex-wrap items-center gap-1.5">
+              {paper.doi && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard
+                      .writeText(paper.doi!)
+                      .then(() => {
+                        setCopiedDoi(true);
+                        setTimeout(() => setCopiedDoi(false), 1800);
+                      })
+                      .catch(() => {});
+                  }}
+                  className="inline-flex min-h-[34px] items-center gap-1 rounded-md border border-line-strong bg-elevated px-2.5 py-1 font-mono text-[11px] text-ink-secondary transition-colors hover:border-accent-soft/45 hover:text-heading sm:min-h-0 sm:rounded sm:px-1.5 sm:py-0.5 sm:text-[10px]"
+                >
+                  {copiedDoi ? (
+                    <>
+                      <Check className="h-2.5 w-2.5 text-ok" />
+                      <span className="text-ok">DOI tersalin</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-2.5 w-2.5" />
+                      <span>DOI</span>
+                    </>
+                  )}
+                </button>
               )}
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const link = paper.doi
+                    ? `https://doi.org/${paper.doi}`
+                    : getSafeHttpUrl(paper.landingUrl);
+                  if (!link) return;
+                  void navigator.clipboard
+                    .writeText(link)
+                    .then(() => {
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 1800);
+                    })
+                    .catch(() => {});
+                }}
+                className="inline-flex min-h-[34px] items-center gap-1 rounded-md border border-line-strong bg-elevated px-2.5 py-1 text-[11px] text-ink-secondary transition-colors hover:border-accent-soft/45 hover:text-heading sm:min-h-0 sm:rounded sm:px-1.5 sm:py-0.5 sm:text-[10px]"
+              >
+                {copiedLink ? (
+                  <>
+                    <Check className="h-2.5 w-2.5 text-ok" />
+                    <span className="text-ok">Tersalin</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-2.5 w-2.5" />
+                    <span>Salin tautan</span>
+                  </>
+                )}
+              </button>
+            </div>
           )}
         </div>
 
         {abstractText ? (
-          <div className="mt-2.5 max-w-[68ch] text-sm leading-relaxed text-[#D4D4D8]">
+          <div className="mt-2.5 max-w-[68ch] text-sm leading-relaxed text-ink-body">
             <p>
               {translatedAbstract
                 ? translatedAbstract.abstract
                 : displayedAbstract}
             </p>
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
               {!translatedAbstract && isLongAbstract && (
                 <button
                   type="button"
                   onClick={() => setExpandedAbstract((v) => !v)}
-                  className="inline-flex items-center gap-0.5 font-medium text-[#F472B6] hover:text-[#F9A8D4]"
+                  className="inline-flex min-h-[36px] items-center gap-0.5 rounded-md px-1 font-medium text-accent-soft hover:text-accent-tint sm:min-h-0 sm:px-0"
                 >
                   {expandedAbstract ? (
                     <>
@@ -482,10 +484,10 @@ export function PaperCard({
                     ? setTranslatedAbstract(null)
                     : void handleTranslateAbstract()
                 }
-                className="inline-flex items-center gap-1 font-medium text-[#A1A1AA] transition-colors hover:text-[#F472B6] disabled:opacity-60"
+                className="inline-flex min-h-[36px] items-center gap-1 rounded-md px-1 font-medium text-ink-secondary transition-colors hover:text-accent-soft disabled:opacity-60 sm:min-h-0 sm:px-0"
               >
                 {translatingAbstract ? (
-                  <Loader2 className="h-3 w-3 animate-spin text-[#F472B6]" />
+                  <Loader2 className="h-3 w-3 animate-spin text-accent-soft" />
                 ) : (
                   <Languages className="h-3.5 w-3.5" />
                 )}
@@ -510,12 +512,12 @@ export function PaperCard({
                       })
                       .catch(() => {});
                   }}
-                  className="inline-flex items-center gap-1 font-medium text-[#A1A1AA] transition-colors hover:text-[#F472B6]"
+                  className="inline-flex min-h-[36px] items-center gap-1 rounded-md px-1 font-medium text-ink-secondary transition-colors hover:text-accent-soft sm:min-h-0 sm:px-0"
                 >
                   {copiedTranslation ? (
                     <>
-                      <Check className="h-3 w-3 text-[#4ADE80]" />
-                      <span className="text-[#4ADE80]">Tersalin</span>
+                      <Check className="h-3 w-3 text-ok" />
+                      <span className="text-ok">Tersalin</span>
                     </>
                   ) : (
                     <>
@@ -531,12 +533,12 @@ export function PaperCard({
                   type="button"
                   disabled={loadingTakeaways}
                   onClick={() => void handleExtractTakeaways()}
-                  className="inline-flex items-center gap-1 font-medium text-[#A1A1AA] transition-colors hover:text-[#F472B6] disabled:opacity-60"
+                  className="inline-flex min-h-[36px] items-center gap-1 rounded-md px-1 font-medium text-ink-secondary transition-colors hover:text-accent-soft disabled:opacity-60 sm:min-h-0 sm:px-0"
                 >
                   {loadingTakeaways ? (
-                    <Loader2 className="h-3 w-3 animate-spin text-[#F472B6]" />
+                    <Loader2 className="h-3 w-3 animate-spin text-accent-soft" />
                   ) : (
-                    <Sparkles className="h-3.5 w-3.5 text-[#F472B6]" />
+                    <Sparkles className="h-3.5 w-3.5 text-accent-soft" />
                   )}
                   {loadingTakeaways
                     ? "Meringkas..."
@@ -547,17 +549,17 @@ export function PaperCard({
               )}
             </div>
             {abstractTranslateErr && (
-              <p className="mt-1 text-xs text-[#F87171]">
+              <p className="mt-1 text-xs text-danger">
                 {abstractTranslateErr}
               </p>
             )}
             {takeawaysErr && (
-              <p className="mt-1 text-xs text-[#F87171]">{takeawaysErr}</p>
+              <p className="mt-1 text-xs text-danger">{takeawaysErr}</p>
             )}
             {showTakeaways && takeaways && (
-              <div className="animate-panel-open mt-2.5 rounded-xl border border-[#2C2E35] bg-[#151619] p-3 text-xs">
-                <div className="mb-2 flex items-center justify-between gap-2 border-b border-[#232429] pb-1.5">
-                  <span className="text-[11px] font-semibold text-[#F9A8D4]">
+              <div className="animate-panel-open mt-2.5 rounded-xl border border-line-strong bg-surface p-3 text-xs">
+                <div className="mb-2 flex items-center justify-between gap-2 border-b border-line pb-1.5">
+                  <span className="text-[11px] font-semibold text-accent-tint">
                     Intisari Terstruktur
                   </span>
                   <button
@@ -577,12 +579,12 @@ export function PaperCard({
                         })
                         .catch(() => {});
                     }}
-                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[#A1A1AA] transition-colors hover:bg-[#1E1F23] hover:text-white"
+                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-ink-secondary transition-colors hover:bg-elevated hover:text-heading"
                   >
                     {copiedTakeaways ? (
                       <>
-                        <Check className="h-3 w-3 text-[#4ADE80]" />
-                        <span className="text-[#4ADE80]">Tersalin</span>
+                        <Check className="h-3 w-3 text-ok" />
+                        <span className="text-ok">Tersalin</span>
                       </>
                     ) : (
                       <>
@@ -601,12 +603,12 @@ export function PaperCard({
                   ].map((item) => (
                     <div
                       key={item.label}
-                      className="rounded-lg border border-[#232429] bg-[#0E0F12]/90 p-2.5"
+                      className="rounded-lg border border-line bg-canvas/90 p-2.5"
                     >
-                      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[#F472B6]">
+                      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-accent-soft">
                         {item.label}
                       </span>
-                      <span className="leading-relaxed text-[#E4E4E7]">
+                      <span className="leading-relaxed text-ink-strong">
                         {item.value}
                       </span>
                     </div>
@@ -616,7 +618,7 @@ export function PaperCard({
             )}
           </div>
         ) : (
-          <p className="mt-2 text-xs italic text-[#71717A]">
+          <p className="mt-2 text-xs italic text-ink-muted">
             Abstrak tidak tersedia di indeks sumber.
           </p>
         )}
@@ -627,7 +629,7 @@ export function PaperCard({
             <button
               type="button"
               onClick={() => onOpenReader(paper, false)}
-              className="btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full bg-[#DB2777] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D]"
+              className="btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover"
             >
               <BookOpenText className="h-3.5 w-3.5" />
               Baca &amp; AI
@@ -636,7 +638,7 @@ export function PaperCard({
             <button
               type="button"
               onClick={() => onOpenReader(paper, true)}
-              className="btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full bg-[#DB2777] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D]"
+              className="btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover"
             >
               <Languages className="h-3.5 w-3.5" />
               Terjemahkan &amp; AI
@@ -653,12 +655,12 @@ export function PaperCard({
             }}
             className={`btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium disabled:opacity-60 ${
               showConvertPanel
-                ? "border-[#DB2777] bg-[#DB2777]/15 text-[#F9A8D4]"
-                : "border-[#2C2E35] bg-[#1E1F23] text-[#E4E4E7] hover:border-[#3F414A] hover:text-white"
+                ? "border-accent bg-accent/15 text-accent-tint"
+                : "border-line-strong bg-elevated text-ink-strong hover:border-line-hover hover:text-heading"
             }`}
           >
             {isConverting || isPdfLoading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F472B6]" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-soft" />
             ) : (
               <FileDown className="h-3.5 w-3.5" />
             )}
@@ -685,8 +687,8 @@ export function PaperCard({
             }}
             className={`btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
               showCitePanel
-                ? "border-[#DB2777] bg-[#DB2777]/15 text-[#F9A8D4]"
-                : "border-[#2C2E35] bg-[#1E1F23] text-[#E4E4E7] hover:border-[#3F414A] hover:text-white"
+                ? "border-accent bg-accent/15 text-accent-tint"
+                : "border-line-strong bg-elevated text-ink-strong hover:border-line-hover hover:text-heading"
             }`}
           >
             <Quote className="h-3.5 w-3.5" />
@@ -697,9 +699,9 @@ export function PaperCard({
             <button
               type="button"
               onClick={() => onOpenNetwork(paper)}
-              className="btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3 py-1.5 text-xs font-medium text-[#A1A1AA] hover:border-[#F472B6]/45 hover:text-[#F9A8D4]"
+              className="btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border border-line-strong bg-elevated px-3 py-1.5 text-xs font-medium text-ink-secondary hover:border-accent-soft/45 hover:text-accent-tint"
             >
-              <GitBranch className="h-3.5 w-3.5 text-[#F472B6]" />
+              <GitBranch className="h-3.5 w-3.5 text-accent-soft" />
               <span>Jejaring</span>
             </button>
           )}
@@ -710,12 +712,12 @@ export function PaperCard({
               onClick={() => onToggleSelectMatrix(paper)}
               className={`btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
                 selectedForMatrix
-                  ? "border-[#F472B6] bg-[#DB2777]/20 text-[#FBCFE8]"
-                  : "border-[#2C2E35] bg-[#1E1F23] text-[#A1A1AA] hover:border-[#3F414A] hover:text-white"
+                  ? "border-accent-soft bg-accent/20 text-accent-tint"
+                  : "border-line-strong bg-elevated text-ink-secondary hover:border-line-hover hover:text-heading"
               }`}
             >
               {selectedForMatrix ? (
-                <CheckSquare className="h-3.5 w-3.5 text-[#F472B6]" />
+                <CheckSquare className="h-3.5 w-3.5 text-accent-soft" />
               ) : (
                 <Square className="h-3.5 w-3.5" />
               )}
@@ -729,8 +731,8 @@ export function PaperCard({
             onClick={() => void handleBookmarkClick()}
             className={`btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
               isBookmarked
-                ? "border-[#DB2777]/45 bg-[#DB2777]/15 text-[#F9A8D4]"
-                : "border-[#2C2E35] bg-[#1E1F23] text-[#E4E4E7] hover:border-[#3F414A] hover:text-white"
+                ? "border-accent/45 bg-accent/15 text-accent-tint"
+                : "border-line-strong bg-elevated text-ink-strong hover:border-line-hover hover:text-heading"
             }`}
           >
             {isBookmarked ? (
@@ -751,8 +753,8 @@ export function PaperCard({
               }}
               className={`btn-tactile inline-flex min-h-[40px] sm:min-h-[34px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
                 showNotePanel || note || projectId
-                  ? "border-[#DB2777]/40 bg-[#DB2777]/12 text-[#F9A8D4]"
-                  : "border-[#2C2E35] bg-[#1E1F23] text-[#A1A1AA] hover:border-[#3F414A] hover:text-white"
+                  ? "border-accent/40 bg-accent/12 text-accent-tint"
+                  : "border-line-strong bg-elevated text-ink-secondary hover:border-line-hover hover:text-heading"
               }`}
             >
               <StickyNote className="h-3.5 w-3.5" />
@@ -763,7 +765,7 @@ export function PaperCard({
 
         {/* Inline 1-Click Citation Panel */}
         {showCitePanel && (
-          <div className="animate-panel-open mt-3 rounded-xl border border-[#2C2E35] border-t-2 border-t-[#DB2777]/65 bg-[#151619] p-3.5 shadow-lg">
+          <div className="animate-panel-open mt-3 rounded-xl border border-line-strong border-t-2 border-t-accent/65 bg-surface p-3.5 shadow-lg">
             <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1">
                 {(
@@ -790,8 +792,8 @@ export function PaperCard({
                     }}
                     className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
                       citeFormat === fmt.id
-                        ? "bg-[#DB2777] text-white"
-                        : "bg-[#1E1F23] text-[#A1A1AA] hover:text-white"
+                        ? "bg-accent text-white"
+                        : "bg-elevated text-ink-secondary hover:text-heading"
                     }`}
                   >
                     {fmt.label}
@@ -802,12 +804,12 @@ export function PaperCard({
               <button
                 type="button"
                 onClick={() => void handleCopyCitation()}
-                className="btn-tactile inline-flex min-h-[32px] items-center gap-1.5 rounded-md border border-[#2C2E35] bg-[#1E1F23] px-3 py-1 text-xs font-semibold text-[#F4F4F5] hover:border-[#DB2777]"
+                className="btn-tactile inline-flex min-h-[32px] items-center gap-1.5 rounded-md border border-line-strong bg-elevated px-3 py-1 text-xs font-semibold text-ink hover:border-accent"
               >
                 {copiedCite ? (
                   <>
-                    <Check className="h-3.5 w-3.5 text-[#4ADE80]" />
-                    <span className="text-[#4ADE80]">Tersalin</span>
+                    <Check className="h-3.5 w-3.5 text-ok" />
+                    <span className="text-ok">Tersalin</span>
                   </>
                 ) : (
                   <>
@@ -818,7 +820,7 @@ export function PaperCard({
               </button>
             </div>
 
-            <pre className="whitespace-pre-wrap break-words rounded-lg border border-[#232429] bg-[#0E0F12] p-3 font-mono text-[11px] leading-relaxed text-[#D4D4D8]">
+            <pre className="whitespace-pre-wrap break-words rounded-lg border border-line bg-canvas p-3 font-mono text-[11px] leading-relaxed text-ink-body">
               {formatCitation(paper, citeFormat)}
             </pre>
           </div>
@@ -826,19 +828,19 @@ export function PaperCard({
 
         {/* Unified Download & Word Export Panel */}
         {showConvertPanel && (
-          <div className="animate-panel-open mt-3 rounded-xl border border-[#2C2E35] border-t-2 border-t-[#DB2777]/65 bg-[#151619] p-3.5 shadow-lg">
-            <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-[#232429] pb-3">
+          <div className="animate-panel-open mt-3 rounded-xl border border-line-strong border-t-2 border-t-accent/65 bg-surface p-3.5 shadow-lg">
+            <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-line pb-3">
               {paper.pdfUrl && (
                 <button
                   type="button"
                   disabled={isPdfLoading}
                   onClick={() => void onDownloadPdf(paper)}
-                  className="btn-tactile inline-flex min-h-[34px] items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3 py-1 text-xs font-medium text-[#E4E4E7] hover:border-[#DB2777] hover:text-white disabled:opacity-60"
+                  className="btn-tactile inline-flex min-h-[34px] items-center gap-1.5 rounded-full border border-line-strong bg-elevated px-3 py-1 text-xs font-medium text-ink-strong hover:border-accent hover:text-heading disabled:opacity-60"
                 >
                   {isPdfLoading ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F472B6]" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-soft" />
                   ) : (
-                    <FileDown className="h-3.5 w-3.5 text-[#F472B6]" />
+                    <FileDown className="h-3.5 w-3.5 text-accent-soft" />
                   )}
                   <span>{isPdfLoading ? "Mengunduh..." : "Unduh PDF Asli"}</span>
                 </button>
@@ -847,7 +849,7 @@ export function PaperCard({
               <button
                 type="button"
                 onClick={() => onOpenReader(paper, true)}
-                className="btn-tactile inline-flex min-h-[34px] items-center gap-1.5 rounded-full border border-[#DB2777]/35 bg-[#DB2777]/12 px-3 py-1 text-xs font-medium text-[#F9A8D4] hover:border-[#F472B6] hover:bg-[#DB2777]/20"
+                className="btn-tactile inline-flex min-h-[34px] items-center gap-1.5 rounded-full border border-accent/35 bg-accent/12 px-3 py-1 text-xs font-medium text-accent-tint hover:border-accent-soft hover:bg-accent/20"
               >
                 <Languages className="h-3.5 w-3.5" />
                 <span>Baca Terjemahan Full ID</span>
@@ -858,7 +860,7 @@ export function PaperCard({
                   href={getSafeHttpUrl(paper.landingUrl)!}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="btn-tactile inline-flex min-h-[34px] items-center gap-1 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3 py-1 text-xs font-medium text-[#A1A1AA] hover:text-white sm:ml-auto"
+                  className="btn-tactile inline-flex min-h-[34px] items-center gap-1 rounded-full border border-line-strong bg-elevated px-3 py-1 text-xs font-medium text-ink-secondary hover:text-heading sm:ml-auto"
                 >
                   <span>Buka Sumber Asli</span>
                   <ExternalLink className="h-3 w-3" />
@@ -867,11 +869,11 @@ export function PaperCard({
             </div>
 
             <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <span className="font-semibold text-[#F4F4F5]">
+              <span className="font-semibold text-ink">
                 Ekspor ke Dokumen Word (.docx)
               </span>
-              <span className="text-[11px] font-medium text-[#A1A1AA]">
-                SmartSari
+              <span className="text-[11px] font-medium text-ink-secondary">
+                SmartSari by AirEvo
               </span>
             </div>
 
@@ -885,14 +887,14 @@ export function PaperCard({
                     onClick={() => setSelectedMode(opt.value)}
                     className={`rounded-lg border p-2.5 text-left transition-colors duration-150 ${
                       active
-                        ? "border-[#DB2777] bg-[#1E1F23]"
-                        : "border-[#232429] bg-[#0E0F12] hover:border-[#2C2E35]"
+                        ? "border-accent bg-elevated"
+                        : "border-line bg-canvas hover:border-line-strong"
                     }`}
                   >
-                    <div className="text-xs font-semibold text-[#F4F4F5]">
+                    <div className="text-xs font-semibold text-ink">
                       {opt.label}
                     </div>
-                    <div className="mt-0.5 text-[11px] leading-snug text-[#A1A1AA]">
+                    <div className="mt-0.5 text-[11px] leading-snug text-ink-secondary">
                       {opt.desc}
                     </div>
                   </button>
@@ -901,7 +903,7 @@ export function PaperCard({
             </div>
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[11px] text-[#A1A1AA]">
+              <p className="text-[11px] text-ink-secondary">
                 {paper.pdfUrl
                   ? "Teks PDF diekstrak otomatis lalu disusun menjadi berkas .docx."
                   : "PDF langsung tidak tersedia; menggunakan metadata & abstrak."}
@@ -910,7 +912,7 @@ export function PaperCard({
                 type="button"
                 disabled={isConverting}
                 onClick={() => void onConvertWord(paper, selectedMode)}
-                className="btn-tactile inline-flex min-h-[38px] items-center gap-1.5 rounded-full bg-[#DB2777] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
+                className="btn-tactile inline-flex min-h-[38px] items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
               >
                 {isConverting ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -925,11 +927,11 @@ export function PaperCard({
 
         {/* Inline Project & Note Panel (Saved Papers) */}
         {showNotePanel && bookmarkId && onUpdateBookmarkMeta && (
-          <div className="animate-panel-open mt-3 space-y-3 rounded-xl border border-[#2C2E35] border-t-2 border-t-[#DB2777]/65 bg-[#151619] p-3.5 shadow-lg">
+          <div className="animate-panel-open mt-3 space-y-3 rounded-xl border border-line-strong border-t-2 border-t-accent/65 bg-surface p-3.5 shadow-lg">
             {projects && projects.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-[#A1A1AA]">
-                  <FolderOpen className="h-3.5 w-3.5 text-[#F472B6]" />
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-ink-secondary">
+                  <FolderOpen className="h-3.5 w-3.5 text-accent-soft" />
                   Proyek:
                 </span>
                 <select
@@ -940,7 +942,7 @@ export function PaperCard({
                       projectId: nextProjectId,
                     });
                   }}
-                  className="rounded-lg border border-[#2C2E35] bg-[#0E0F12] px-2.5 py-1 text-xs text-[#F4F4F5] focus:border-[#F472B6] focus:outline-none"
+                  className="rounded-lg border border-line-strong bg-canvas px-2.5 py-1 text-xs text-ink focus:border-accent-soft focus:outline-none"
                 >
                   <option value="">Tanpa Proyek</option>
                   {projects.map((p) => (
@@ -967,10 +969,10 @@ export function PaperCard({
                   }
                 }}
                 placeholder="Tulis catatan riset pribadi untuk jurnal ini (metode, kutipan penting, dll)..."
-                className="w-full rounded-lg border border-[#2C2E35] bg-[#0E0F12] px-3 py-2 text-xs text-[#F4F4F5] placeholder-[#71717A] focus:border-[#F472B6] focus:outline-none"
+                className="w-full rounded-lg border border-line-strong bg-canvas px-3 py-2 text-xs text-ink placeholder:text-ink-muted focus:border-accent-soft focus:outline-none"
               />
               <div className="mt-2 flex items-center justify-between gap-2">
-                <span className="text-[11px] text-[#71717A]">
+                <span className="text-[11px] text-ink-muted">
                   Ctrl+Enter untuk simpan
                 </span>
                 <button
@@ -986,7 +988,7 @@ export function PaperCard({
                       setSavingMeta(false);
                     }
                   }}
-                  className="btn-tactile inline-flex items-center gap-1.5 rounded-full bg-[#DB2777] px-3.5 py-1 text-xs font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
+                  className="btn-tactile inline-flex items-center gap-1.5 rounded-full bg-accent px-3.5 py-1 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
                 >
                   {savingMeta && <Loader2 className="h-3 w-3 animate-spin" />}
                   Simpan Catatan

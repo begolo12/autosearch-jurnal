@@ -72,32 +72,32 @@ export function PwaRegistrar() {
       <button
         type="button"
         onClick={() => void handleInstall()}
-        className="btn-tactile inline-flex min-h-[34px] items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#1E1F23] px-3.5 py-1.5 text-xs font-medium text-[#E4E4E7] hover:border-[#DB2777]/60 hover:text-white"
+        className="btn-tactile inline-flex min-h-[38px] sm:min-h-[34px] items-center gap-1.5 rounded-full border border-line-strong bg-surface px-3 py-1.5 text-xs font-medium text-ink-strong hover:border-accent/60 hover:text-heading"
       >
         {installPrompt ? (
-          <Download className="h-3.5 w-3.5 text-[#F472B6]" />
+          <Download className="h-3.5 w-3.5 text-accent-soft" />
         ) : (
-          <Share className="h-3.5 w-3.5 text-[#F472B6]" />
+          <Share className="h-3.5 w-3.5 text-accent-soft" />
         )}
-        <span>Pasang App</span>
+        <span className="hidden sm:inline">Pasang App</span>
       </button>
 
       {showIosGuide && (
-        <div className="animate-panel-open absolute right-0 top-10 z-40 w-64 rounded-xl border border-[#2C2E35] bg-[#151619] p-3.5 text-xs text-[#F4F4F5] shadow-xl">
-          <div className="mb-1 flex items-center justify-between font-semibold">
+        <div className="animate-panel-open absolute right-0 top-11 z-40 w-64 rounded-xl border border-line-strong bg-surface p-3.5 text-xs text-ink shadow-xl">
+          <div className="mb-1 flex items-center justify-between font-semibold text-heading">
             <span>Pasang SmartSari di iPhone/iPad</span>
             <button
               type="button"
               onClick={() => setShowIosGuide(false)}
-              className="text-[#A1A1AA] hover:text-white"
+              className="text-ink-secondary hover:text-heading"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
-          <p className="text-[11px] leading-relaxed text-[#A1A1AA]">
-            Ketuk tombol <strong className="text-white">Bagikan (Share)</strong>{" "}
+          <p className="text-[11px] leading-relaxed text-ink-secondary">
+            Ketuk tombol <strong className="text-heading">Bagikan (Share)</strong>{" "}
             di Safari, lalu pilih{" "}
-            <strong className="text-white">
+            <strong className="text-heading">
               Tambah ke Layar Utama (Add to Home Screen)
             </strong>
             .

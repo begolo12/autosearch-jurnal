@@ -1,12 +1,41 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowLeft, Scale } from "lucide-react";
+import { Scale } from "lucide-react";
+import { LegalPageShell } from "@/components/LegalPageShell";
 
 export const metadata: Metadata = {
-  title: "Lisensi, Hak Cipta & Atribusi — SmartSari",
+  title: "Lisensi, Hak Cipta & Atribusi — SmartSari by AirEvo",
   description:
-    "Informasi hak cipta platform SmartSari, lisensi karya ilmiah pihak ketiga, serta atribusi sumber data dan perangkat lunak sumber terbuka.",
+    "Informasi kepemilikan SmartSari by AirEvo, lisensi karya ilmiah pihak ketiga, serta atribusi basis data akademik dan perangkat lunak sumber terbuka.",
 };
+
+const TOC = [
+  { id: "hak-cipta-karya", label: "01 Hak Cipta Karya Ilmiah" },
+  { id: "atribusi-data", label: "02 Sumber Data Akademik" },
+  { id: "atribusi-oss", label: "03 Perangkat Lunak Terbuka" },
+];
+
+const DATA_SOURCES = [
+  {
+    name: "OpenAlex",
+    badge: "CC0 1.0",
+    desc: "Data bibliografis global, profil jurnal, metrik sitasi, dan jejaring snowballing lintas literatur.",
+  },
+  {
+    name: "Crossref",
+    badge: "Open Metadata API",
+    desc: "Registrasi DOI resmi, metadata penerbit, tanggal terbit, serta informasi ISSN terstruktur.",
+  },
+  {
+    name: "Europe PMC",
+    badge: "Open Access Archive",
+    desc: "Indeks literatur ilmu hayat, biomedis, dan repositori naskah lengkap akses terbuka.",
+  },
+  {
+    name: "Unpaywall",
+    badge: "CC0 1.0",
+    desc: "Penelusuran legal terhadap lokasi salinan PDF akses terbuka (Open Access) resmi penerbit & repositori.",
+  },
+];
 
 const OPEN_SOURCE_LIBS = [
   { name: "Next.js", license: "MIT License" },
@@ -23,100 +52,113 @@ const OPEN_SOURCE_LIBS = [
 
 export default function LisensiPage() {
   return (
-    <div className="min-h-screen bg-[#0E0F12] px-4 py-10 text-[#F4F4F5] sm:px-8">
-      <div className="mx-auto max-w-3xl">
-        <Link
-          href="/"
-          className="mb-6 inline-flex items-center gap-1.5 rounded-full border border-[#2C2E35] bg-[#151619] px-3.5 py-1.5 text-xs font-medium text-[#D4D4D8] transition-colors hover:border-[#F472B6]/45 hover:text-white"
-        >
-          <ArrowLeft className="h-3.5 w-3.5 text-[#F472B6]" />
-          Kembali ke SmartSari
-        </Link>
-
-        <header className="mb-8 border-b border-[#232429] pb-6">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#DB2777]/30 bg-[#DB2777]/10 px-3 py-1 text-xs font-medium text-[#F9A8D4]">
-            <Scale className="h-3.5 w-3.5" />
-            Hak Cipta &amp; Kepatuhan Lisensi
+    <LegalPageShell
+      badgeIcon={<Scale className="h-3.5 w-3.5" />}
+      badgeLabel="Hak Cipta &amp; Kepatuhan Lisensi"
+      title="Lisensi, Hak Cipta &amp; Atribusi"
+      subtitle="Transparansi kepemilikan SmartSari by AirEvo, penghormatan hak cipta publikasi ilmiah, serta atribusi mitra data dan pustaka terbuka."
+      metaText="SmartSari by AirEvo · Diperbarui: 28 November 2026"
+      toc={TOC}
+      currentPath="/lisensi"
+    >
+      <div className="space-y-8 rounded-2xl border border-line bg-surface p-6 text-[15px] leading-[1.8] text-ink-body sm:p-10">
+        <section id="hak-cipta-karya" className="scroll-mt-8 space-y-3">
+          <div className="flex items-baseline gap-2.5">
+            <span className="font-mono text-xs font-semibold text-accent-soft">
+              01
+            </span>
+            <h2 className="text-lg font-semibold tracking-[-0.015em] text-heading">
+              Hak Cipta Karya Ilmiah &amp; Akses Terbuka
+            </h2>
           </div>
-          <h1 className="text-2xl font-bold tracking-[-0.02em] text-white sm:text-3xl">
-            Lisensi, Hak Cipta &amp; Atribusi
-          </h1>
-          <p className="mt-2 text-xs text-[#A1A1AA]">
-            &copy; 2026 SmartSari. Seluruh hak cipta dilindungi.
+          <p>
+            Platform{" "}
+            <strong className="font-semibold text-heading">
+              SmartSari diproduksi oleh AirEvo
+            </strong>
+            . SmartSari by AirEvo tidak mengklaim kepemilikan atas artikel
+            ilmiah, abstrak, maupun berkas PDF pihak ketiga yang muncul pada
+            hasil pencarian. Seluruh hak cipta karya ilmiah tetap melekat penuh
+            pada penulis dan/atau penerbit aslinya.
           </p>
-        </header>
+          <p className="text-ink-secondary">
+            Pratinjau serta unduhan PDF secara langsung hanya disajikan untuk
+            berkas berstatus akses terbuka (<em>Open Access</em>) yang disediakan
+            oleh penerbit atau repositori resmi, sedangkan artikel berbayar
+            diarahkan ke tautan DOI penerbit. Pengguna wajib mematuhi ketentuan
+            lisensi setiap naskah (seperti CC BY atau CC BY-NC) serta menyertakan
+            sitasi yang layak.
+          </p>
+        </section>
 
-        <div className="space-y-6 rounded-2xl border border-[#232429] bg-[#151619] p-6 text-sm leading-relaxed text-[#D4D4D8] sm:p-8">
-          <section className="space-y-2">
-            <h2 className="text-base font-semibold text-white">
-              1. Hak Cipta Karya Ilmiah &amp; Akses Terbuka
-            </h2>
-            <p>
-              SmartSari tidak mengklaim kepemilikan atas artikel ilmiah,
-              abstrak, maupun berkas PDF pihak ketiga yang ditampilkan melalui
-              hasil pencarian. Seluruh hak cipta karya ilmiah tetap berada pada
-              penulis dan/atau penerbit masing-masing.
-            </p>
-            <p className="text-[#A1A1AA]">
-              Pratinjau dan unduhan PDF hanya dilakukan untuk berkas akses
-              terbuka (Open Access) yang diizinkan oleh penerbit, sementara
-              artikel non-terbuka diarahkan ke halaman resmi penerbit (DOI).
-              Pengguna wajib mematuhi ketentuan lisensi masing-masing artikel
-              (seperti CC BY, CC BY-NC, atau hak cipta penerbit) serta
-              mencantumkan sitasi yang semestinya.
-            </p>
-          </section>
+        <hr className="border-line" />
 
-          <section className="space-y-2">
-            <h2 className="text-base font-semibold text-white">
-              2. Atribusi Sumber Data Akademik
+        <section id="atribusi-data" className="scroll-mt-8 space-y-3.5">
+          <div className="flex items-baseline gap-2.5">
+            <span className="font-mono text-xs font-semibold text-accent-soft">
+              02
+            </span>
+            <h2 className="text-lg font-semibold tracking-[-0.015em] text-heading">
+              Atribusi Sumber Data Akademik
             </h2>
-            <ul className="list-disc space-y-1.5 pl-5 text-[#A1A1AA]">
-              <li>
-                <strong className="text-[#E4E4E7]">OpenAlex:</strong> Data
-                bibliografis dan jejaring sitasi disediakan di bawah lisensi CC0
-                1.0 Universal Public Domain Dedication.
-              </li>
-              <li>
-                <strong className="text-[#E4E4E7]">Crossref:</strong> Metadata
-                DOI dan informasi publikasi jurnal melalui API metadata terbuka
-                Crossref.
-              </li>
-              <li>
-                <strong className="text-[#E4E4E7]">Europe PMC:</strong> Indeks
-                literatur biomedis dan teks lengkap akses terbuka.
-              </li>
-              <li>
-                <strong className="text-[#E4E4E7]">Unpaywall:</strong> Indeks
-                tautan versi akses terbuka resmi (CC0).
-              </li>
-            </ul>
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-white">
-              3. Atribusi Perangkat Lunak Sumber Terbuka
-            </h2>
-            <p className="text-[#A1A1AA]">
-              Platform SmartSari dibangun menggunakan pustaka perangkat lunak
-              sumber terbuka berikut sesuai ketentuan lisensi masing-masing:
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {OPEN_SOURCE_LIBS.map((lib) => (
-                <div
-                  key={lib.name}
-                  className="flex items-center justify-between rounded-xl border border-[#232429] bg-[#0E0F12] px-3.5 py-2 text-xs"
-                >
-                  <span className="font-medium text-white">{lib.name}</span>
-                  <span className="font-mono text-[11px] text-[#F472B6]">
-                    {lib.license}
+          </div>
+          <p className="text-ink-secondary">
+            SmartSari mengagregasi metadata ilmiah terbuka dan registri ISSN
+            jurnal nasional SINTA 1–6 terkurasi dengan dukungan penyedia data
+            berikut:
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {DATA_SOURCES.map((src) => (
+              <div
+                key={src.name}
+                className="rounded-xl border border-line bg-canvas p-4"
+              >
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-heading">
+                    {src.name}
+                  </span>
+                  <span className="rounded-md bg-accent/12 px-2 py-0.5 font-mono text-[10px] font-semibold text-accent-soft">
+                    {src.badge}
                   </span>
                 </div>
-              ))}
-            </div>
-          </section>
-        </div>
+                <p className="text-xs leading-relaxed text-ink-secondary">
+                  {src.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <hr className="border-line" />
+
+        <section id="atribusi-oss" className="scroll-mt-8 space-y-3.5">
+          <div className="flex items-baseline gap-2.5">
+            <span className="font-mono text-xs font-semibold text-accent-soft">
+              03
+            </span>
+            <h2 className="text-lg font-semibold tracking-[-0.015em] text-heading">
+              Atribusi Perangkat Lunak Sumber Terbuka
+            </h2>
+          </div>
+          <p className="text-ink-secondary">
+            Aplikasi SmartSari by AirEvo dibangun di atas komponen perangkat lunak
+            sumber terbuka berikut sesuai ketentuan lisensi masing-masing:
+          </p>
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            {OPEN_SOURCE_LIBS.map((lib) => (
+              <div
+                key={lib.name}
+                className="flex items-center justify-between rounded-xl border border-line bg-canvas px-4 py-2.5 text-xs"
+              >
+                <span className="font-medium text-heading">{lib.name}</span>
+                <span className="font-mono text-[11px] font-semibold text-accent-soft">
+                  {lib.license}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
-    </div>
+    </LegalPageShell>
   );
 }

@@ -16,6 +16,7 @@ import {
   User,
   X,
 } from "lucide-react";
+import { getActiveResolvedTheme } from "@/lib/appearance";
 import type { AuthUser } from "@/lib/types";
 
 interface AuthModalProps {
@@ -160,7 +161,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
         turnstileContainerRef.current,
         {
           sitekey: turnstileSiteKey,
-          theme: "dark",
+          theme: getActiveResolvedTheme(),
           callback: (token) => setTurnstileToken(token),
           "expired-callback": () => setTurnstileToken(""),
           "error-callback": () => setTurnstileToken(""),
@@ -435,10 +436,10 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
   };
 
   const renderAntiBotBox = () => (
-    <div className="rounded-xl border border-[#2C2E35] bg-[#0E0F12] p-3">
+    <div className="rounded-xl border border-line-strong bg-canvas p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#F9A8D4]">
-          <ShieldCheck className="h-3.5 w-3.5 text-[#F472B6]" />
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-accent-tint">
+          <ShieldCheck className="h-3.5 w-3.5 text-accent-soft" />
           Verifikasi Anti-Bot
         </span>
         <button
@@ -446,7 +447,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           onClick={() => void fetchChallenge()}
           disabled={loadingChallenge}
           aria-label="Muat ulang verifikasi keamanan"
-          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-ink-secondary hover:bg-elevated hover:text-heading disabled:opacity-50"
         >
           <RefreshCw
             className={`h-3 w-3 ${loadingChallenge ? "animate-spin" : ""}`}
@@ -462,7 +463,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
         />
       ) : (
         <div className="flex items-center gap-2.5">
-          <span className="shrink-0 rounded-lg border border-[#232429] bg-[#151619] px-3 py-1.5 font-mono text-xs font-semibold text-white">
+          <span className="shrink-0 rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-xs font-semibold text-heading">
             {challengeQuestion || "Memuat..."}
           </span>
           <input
@@ -472,7 +473,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
             value={challengeAnswer}
             onChange={(e) => setChallengeAnswer(e.target.value)}
             placeholder="Jawaban angka"
-            className="min-w-0 flex-1 rounded-lg border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-sm text-white placeholder-[#71717A] focus:border-[#F472B6] focus:outline-none"
+            className="min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 py-1.5 text-sm text-heading placeholder:text-ink-muted focus:border-accent-soft focus:outline-none"
           />
         </div>
       )}
@@ -489,19 +490,19 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
       aria-modal="true"
       aria-label="Akun SmartSari"
     >
-      <div className="animate-modal-in max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[#2C2E35] bg-[#151619] p-6 text-[#F4F4F5] shadow-2xl">
+      <div className="animate-modal-in max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl border border-line-strong bg-surface p-6 text-ink shadow-2xl">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#DB2777]/15 text-[#F472B6]">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/15 text-accent-soft">
               <Cloud className="h-4 w-4" />
             </span>
             <div>
-              <h2 className="text-base font-semibold text-white">
+              <h2 className="text-base font-semibold text-heading">
                 {mode === "forgot"
                   ? "Atur Ulang Kata Sandi"
                   : "Sinkronkan Ruang Riset"}
               </h2>
-              <p className="text-xs text-[#A1A1AA]">
+              <p className="text-xs text-ink-secondary">
                 {mode === "forgot"
                   ? "Verifikasi email Anda dengan kode OTP 6 digit."
                   : "Simpan proyek, catatan & riwayat di semua perangkat."}
@@ -512,14 +513,14 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
             type="button"
             onClick={onClose}
             aria-label="Tutup dialog akun"
-            className="rounded-lg p-1.5 text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white"
+            className="rounded-lg p-1.5 text-ink-secondary hover:bg-elevated hover:text-heading"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {mode !== "forgot" ? (
-          <div className="mb-4 grid grid-cols-2 rounded-xl border border-[#232429] bg-[#0E0F12] p-1">
+          <div className="mb-4 grid grid-cols-2 rounded-xl border border-line bg-canvas p-1">
             <button
               type="button"
               onClick={() => {
@@ -530,8 +531,8 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
               }}
               className={`rounded-lg py-1.5 text-xs font-semibold transition-colors ${
                 mode === "login"
-                  ? "bg-[#DB2777] text-white"
-                  : "text-[#A1A1AA] hover:text-white"
+                  ? "bg-accent text-white"
+                  : "text-ink-secondary hover:text-heading"
               }`}
             >
               Masuk
@@ -546,8 +547,8 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
               }}
               className={`rounded-lg py-1.5 text-xs font-semibold transition-colors ${
                 mode === "register"
-                  ? "bg-[#DB2777] text-white"
-                  : "text-[#A1A1AA] hover:text-white"
+                  ? "bg-accent text-white"
+                  : "text-ink-secondary hover:text-heading"
               }`}
             >
               Daftar Akun Baru
@@ -561,9 +562,9 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
               setForgotStep("email");
               setError(null);
             }}
-            className="mb-4 inline-flex items-center gap-1.5 text-xs text-[#A1A1AA] hover:text-white"
+            className="-ml-2 mb-4 inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-ink-body transition-colors hover:bg-elevated hover:text-heading"
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
+            <ArrowLeft className="h-3.5 w-3.5 text-accent-soft" />
             Kembali ke halaman Masuk
           </button>
         )}
@@ -586,11 +587,11 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           {mode === "forgot" && forgotStep === "email" && (
             <>
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-[#D4D4D8]">
+                <span className="mb-1 block text-xs font-medium text-ink-body">
                   Email Akun Terdaftar
                 </span>
-                <div className="flex items-center gap-2 rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2 focus-within:border-[#F472B6]">
-                  <Mail className="h-4 w-4 text-[#71717A]" />
+                <div className="flex items-center gap-2.5 rounded-xl border border-line-strong bg-canvas px-3 py-2 focus-within:border-accent-soft">
+                  <Mail className="h-4 w-4 shrink-0 text-ink-muted" />
                   <input
                     type="email"
                     autoComplete="email"
@@ -600,7 +601,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="nama@kampus.ac.id"
-                    className="w-full bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
+                    className="w-full bg-transparent text-sm text-heading placeholder:text-ink-muted focus:outline-none"
                   />
                 </div>
               </label>
@@ -610,17 +611,17 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
 
           {mode === "forgot" && forgotStep === "reset" && (
             <div className="space-y-3">
-              <div className="rounded-xl border border-[#DB2777]/35 bg-[#DB2777]/10 p-3.5 text-xs leading-relaxed text-[#FBCFE8]">
-                Jika <strong className="text-white">{email}</strong> terdaftar,
+              <div className="rounded-xl border border-accent/35 bg-accent/10 p-3.5 text-xs leading-relaxed text-ink-strong">
+                Jika <strong className="text-heading">{email}</strong> terdaftar,
                 kode OTP 6 digit telah dikirim (berlaku 10 menit).
               </div>
 
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-[#D4D4D8]">
+                <span className="mb-1 block text-xs font-medium text-ink-body">
                   Kode OTP Email (6 Digit)
                 </span>
-                <div className="flex items-center gap-2 rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2.5 focus-within:border-[#F472B6]">
-                  <KeyRound className="h-4 w-4 text-[#F472B6]" />
+                <div className="flex items-center gap-2.5 rounded-xl border border-line-strong bg-canvas px-3 py-2.5 focus-within:border-accent-soft">
+                  <KeyRound className="h-4 w-4 shrink-0 text-accent-soft" />
                   <input
                     type="text"
                     inputMode="numeric"
@@ -633,17 +634,17 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                       setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
                     }
                     placeholder="000000"
-                    className="w-full bg-transparent text-center font-mono text-lg font-bold tracking-[0.45em] text-white placeholder-[#52525B] focus:outline-none"
+                    className="w-full bg-transparent text-center font-mono text-lg font-bold tracking-[0.45em] text-heading placeholder:text-ink-faint focus:outline-none"
                   />
                 </div>
               </label>
 
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-[#D4D4D8]">
+                <span className="mb-1 block text-xs font-medium text-ink-body">
                   Kata Sandi Baru
                 </span>
-                <div className="flex items-center gap-2 rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2 focus-within:border-[#F472B6]">
-                  <Lock className="h-4 w-4 text-[#71717A]" />
+                <div className="flex items-center gap-2.5 rounded-xl border border-line-strong bg-canvas px-3 py-2 focus-within:border-accent-soft">
+                  <Lock className="h-4 w-4 shrink-0 text-ink-muted" />
                   <input
                     type={showPassword ? "text" : "password"}
                     autoComplete="new-password"
@@ -655,7 +656,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                     onKeyUp={handlePasswordKeyEvent}
                     onKeyDown={handlePasswordKeyEvent}
                     placeholder="Min. 8 karakter (huruf & angka)"
-                    className="w-full bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
+                    className="w-full bg-transparent text-sm text-heading placeholder:text-ink-muted focus:outline-none"
                   />
                   <button
                     type="button"
@@ -665,7 +666,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                         ? "Sembunyikan kata sandi"
                         : "Tampilkan kata sandi"
                     }
-                    className="rounded p-1 text-[#71717A] transition-colors hover:text-white"
+                    className="rounded p-1 text-ink-muted transition-colors hover:text-heading"
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4" />
@@ -677,7 +678,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
               </label>
 
               {capsLockOn && (
-                <p className="text-[11px] font-medium text-amber-300">
+                <p className="text-[11px] font-medium text-warn">
                   Caps Lock aktif
                 </p>
               )}
@@ -691,24 +692,24 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                         className={`h-1 rounded-full transition-colors ${
                           passwordStrength >= lvl
                             ? passwordStrength === 3
-                              ? "bg-[#4ADE80]"
+                              ? "bg-ok"
                               : passwordStrength === 2
-                                ? "bg-amber-400"
-                                : "bg-[#EF4444]"
-                            : "bg-[#232429]"
+                                ? "bg-warn"
+                                : "bg-danger"
+                            : "bg-line"
                         }`}
                       />
                     ))}
                   </div>
-                  <p className="text-[11px] text-[#A1A1AA]">
+                  <p className="text-[11px] text-ink-secondary">
                     Kekuatan kata sandi:{" "}
                     <span
                       className={
                         passwordStrength === 3
-                          ? "font-medium text-[#4ADE80]"
+                          ? "font-medium text-ok"
                           : passwordStrength === 2
-                            ? "font-medium text-amber-300"
-                            : "font-medium text-[#FCA5A5]"
+                            ? "font-medium text-warn"
+                            : "font-medium text-danger"
                       }
                     >
                       {passwordStrength === 3
@@ -724,7 +725,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
               <div className="flex flex-wrap gap-3 text-[11px]">
                 <span
                   className={`inline-flex items-center gap-1 ${
-                    hasMinLen ? "text-[#4ADE80]" : "text-[#71717A]"
+                    hasMinLen ? "text-ok" : "text-ink-muted"
                   }`}
                 >
                   <Check className="h-3 w-3" />
@@ -732,7 +733,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                 </span>
                 <span
                   className={`inline-flex items-center gap-1 ${
-                    hasLetterAndDigit ? "text-[#4ADE80]" : "text-[#71717A]"
+                    hasLetterAndDigit ? "text-ok" : "text-ink-muted"
                   }`}
                 >
                   <Check className="h-3 w-3" />
@@ -741,11 +742,11 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
               </div>
 
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-[#D4D4D8]">
+                <span className="mb-1 block text-xs font-medium text-ink-body">
                   Konfirmasi Kata Sandi Baru
                 </span>
-                <div className="flex items-center gap-2 rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2 focus-within:border-[#F472B6]">
-                  <Lock className="h-4 w-4 text-[#71717A]" />
+                <div className="flex items-center gap-2.5 rounded-xl border border-line-strong bg-canvas px-3 py-2 focus-within:border-accent-soft">
+                  <Lock className="h-4 w-4 shrink-0 text-ink-muted" />
                   <input
                     type={showConfirmPassword ? "text" : "password"}
                     autoComplete="new-password"
@@ -757,7 +758,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                     onKeyUp={handlePasswordKeyEvent}
                     onKeyDown={handlePasswordKeyEvent}
                     placeholder="Ulangi kata sandi baru"
-                    className="w-full bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
+                    className="w-full bg-transparent text-sm text-heading placeholder:text-ink-muted focus:outline-none"
                   />
                   <button
                     type="button"
@@ -767,7 +768,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                         ? "Sembunyikan konfirmasi kata sandi"
                         : "Tampilkan konfirmasi kata sandi"
                     }
-                    className="rounded p-1 text-[#71717A] transition-colors hover:text-white"
+                    className="rounded p-1 text-ink-muted transition-colors hover:text-heading"
                   >
                     {showConfirmPassword ? (
                       <EyeOff className="h-4 w-4" />
@@ -781,9 +782,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
               {confirmPassword.length > 0 && (
                 <p
                   className={`inline-flex items-center gap-1 text-[11px] ${
-                    password === confirmPassword
-                      ? "text-[#4ADE80]"
-                      : "text-amber-300"
+                    password === confirmPassword ? "text-ok" : "text-warn"
                   }`}
                 >
                   <Check className="h-3 w-3" />
@@ -800,7 +799,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                   setForgotStep("email");
                   setError(null);
                 }}
-                className="inline-flex items-center gap-1.5 text-xs text-[#A1A1AA] hover:text-white disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 text-xs text-ink-secondary hover:text-heading disabled:opacity-50"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 {otpCooldown > 0
@@ -812,19 +811,19 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
 
           {mode === "register" && registerStep === "otp" && (
             <div className="space-y-3">
-              <div className="rounded-xl border border-[#DB2777]/35 bg-[#DB2777]/10 p-3.5 text-xs leading-relaxed text-[#FBCFE8]">
-                Jika <strong className="text-white">{email}</strong> belum
+              <div className="rounded-xl border border-accent/35 bg-accent/10 p-3.5 text-xs leading-relaxed text-ink-strong">
+                Jika <strong className="text-heading">{email}</strong> belum
                 terdaftar dan valid, kode OTP 6 digit telah dikirim (berlaku 10
                 menit). Sudah punya akun? Silakan masuk atau gunakan Lupa Kata
                 Sandi.
               </div>
 
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-[#D4D4D8]">
+                <span className="mb-1 block text-xs font-medium text-ink-body">
                   Kode OTP Email (6 Digit)
                 </span>
-                <div className="flex items-center gap-2 rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2.5 focus-within:border-[#F472B6]">
-                  <KeyRound className="h-4 w-4 text-[#F472B6]" />
+                <div className="flex items-center gap-2.5 rounded-xl border border-line-strong bg-canvas px-3 py-2.5 focus-within:border-accent-soft">
+                  <KeyRound className="h-4 w-4 shrink-0 text-accent-soft" />
                   <input
                     type="text"
                     inputMode="numeric"
@@ -837,7 +836,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                       setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
                     }
                     placeholder="000000"
-                    className="w-full bg-transparent text-center font-mono text-lg font-bold tracking-[0.45em] text-white placeholder-[#52525B] focus:outline-none"
+                    className="w-full bg-transparent text-center font-mono text-lg font-bold tracking-[0.45em] text-heading placeholder:text-ink-faint focus:outline-none"
                   />
                 </div>
               </label>
@@ -849,7 +848,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                   setRegisterStep("form");
                   setError(null);
                 }}
-                className="inline-flex items-center gap-1.5 text-xs text-[#A1A1AA] hover:text-white disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 text-xs text-ink-secondary hover:text-heading disabled:opacity-50"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 {otpCooldown > 0
@@ -864,11 +863,11 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
             <>
               {mode === "register" && (
                 <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-[#D4D4D8]">
+                  <span className="mb-1 block text-xs font-medium text-ink-body">
                     Nama Lengkap
                   </span>
-                  <div className="flex items-center gap-2 rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2 focus-within:border-[#F472B6]">
-                    <User className="h-4 w-4 text-[#71717A]" />
+                  <div className="flex items-center gap-2.5 rounded-xl border border-line-strong bg-canvas px-3 py-2 focus-within:border-accent-soft">
+                    <User className="h-4 w-4 shrink-0 text-ink-muted" />
                     <input
                       type="text"
                       autoComplete="name"
@@ -879,18 +878,18 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Nama peneliti / mahasiswa"
-                      className="w-full bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
+                      className="w-full bg-transparent text-sm text-heading placeholder:text-ink-muted focus:outline-none"
                     />
                   </div>
                 </label>
               )}
 
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-[#D4D4D8]">
+                <span className="mb-1 block text-xs font-medium text-ink-body">
                   Email
                 </span>
-                <div className="flex items-center gap-2 rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2 focus-within:border-[#F472B6]">
-                  <Mail className="h-4 w-4 text-[#71717A]" />
+                <div className="flex items-center gap-2.5 rounded-xl border border-line-strong bg-canvas px-3 py-2 focus-within:border-accent-soft">
+                  <Mail className="h-4 w-4 shrink-0 text-ink-muted" />
                   <input
                     type="email"
                     autoComplete="email"
@@ -900,17 +899,17 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="nama@kampus.ac.id"
-                    className="w-full bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
+                    className="w-full bg-transparent text-sm text-heading placeholder:text-ink-muted focus:outline-none"
                   />
                 </div>
               </label>
 
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-[#D4D4D8]">
+                <span className="mb-1 block text-xs font-medium text-ink-body">
                   Kata Sandi
                 </span>
-                <div className="flex items-center gap-2 rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2 focus-within:border-[#F472B6]">
-                  <Lock className="h-4 w-4 text-[#71717A]" />
+                <div className="flex items-center gap-2.5 rounded-xl border border-line-strong bg-canvas px-3 py-2 focus-within:border-accent-soft">
+                  <Lock className="h-4 w-4 shrink-0 text-ink-muted" />
                   <input
                     type={showPassword ? "text" : "password"}
                     autoComplete={
@@ -928,7 +927,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                         ? "Min. 8 karakter (huruf & angka)"
                         : "Masukkan kata sandi"
                     }
-                    className="w-full bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
+                    className="w-full bg-transparent text-sm text-heading placeholder:text-ink-muted focus:outline-none"
                   />
                   <button
                     type="button"
@@ -938,7 +937,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                         ? "Sembunyikan kata sandi"
                         : "Tampilkan kata sandi"
                     }
-                    className="rounded p-1 text-[#71717A] transition-colors hover:text-white"
+                    className="rounded p-1 text-ink-muted transition-colors hover:text-heading"
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4" />
@@ -950,7 +949,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
               </label>
 
               {capsLockOn && (
-                <p className="text-[11px] font-medium text-amber-300">
+                <p className="text-[11px] font-medium text-warn">
                   Caps Lock aktif
                 </p>
               )}
@@ -965,7 +964,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                       setError(null);
                       setSuccessMsg(null);
                     }}
-                    className="text-xs font-medium text-[#F472B6] hover:text-[#F9A8D4]"
+                    className="text-xs font-medium text-accent-soft hover:text-accent-tint"
                   >
                     Lupa kata sandi?
                   </button>
@@ -983,24 +982,24 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                             className={`h-1 rounded-full transition-colors ${
                               passwordStrength >= lvl
                                 ? passwordStrength === 3
-                                  ? "bg-[#4ADE80]"
+                                  ? "bg-ok"
                                   : passwordStrength === 2
-                                    ? "bg-amber-400"
-                                    : "bg-[#EF4444]"
-                                : "bg-[#232429]"
+                                    ? "bg-warn"
+                                    : "bg-danger"
+                                : "bg-line"
                             }`}
                           />
                         ))}
                       </div>
-                      <p className="text-[11px] text-[#A1A1AA]">
+                      <p className="text-[11px] text-ink-secondary">
                         Kekuatan kata sandi:{" "}
                         <span
                           className={
                             passwordStrength === 3
-                              ? "font-medium text-[#4ADE80]"
+                              ? "font-medium text-ok"
                               : passwordStrength === 2
-                                ? "font-medium text-amber-300"
-                                : "font-medium text-[#FCA5A5]"
+                                ? "font-medium text-warn"
+                                : "font-medium text-danger"
                           }
                         >
                           {passwordStrength === 3
@@ -1016,7 +1015,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                   <div className="flex flex-wrap gap-3 text-[11px]">
                     <span
                       className={`inline-flex items-center gap-1 ${
-                        hasMinLen ? "text-[#4ADE80]" : "text-[#71717A]"
+                        hasMinLen ? "text-ok" : "text-ink-muted"
                       }`}
                     >
                       <Check className="h-3 w-3" />
@@ -1024,7 +1023,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                     </span>
                     <span
                       className={`inline-flex items-center gap-1 ${
-                        hasLetterAndDigit ? "text-[#4ADE80]" : "text-[#71717A]"
+                        hasLetterAndDigit ? "text-ok" : "text-ink-muted"
                       }`}
                     >
                       <Check className="h-3 w-3" />
@@ -1033,11 +1032,11 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                   </div>
 
                   <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-[#D4D4D8]">
+                    <span className="mb-1 block text-xs font-medium text-ink-body">
                       Konfirmasi Kata Sandi
                     </span>
-                    <div className="flex items-center gap-2 rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2 focus-within:border-[#F472B6]">
-                      <Lock className="h-4 w-4 text-[#71717A]" />
+                    <div className="flex items-center gap-2.5 rounded-xl border border-line-strong bg-canvas px-3 py-2 focus-within:border-accent-soft">
+                      <Lock className="h-4 w-4 shrink-0 text-ink-muted" />
                       <input
                         type={showConfirmPassword ? "text" : "password"}
                         autoComplete="new-password"
@@ -1049,7 +1048,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                         onKeyUp={handlePasswordKeyEvent}
                         onKeyDown={handlePasswordKeyEvent}
                         placeholder="Ulangi kata sandi"
-                        className="w-full bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
+                        className="w-full bg-transparent text-sm text-heading placeholder:text-ink-muted focus:outline-none"
                       />
                       <button
                         type="button"
@@ -1059,7 +1058,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                             ? "Sembunyikan konfirmasi kata sandi"
                             : "Tampilkan konfirmasi kata sandi"
                         }
-                        className="rounded p-1 text-[#71717A] transition-colors hover:text-white"
+                        className="rounded p-1 text-ink-muted transition-colors hover:text-heading"
                       >
                         {showConfirmPassword ? (
                           <EyeOff className="h-4 w-4" />
@@ -1073,9 +1072,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
                   {confirmPassword.length > 0 && (
                     <p
                       className={`inline-flex items-center gap-1 text-[11px] ${
-                        password === confirmPassword
-                          ? "text-[#4ADE80]"
-                          : "text-amber-300"
+                        password === confirmPassword ? "text-ok" : "text-warn"
                       }`}
                     >
                       <Check className="h-3 w-3" />
@@ -1092,18 +1089,18 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           )}
 
           {successMsg && (
-            <p className="rounded-lg border border-[#4ADE80]/30 bg-[#4ADE80]/10 px-3 py-2 text-xs text-[#86EFAC]">
+            <p className="rounded-lg border border-ok/35 bg-ok/10 px-3 py-2 text-xs text-ok-soft">
               {successMsg}
             </p>
           )}
 
           {error && (
-            <p className="rounded-lg border border-[#EF4444]/30 bg-[#EF4444]/10 px-3 py-2 text-xs text-[#FCA5A5]">
+            <p className="rounded-lg border border-danger/35 bg-danger/10 px-3 py-2 text-xs text-danger-soft">
               {error}
             </p>
           )}
 
-          <p className="text-[11px] leading-relaxed text-[#71717A]">
+          <p className="text-[11px] leading-relaxed text-ink-muted">
             {mode === "login"
               ? "Jurnal tersimpan, proyek riset, dan riwayat di perangkat ini akan otomatis digabungkan ke akun Anda."
               : "Dilindungi verifikasi OTP email, proteksi anti-bot, dan enkripsi kata sandi standar industri."}
@@ -1112,7 +1109,7 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           <button
             type="submit"
             disabled={loading}
-            className="btn-tactile flex w-full items-center justify-center gap-2 rounded-xl bg-[#DB2777] py-2.5 text-sm font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
+            className="btn-tactile flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-2.5 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {mode === "login"

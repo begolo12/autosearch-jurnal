@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   User,
 } from "lucide-react";
+import { getActiveResolvedTheme } from "@/lib/appearance";
 
 type ContactCategory = "bantuan" | "hapus_akun" | "masukan" | "lainnya";
 
@@ -103,7 +104,7 @@ export function ContactForm() {
         turnstileContainerRef.current,
         {
           sitekey: turnstileSiteKey,
-          theme: "dark",
+          theme: getActiveResolvedTheme(),
           callback: (token) => setTurnstileToken(token),
           "expired-callback": () => setTurnstileToken(""),
           "error-callback": () => setTurnstileToken(""),
@@ -210,13 +211,18 @@ export function ContactForm() {
         />
       </div>
 
+      <p className="text-[11px] text-ink-muted">
+        Kolom bertanda <span className="font-semibold text-accent-soft">*</span>{" "}
+        wajib diisi.
+      </p>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
-          <span className="mb-1.5 block text-xs font-medium text-[#D4D4D8]">
-            Nama Lengkap
+          <span className="mb-1.5 block text-xs font-medium text-ink-body">
+            Nama Lengkap <span className="text-accent-soft">*</span>
           </span>
-          <div className="flex items-center gap-2 rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2.5 focus-within:border-[#F472B6]">
-            <User className="h-4 w-4 text-[#71717A]" />
+          <div className="flex items-center gap-2.5 rounded-xl border border-line-strong bg-canvas px-3 py-2.5 focus-within:border-accent-soft">
+            <User className="h-4 w-4 shrink-0 text-ink-muted" />
             <input
               type="text"
               required
@@ -225,17 +231,17 @@ export function ContactForm() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Nama Anda"
-              className="w-full bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
+              className="w-full bg-transparent text-sm text-heading placeholder:text-ink-muted focus:outline-none"
             />
           </div>
         </label>
 
         <label className="block">
-          <span className="mb-1.5 block text-xs font-medium text-[#D4D4D8]">
-            Email Balasan
+          <span className="mb-1.5 block text-xs font-medium text-ink-body">
+            Email Balasan <span className="text-accent-soft">*</span>
           </span>
-          <div className="flex items-center gap-2 rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2.5 focus-within:border-[#F472B6]">
-            <Mail className="h-4 w-4 text-[#71717A]" />
+          <div className="flex items-center gap-2.5 rounded-xl border border-line-strong bg-canvas px-3 py-2.5 focus-within:border-accent-soft">
+            <Mail className="h-4 w-4 shrink-0 text-ink-muted" />
             <input
               type="email"
               required
@@ -243,20 +249,20 @@ export function ContactForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="nama@kampus.ac.id"
-              className="w-full bg-transparent text-sm text-white placeholder-[#71717A] focus:outline-none"
+              className="w-full bg-transparent text-sm text-heading placeholder:text-ink-muted focus:outline-none"
             />
           </div>
         </label>
       </div>
 
       <label className="block">
-        <span className="mb-1.5 block text-xs font-medium text-[#D4D4D8]">
-          Kategori Keperluan
+        <span className="mb-1.5 block text-xs font-medium text-ink-body">
+          Kategori Keperluan <span className="text-accent-soft">*</span>
         </span>
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value as ContactCategory)}
-          className="w-full rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3 py-2.5 text-sm text-white focus:border-[#F472B6] focus:outline-none"
+          className="w-full rounded-xl border border-line-strong bg-canvas px-3 py-2.5 text-sm text-heading focus:border-accent-soft focus:outline-none"
         >
           <option value="bantuan">Bantuan Teknis &amp; Penggunaan</option>
           <option value="hapus_akun">
@@ -269,11 +275,13 @@ export function ContactForm() {
 
       <label className="block">
         <div className="mb-1.5 flex items-center justify-between">
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#D4D4D8]">
-            <MessageSquare className="h-3.5 w-3.5 text-[#F472B6]" />
-            Pesan
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-body">
+            <MessageSquare className="h-3.5 w-3.5 text-accent-soft" />
+            <span>
+              Pesan <span className="text-accent-soft">*</span>
+            </span>
           </span>
-          <span className="font-mono text-[11px] text-[#71717A]">
+          <span className="font-mono text-[11px] text-ink-muted">
             {message.length}/2000
           </span>
         </div>
@@ -285,21 +293,21 @@ export function ContactForm() {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Tuliskan pertanyaan, kendala, atau permintaan penghapusan akun Anda..."
-          className="w-full rounded-xl border border-[#2C2E35] bg-[#0E0F12] px-3.5 py-2.5 text-sm text-white placeholder-[#71717A] focus:border-[#F472B6] focus:outline-none"
+          className="w-full rounded-xl border border-line-strong bg-canvas px-3.5 py-2.5 text-sm text-heading placeholder:text-ink-muted focus:border-accent-soft focus:outline-none"
         />
       </label>
 
-      <div className="rounded-xl border border-[#2C2E35] bg-[#0E0F12] p-3">
+      <div className="rounded-xl border border-line-strong bg-canvas p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#F9A8D4]">
-            <ShieldCheck className="h-3.5 w-3.5 text-[#F472B6]" />
-            Verifikasi Anti-Bot
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-accent-tint">
+            <ShieldCheck className="h-3.5 w-3.5 text-accent-soft" />
+            Verifikasi Anti-Bot <span className="text-accent-soft">*</span>
           </span>
           <button
             type="button"
             onClick={() => void fetchChallenge()}
             disabled={loadingChallenge}
-            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-[#A1A1AA] hover:bg-[#1E1F23] hover:text-white disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-ink-secondary hover:bg-elevated hover:text-heading disabled:opacity-50"
           >
             <RefreshCw
               className={`h-3 w-3 ${loadingChallenge ? "animate-spin" : ""}`}
@@ -315,7 +323,7 @@ export function ContactForm() {
           />
         ) : (
           <div className="flex items-center gap-2.5">
-            <span className="shrink-0 rounded-lg border border-[#232429] bg-[#151619] px-3 py-1.5 font-mono text-xs font-semibold text-white">
+            <span className="shrink-0 rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-xs font-semibold text-heading">
               {challengeQuestion || "Memuat..."}
             </span>
             <input
@@ -325,24 +333,24 @@ export function ContactForm() {
               value={challengeAnswer}
               onChange={(e) => setChallengeAnswer(e.target.value)}
               placeholder="Jawaban angka"
-              className="min-w-0 flex-1 rounded-lg border border-[#2C2E35] bg-[#151619] px-3 py-1.5 text-sm text-white placeholder-[#71717A] focus:border-[#F472B6] focus:outline-none"
+              className="min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 py-1.5 text-sm text-heading placeholder:text-ink-muted focus:border-accent-soft focus:outline-none"
             />
           </div>
         )}
       </div>
 
       {success && (
-        <div className="flex items-start gap-2 rounded-xl border border-[#4ADE80]/35 bg-[#4ADE80]/10 px-3.5 py-2.5 text-xs text-[#86EFAC]">
+        <div className="flex items-start gap-2 rounded-xl border border-ok/35 bg-ok/10 px-3.5 py-2.5 text-xs text-ok-soft">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            Pesan Anda berhasil dikirim ke tim SmartSari. Balasan akan dikirim
-            ke alamat email Anda.
+            Pesan Anda berhasil dikirim ke tim SmartSari by AirEvo. Balasan akan
+            dikirim ke alamat email Anda.
           </span>
         </div>
       )}
 
       {error && (
-        <p className="rounded-xl border border-[#EF4444]/30 bg-[#EF4444]/10 px-3.5 py-2.5 text-xs text-[#FCA5A5]">
+        <p className="rounded-xl border border-danger/35 bg-danger/10 px-3.5 py-2.5 text-xs text-danger-soft">
           {error}
         </p>
       )}
@@ -350,7 +358,7 @@ export function ContactForm() {
       <button
         type="submit"
         disabled={submitting}
-        className="btn-tactile inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#DB2777] py-2.5 text-sm font-semibold text-white hover:bg-[#BE185D] disabled:opacity-60"
+        className="btn-tactile inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-accent py-2.5 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
       >
         {submitting ? (
           <Loader2 className="h-4 w-4 animate-spin" />

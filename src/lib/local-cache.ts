@@ -299,11 +299,15 @@ export function patchUiSessionScroll(scrollY: number): void {
 export function clearAllLocalCache(): number {
   if (!isBrowser()) return 0;
   let cleared = 0;
+  const preservedKeys = new Set([
+    `${PREFIX}appearance`,
+    `${PREFIX}search_prefs`,
+  ]);
   try {
     const keysToRemove: string[] = [];
     for (let i = 0; i < window.localStorage.length; i += 1) {
       const k = window.localStorage.key(i);
-      if (k && k.startsWith(PREFIX)) {
+      if (k && k.startsWith(PREFIX) && !preservedKeys.has(k)) {
         keysToRemove.push(k);
       }
     }
